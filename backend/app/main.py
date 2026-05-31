@@ -1,7 +1,18 @@
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle events."""
+    os.makedirs(settings.PHOTOS_DIR, exist_ok=True)
+    os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
+    yield
 
 
 app = FastAPI(
@@ -9,6 +20,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS configuration
@@ -31,14 +43,6 @@ async def add_security_headers(request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup."""
-    import os
-    os.makedirs(settings.PHOTOS_DIR, exist_ok=True)
-    os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
 
 
 @app.get("/health")

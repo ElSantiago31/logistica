@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 
@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     PHOTOS_THUMBNAIL_DIR: str = "./data/photos/thumbnails"
     PHOTO_MAX_SIZE_MB: int = 5
 
+    # pgAdmin
+    PGADMIN_EMAIL: str = "admin@logistica.com"
+    PGADMIN_PASSWORD: str = "admin123"
+    PGADMIN_PORT: int = 5050
+
     @property
     def allowed_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
@@ -60,10 +65,11 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}_test"
         )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+    )
 
 
 settings = Settings()
