@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routers import auth as auth_router
 
 
 @asynccontextmanager
@@ -22,6 +23,9 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Register routers
+app.include_router(auth_router.router)
 
 # CORS configuration
 app.add_middleware(
