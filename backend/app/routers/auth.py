@@ -134,6 +134,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         whatsapp=body.whatsapp,
         has_protocol_experience=body.has_protocol_experience,
         event_size_experience=body.event_size_experience,
+        education_level=body.education_level,
         shoe_size=body.shoe_size,
         shirt_size=body.shirt_size,
         pants_size=body.pants_size,

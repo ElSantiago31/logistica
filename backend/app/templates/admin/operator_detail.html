@@ -100,6 +100,7 @@
                     <p class="text-sm"><span class="text-gray-500">Dirección:</span> <strong>${o.address||'-'}</strong></p>
                     <p class="text-sm"><span class="text-gray-500">Localidad/Barrio:</span> <strong>${o.locality||'-'}</strong></p>
                     <p class="text-sm"><span class="text-gray-500">Tipo sanguíneo:</span> <strong>${o.blood_type||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Nivel de Estudio:</span> <strong>${{primaria:'Primaria',secundaria:'Secundaria / Bachillerato',tecnico:'Técnico',tecnologo:'Tecnólogo',universitario:'Universitario',postgrado:'Postgrado'}[o.education_level]||'-'}</strong></p>
                 </div>
             </div>
             <div>

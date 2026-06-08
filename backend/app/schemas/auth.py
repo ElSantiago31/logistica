@@ -92,6 +92,7 @@ class OperatorRegisterRequest(BaseModel):
     whatsapp: Optional[str] = None
     has_protocol_experience: Optional[bool] = None
     event_size_experience: Optional[str] = None
+    education_level: Optional[str] = None
     shoe_size: Optional[str] = None
     shirt_size: Optional[str] = None
     pants_size: Optional[str] = None

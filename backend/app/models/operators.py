@@ -32,6 +32,7 @@ class Operator(BaseModel):
     event_size_experience: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Tamaño evento: 100,500,1000,2000+")
     locality: Mapped[str | None] = mapped_column(String(150), nullable=True, comment="Localidad/Barrio")
     whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número WhatsApp")
+    education_level: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Nivel de estudio: primaria,secundaria,tecnico,tecnologo,universitario,postgrado")
     shoe_size: Mapped[str | None] = mapped_column(String(10), nullable=True)
     shirt_size: Mapped[str | None] = mapped_column(String(10), nullable=True)
     pants_size: Mapped[str | None] = mapped_column(String(10), nullable=True)

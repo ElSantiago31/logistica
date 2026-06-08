@@ -19,6 +19,7 @@ class OperatorBase(BaseModel):
     arl_id: Optional[uuid.UUID] = None
     has_protocol_experience: Optional[bool] = None
     event_size_experience: Optional[str] = Field(None, max_length=50)
+    education_level: Optional[str] = Field(None, max_length=50)
     shoe_size: Optional[str] = Field(None, max_length=10)
     shirt_size: Optional[str] = Field(None, max_length=10)
     pants_size: Optional[str] = Field(None, max_length=10)
@@ -73,6 +74,7 @@ class OperatorResponse(BaseModel):
     whatsapp: Optional[str]
     has_protocol_experience: Optional[bool]
     event_size_experience: Optional[str]
+    education_level: Optional[str]
     shoe_size: Optional[str]
     shirt_size: Optional[str]
     pants_size: Optional[str]
@@ -126,6 +128,7 @@ class OperatorResponse(BaseModel):
                     'whatsapp': profile.whatsapp,
                     'has_protocol_experience': profile.has_protocol_experience,
                     'event_size_experience': profile.event_size_experience,
+                    'education_level': profile.education_level,
                     'shoe_size': profile.shoe_size,
                     'shirt_size': profile.shirt_size,
                     'pants_size': profile.pants_size,
@@ -144,6 +147,7 @@ class OperatorResponse(BaseModel):
                     'emergency_contact_name': None, 'emergency_contact_phone': None,
                     'locality': None, 'whatsapp': None,
                     'has_protocol_experience': None, 'event_size_experience': None,
+                    'education_level': None,
                     'shoe_size': None, 'shirt_size': None, 'pants_size': None, 'jacket_size': None,
                     'background_check_status': 'pending',
                     'background_check_date': None, 'experience_roles': None,
