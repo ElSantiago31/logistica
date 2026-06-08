@@ -20,12 +20,20 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # WhatsApp Meta API
-    WHATSAPP_API_URL: str = "https://graph.facebook.com/v18.0"
-    WHATSAPP_PHONE_NUMBER_ID: str = ""
-    WHATSAPP_ACCESS_TOKEN: str = ""
-    WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = ""
-    WHATSAPP_APP_SECRET: str = ""
+    # Zenvia WhatsApp API
+    ZENVIA_API_KEY: str = ""
+    ZENVIA_API_URL: str = "https://api.zenvia.com/v2"
+    ZENVIA_CHANNEL_ID: str = ""
+    ZENVIA_WEBHOOK_TOKEN: str = ""
+
+    # Zenvia template names (must match templates created in Zenvia dashboard)
+    ZENVIA_TEMPLATE_INVITATION: str = "event_invitation"
+    ZENVIA_TEMPLATE_REMINDER_1D: str = "reminder_1d"
+    ZENVIA_TEMPLATE_REMINDER_5D: str = "reminder_5d"
+
+    # Confirmation keywords (operators text these to confirm/reject via WhatsApp)
+    ZENVIA_CONFIRM_KEYWORDS: str = "CONFIRMAR,SI,SÍ,CONFIRMO,CONFIRM"
+    ZENVIA_REJECT_KEYWORDS: str = "RECHAZAR,NO,RECHAZO,REJECT"
 
     # App
     APP_NAME: str = "Logistica"

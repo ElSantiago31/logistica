@@ -1,11 +1,21 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.routers import auth as auth_router
+from app.routers import operators as operators_router
+from app.routers import catalogs as catalogs_router
+from app.routers import events as events_router
+from app.routers import whatsapp as whatsapp_router
+from app.routers import sync as sync_router
+from app.routers import payroll as payroll_router
+from app.routers import reports as reports_router
 
 
 @asynccontextmanager
@@ -26,6 +36,28 @@ app = FastAPI(
 
 # Register routers
 app.include_router(auth_router.router)
+app.include_router(operators_router.router)
+app.include_router(catalogs_router.router)
+app.include_router(events_router.router)
+app.include_router(whatsapp_router.router)
+app.include_router(sync_router.router)
+app.include_router(payroll_router.router)
+app.include_router(reports_router.router)
+
+# Templates Jinja2
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# Frontend static dirs
+FRONTEND_PUBLIC = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "public")
+FRONTEND_JS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "js")
+os.makedirs(FRONTEND_PUBLIC, exist_ok=True)
+os.makedirs(FRONTEND_JS, exist_ok=True)
+
+# Mount static files for photos
+app.mount("/static/photos", StaticFiles(directory=settings.PHOTOS_DIR), name="photos")
+app.mount("/static/frontend", StaticFiles(directory=FRONTEND_PUBLIC), name="frontend_static")
+app.mount("/static/js", StaticFiles(directory=FRONTEND_JS), name="frontend_js")
 
 # CORS configuration
 app.add_middleware(
@@ -59,10 +91,84 @@ async def health_check():
     }
 
 
-@app.get("/")
-async def root():
-    """Root endpoint — redirect to docs."""
-    return {
-        "message": f"{settings.APP_NAME} v{settings.APP_VERSION}",
-        "docs": "/docs",
-    }
+# --- HTML Routes ---
+
+@app.get("/test-ui", response_class=HTMLResponse)
+async def test_ui(request: Request):
+    return templates.TemplateResponse("test.html", {"request": request})
+
+
+@app.get("/enrolamiento", response_class=HTMLResponse)
+async def enrollment_page(request: Request):
+    return templates.TemplateResponse("landing/index.html", {"request": request})
+
+
+@app.get("/enrolamiento/success", response_class=HTMLResponse)
+async def enrollment_success(request: Request):
+    return templates.TemplateResponse("landing/success.html", {"request": request})
+
+
+@app.get("/enrolamiento/login", response_class=HTMLResponse)
+async def operator_login(request: Request):
+    return templates.TemplateResponse("landing/operator_login.html", {"request": request})
+
+
+@app.get("/enrolamiento/perfil", response_class=HTMLResponse)
+async def operator_profile(request: Request):
+    return templates.TemplateResponse("landing/operator_profile.html", {"request": request})
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    return templates.TemplateResponse("admin/index.html", {"request": request})
+
+
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login(request: Request):
+    return templates.TemplateResponse("admin/login.html", {"request": request})
+
+
+@app.get("/admin/operators", response_class=HTMLResponse)
+async def admin_operators(request: Request):
+    return templates.TemplateResponse("admin/operators.html", {"request": request})
+
+
+@app.get("/admin/operator/{op_id}", response_class=HTMLResponse)
+async def admin_operator_detail(request: Request, op_id: str):
+    return templates.TemplateResponse("admin/operator_detail.html", {"request": request})
+
+
+@app.get("/admin/superadmin", response_class=HTMLResponse)
+async def admin_superadmin(request: Request):
+    return templates.TemplateResponse("admin/superadmin.html", {"request": request})
+
+
+@app.get("/admin/events", response_class=HTMLResponse)
+async def admin_events(request: Request):
+    return templates.TemplateResponse("admin/events.html", {"request": request})
+
+
+@app.get("/admin/events/create", response_class=HTMLResponse)
+async def admin_event_create(request: Request):
+    return templates.TemplateResponse("admin/event_create.html", {"request": request})
+
+
+@app.get("/admin/events/{event_id}", response_class=HTMLResponse)
+async def admin_event_detail(request: Request, event_id: str):
+    return templates.TemplateResponse("admin/event_detail.html", {"request": request, "event_id": event_id})
+
+
+@app.get("/admin/events/{event_id}/checkin", response_class=HTMLResponse)
+async def admin_checkin(request: Request, event_id: str):
+    return templates.TemplateResponse("admin/checkin.html", {"request": request, "event_id": event_id})
+
+
+@app.get("/admin/events/{event_id}/payroll", response_class=HTMLResponse)
+async def admin_payroll(request: Request, event_id: str):
+    return templates.TemplateResponse("admin/payroll.html", {"request": request, "event_id": event_id})
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Root — Landing page de la empresa."""
+    return templates.TemplateResponse("landing/home.html", {"request": request})

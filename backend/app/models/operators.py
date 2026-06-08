@@ -1,6 +1,6 @@
 """Operator model - extended profile for operator users."""
 import uuid
-from sqlalchemy import String, ForeignKey, Date, Text
+from sqlalchemy import Boolean, String, ForeignKey, Date, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -27,6 +27,15 @@ class Operator(BaseModel):
     blood_type: Mapped[str | None] = mapped_column(String(5), nullable=True)
     emergency_contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Experiencia y tallas
+    has_protocol_experience: Mapped[bool | None] = mapped_column(Boolean, nullable=True, comment="Experiencia en protocolo")
+    event_size_experience: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Tamaño evento: 100,500,1000,2000+")
+    locality: Mapped[str | None] = mapped_column(String(150), nullable=True, comment="Localidad/Barrio")
+    whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número WhatsApp")
+    shoe_size: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    shirt_size: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    pants_size: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    jacket_size: Mapped[str | None] = mapped_column(String(10), nullable=True)
     background_check_status: Mapped[str] = mapped_column(
         String(20), default="pending", nullable=False,
         comment="pending | approved | rejected",
@@ -34,6 +43,7 @@ class Operator(BaseModel):
     background_check_date: Mapped[str | None] = mapped_column(Date, nullable=True)
     rating_avg: Mapped[float | None] = mapped_column(nullable=True, comment="Promedio de evaluaciones")
     total_events: Mapped[int] = mapped_column(default=0, nullable=False)
+    experience_roles: Mapped[str | None] = mapped_column(Text, nullable=True, comment="JSON list of role IDs with experience")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships

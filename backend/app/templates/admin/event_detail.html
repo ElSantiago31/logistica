@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Detalle Evento - Admin{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+  <nav class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
+      <a href="/admin/events" class="text-gray-600 hover:text-gray-900">← Eventos</a>
+      <h1 class="text-xl font-bold text-gray-800" id="eventTitle">Cargando...</h1>
+    </div>
+  </nav>
+
+  <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <!-- Event Info -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900" id="evName"></h2>
+          <p class="text-gray-500 mt-1" id="evClient"></p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span id="evStatusBadge" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+          <div id="evActions" class="flex gap-2"></div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm" id="evDetails"></div>
+    </div>
+
+    <!-- Staff Needs -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Personal Requerido</h3>
+      <div id="staffNeedsTable"></div>
+    </div>
+
+    <!-- Assign Operators -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-800">Asignaciones</h3>
+        <button onclick="showAssignModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">+ Asignar Operadores</button>
+        <button onclick="sendInvitations()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">📱 Invitar por WA</button>
+        <button onclick="sendReminder()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 text-sm">🔔 Recordatorio</button>
+        <button onclick="sendPending()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">📤 Enviar Pendientes</button>
+        <a href="/admin/events/{{ event_id }}/checkin" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm">📷 Check-in</a>
+        <a href="/admin/events/{{ event_id }}/payroll" class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 text-sm">💰 Nómina</a>
+      </div>
+      <div id="assignmentsTable"></div>
+    </div>
+  </div>
+
+  <!-- Assign Modal -->
+  <div id="assignModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">Buscar y Asignar Operadores</h3>
+        <button onclick="closeAssignModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+      </div>
+      <div class="flex gap-2 mb-4">
+        <input type="text" id="searchOps" placeholder="Buscar por nombre, email, doc..." class="flex-1 border rounded-lg px-3 py-2" oninput="searchOperators()">
+        <select id="filterExpRole" class="border rounded-lg px-3 py-2" onchange="searchOperators()">
+          <option value="">Todos los cargos</option>
+        </select>
+        <select id="assignRole" class="border rounded-lg px-3 py-2"></select>
+      </div>
+      <div id="opsResults" class="space-y-2 max-h-60 overflow-y-auto"></div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button onclick="closeAssignModal()" class="px-4 py-2 border rounded-lg">Cancelar</button>
+        <button onclick="assignSelected()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Asignar Seleccionados</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50"></div>
+</div>
+
+<script>
+const EVENT_ID = '{{ event_id }}';
+function getToken(){return localStorage.getItem('access_token');}
+let selectedOps = new Set();
+let assignedOps = new Set();  // operator IDs already assigned
+let currentStaffNeeds = [];  // staff needs with rates
+let roles = [];
+
+async function loadEvent(){
+  const token = getToken();
+  if(!token){window.location.href='/admin/login';return;}
+  const res = await fetch(`/api/events/${EVENT_ID}`,{headers:{'Authorization':'Bearer '+token}});
+  if(!res.ok){showToast('Error cargando evento','bg-red-500');return;}
+  const ev = await res.json();
+  document.getElementById('eventTitle').textContent = ev.name;
+  document.getElementById('evName').textContent = ev.name;
+  document.getElementById('evClient').textContent = ev.client_name ? `Cliente: ${ev.client_name}` : '';
+  // Show status badge
+  const STATUS_LABELS_EV = {draft:'Borrador',published:'Publicado',in_progress:'En Progreso',completed:'Completado',cancelled:'Cancelado'};
+  const STATUS_COLORS_EV = {draft:'bg-gray-100 text-gray-800',published:'bg-blue-100 text-blue-800',in_progress:'bg-yellow-100 text-yellow-800',completed:'bg-green-100 text-green-800',cancelled:'bg-red-100 text-red-800'};
+  document.getElementById('evStatusBadge').textContent = STATUS_LABELS_EV[ev.status]||ev.status;
+  document.getElementById('evStatusBadge').className = `px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS_EV[ev.status]||'bg-gray-100'}`;
+  // Action buttons based on status
+  let actions = '';
+  if(ev.status==='draft'){
+    actions += `<button onclick="changeEventStatus('published')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">📢 Publicar</button>`;
+    actions += `<button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm">Cancelar</button>`;
+  } else if(ev.status==='published'){
+    actions += `<button onclick="changeEventStatus('in_progress')" class="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 text-sm">▶ Iniciar Evento</button>`;
+    actions += `<button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm">Cancelar</button>`;
+  } else if(ev.status==='in_progress'){
+    actions += `<button onclick="changeEventStatus('completed')" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">✓ Completar</button>`;
+  }
+  document.getElementById('evActions').innerHTML = actions;
+  const sd = new Date(ev.start_date).toLocaleDateString('es-CO');
+  const ed = new Date(ev.end_date).toLocaleDateString('es-CO');
+  document.getElementById('evDetails').innerHTML = `
+    <div><span class="text-gray-500">Ubicación</span><div class="font-medium">${ev.city||ev.location}</div></div>
+    <div><span class="text-gray-500">Fecha Inicio</span><div class="font-medium">${sd}</div></div>
+    <div><span class="text-gray-500">Fecha Fin</span><div class="font-medium">${ed}</div></div>
+    <div><span class="text-gray-500">Personal</span><div class="font-medium">${ev.total_confirmed}/${ev.total_staff_needed}</div></div>`;
+  renderStaffNeeds(ev.staff_needs||[]);
+  loadAssignments();
+  loadRoles();
+}
+
+function renderStaffNeeds(needs){
+  currentStaffNeeds = needs;  // store for rate lookup
+  const div = document.getElementById('staffNeedsTable');
+  if(!needs.length){div.innerHTML='<p class="text-gray-500">No se han definido necesidades de personal</p>';return;}
+  div.innerHTML = `<table class="w-full"><thead class="bg-gray-50"><tr>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Necesarios</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Confirmados</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th>
+  </tr></thead><tbody class="divide-y">${needs.map(n=>`<tr>
+    <td class="px-4 py-2 font-medium">${n.role_name||'Sin rol'}</td>
+    <td class="px-4 py-2">${n.quantity_needed}</td>
+    <td class="px-4 py-2">${n.quantity_confirmed}</td>
+    <td class="px-4 py-2">${n.rate_per_shift?'$'+n.rate_per_shift.toLocaleString('es-CO'):'-'}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadAssignments(){
+  const token = getToken();
+  const res = await fetch(`/api/events/${EVENT_ID}/assignments`,{headers:{'Authorization':'Bearer '+token}});
+  const assignments = await res.json();
+  const div = document.getElementById('assignmentsTable');
+  if(!assignments.length){div.innerHTML='<p class="text-gray-500">No hay operadores asignados</p>';return;}
+  const STATUS_LABELS = {invited:'Invitado',confirmed:'Confirmado',rejected:'Rechazado',standby:'En espera',no_show:'No asistió',checked_in:'Check-in'};
+  const STATUS_COLORS = {invited:'bg-yellow-100 text-yellow-800',confirmed:'bg-green-100 text-green-800',rejected:'bg-red-100 text-red-800',standby:'bg-gray-100 text-gray-800',no_show:'bg-red-100 text-red-800',checked_in:'bg-blue-100 text-blue-800'};
+  div.innerHTML = `<table class="w-full"><thead class="bg-gray-50"><tr>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operador</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th>
+  </tr></thead><tbody class="divide-y">${assignments.map(a=>`<tr>
+    <td class="px-4 py-2 font-medium">${a.operator_name}</td>
+    <td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td>
+    <td class="px-4 py-2 text-sm">${a.role_name||'-'}</td>
+    <td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[a.status]||'bg-gray-100'}">${STATUS_LABELS[a.status]||a.status}</span></td>
+    <td class="px-4 py-2 text-sm">${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</td>
+  </tr>`).join('')}</tbody></table>`;
+  // Track assigned operator user IDs
+  assignedOps.clear();
+  assignments.forEach(a => { if(a.operator_user_id) assignedOps.add(a.operator_user_id); });
+}
+
+const STATUS_CONFIRM = {
+  published: {msg:'¿Publicar este evento? Los operadores podrán ser invitados.',toast:'Evento publicado',color:'bg-blue-500'},
+  in_progress: {msg:'¿Iniciar este evento?',toast:'Evento en progreso',color:'bg-yellow-500'},
+  completed: {msg:'¿Marcar este evento como completado?',toast:'Evento completado',color:'bg-green-500'},
+  cancelled: {msg:'¿Estás seguro de cancelar este evento? Esta acción no se puede deshacer.',toast:'Evento cancelado',color:'bg-red-500'},
+};
+async function changeEventStatus(newStatus){
+  const cfg = STATUS_CONFIRM[newStatus];
+  if(cfg && !confirm(cfg.msg))return;
+  const token = getToken();
+  const res = await fetch(`/api/events/${EVENT_ID}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({status:newStatus})});
+  if(res.ok){showToast(cfg?.toast||'Estado actualizado',cfg?.color||'bg-green-500');loadEvent();}
+  else{showToast('Error al cambiar estado','bg-red-500');}
+}
+
+async function loadRoles(){
+  const token = getToken();
+  const res = await fetch('/api/catalogs/roles',{headers:{'Authorization':'Bearer '+token}});
+  const data = await res.json();
+  roles = data.items||data;
+  // Populate assign role dropdown (with rate from staff needs)
+  const sel = document.getElementById('assignRole');
+  sel.innerHTML = '<option value="">Sin rol específico</option>' + roles.map(r=>{
+    const need = currentStaffNeeds.find(n => n.role_id === r.id);
+    const rateStr = need && need.rate_per_shift ? ` ($${need.rate_per_shift.toLocaleString('es-CO')})` : '';
+    return `<option value="${r.id}">${r.name}${rateStr}</option>`;
+  }).join('');
+  // Populate experience filter dropdown
+  const filterSel = document.getElementById('filterExpRole');
+  filterSel.innerHTML = '<option value="">Todos los cargos</option>' + roles.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+}
+
+function showAssignModal(){
+  selectedOps.clear();
+  document.getElementById('assignModal').classList.remove('hidden');
+  document.getElementById('opsResults').innerHTML='<p class="text-gray-500 text-sm">Cargando operadores...</p>';
+  loadAllOperators();
+}
+function closeAssignModal(){document.getElementById('assignModal').classList.add('hidden');}
+
+async function loadAllOperators(){
+  const token = getToken();
+  const roleId = document.getElementById('filterExpRole').value;
+  const q = document.getElementById('searchOps').value;
+  let url = '/api/operators/?limit=50&is_approved=true';
+  if(q.length>=2) url += `&search=${encodeURIComponent(q)}`;
+  if(roleId) url += `&experience_role_id=${encodeURIComponent(roleId)}`;
+  try{
+    const res = await fetch(url,{headers:{'Authorization':'Bearer '+token}});
+    const data = await res.json();
+    renderOpsResults(data.items||[]);
+  }catch(e){document.getElementById('opsResults').innerHTML='<p class="text-red-500 text-sm">Error cargando operadores</p>';}
+}
+
+async function searchOperators(){
+  const token = getToken();
+  const q = document.getElementById('searchOps').value;
+  const roleId = document.getElementById('filterExpRole').value;
+  let url = '/api/operators/?limit=50&is_approved=true';
+  if(q.length>=2) url += `&search=${encodeURIComponent(q)}`;
+  if(roleId) url += `&experience_role_id=${encodeURIComponent(roleId)}`;
+  try{
+    const res = await fetch(url,{headers:{'Authorization':'Bearer '+token}});
+    const data = await res.json();
+    renderOpsResults(data.items||[]);
+  }catch(e){document.getElementById('opsResults').innerHTML='<p class="text-red-500 text-sm">Error en búsqueda</p>';}
+}
+
+function renderOpsResults(ops){
+  // Filter out already assigned operators
+  const available = ops.filter(o => !assignedOps.has(String(o.id)));
+  if(!available.length){document.getElementById('opsResults').innerHTML='<p class="text-gray-500 text-sm">No hay operadores disponibles</p>';return;}
+  document.getElementById('opsResults').innerHTML = available.map(o=>`<label class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+    <input type="checkbox" value="${o.id}" onchange="toggleOp(this)" class="rounded">
+    <span class="font-medium">${o.first_name} ${o.last_name}</span>
+    <span class="text-sm text-gray-500">${o.phone||''}</span>
+    <span class="text-xs text-gray-400">${o.city||''}</span>
+  </label>`).join('');
+}
+
+function toggleOp(cb){if(cb.checked)selectedOps.add(cb.value);else selectedOps.delete(cb.value);}
+
+async function assignSelected(){
+  if(!selectedOps.size){showToast('Selecciona al menos un operador','bg-yellow-500');return;}
+  const token = getToken();
+  const roleId = document.getElementById('assignRole').value||null;
+  const body = {operator_ids:Array.from(selectedOps),role_id:roleId};
+  const res = await fetch(`/api/events/${EVENT_ID}/assign`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
+  if(res.ok){showToast('Operadores asignados','bg-green-500');closeAssignModal();loadAssignments();}
+  else{showToast('Error al asignar','bg-red-500');}
+}
+
+function showToast(msg,cls){const t=document.getElementById('toast');t.textContent=msg;t.className=`fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${cls}`;setTimeout(()=>t.className='hidden',3000);}
+
+async function sendInvitations(){
+  const token=getToken();
+  if(!confirm('¿Encolar invitaciones WhatsApp para operadores invitados?'))return;
+  const res=await fetch(`/api/whatsapp/events/${EVENT_ID}/invite`,{method:'POST',headers:{'Authorization':'Bearer '+token}});
+  const data=await res.json();
+  showToast(data.message||'Error',res.ok?'bg-green-500':'bg-red-500');
+}
+
+async function sendReminder(){
+  const token=getToken();
+  if(!confirm('¿Encolar recordatorios para operadores confirmados?'))return;
+  const res=await fetch(`/api/whatsapp/events/${EVENT_ID}/remind`,{method:'POST',headers:{'Authorization':'Bearer '+token}});
+  const data=await res.json();
+  showToast(data.message||'Error',res.ok?'bg-teal-500':'bg-red-500');
+}
+
+async function sendPending(){
+  const token=getToken();
+  if(!confirm('¿Simular envío de mensajes pendientes?'))return;
+  const res=await fetch('/api/whatsapp/send-pending',{method:'POST',headers:{'Authorization':'Bearer '+token}});
+  const data=await res.json();
+  showToast(`Enviados: ${data.sent||0}`,res.ok?'bg-blue-500':'bg-red-500');
+}
+
+loadEvent();
+</script>
+{% endblock %}

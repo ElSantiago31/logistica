@@ -1,0 +1,16 @@
+"""Generate initial migration and apply it."""
+import os, sys
+os.chdir(r"c:\Users\Karen\Downloads\logistica\backend")
+sys.path.insert(0, os.getcwd())
+
+from alembic.config import Config
+from alembic import command
+
+alembic_cfg = Config("alembic.ini")
+alembic_cfg.set_main_option("sqlalchemy.url", "postgresql+asyncpg://logistica:logistica_dev_2024@localhost:5432/logistica")
+
+print("Generating migration...")
+command.revision(alembic_cfg, autogenerate=True, message="initial schema")
+print("Applying migration...")
+command.upgrade(alembic_cfg, "head")
+print("Done!")

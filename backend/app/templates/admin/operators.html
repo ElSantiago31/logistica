@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operadores - Logística Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: {
+                primary: { 50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224' },
+            }}}
+        }
+    </script>
+    <style>
+        .toast { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Navbar -->
+    <nav style="background: linear-gradient(135deg, #5d4224 0%, #785631 100%);" class="text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                    <div class="leading-tight">
+                        <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                        <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                    </div>
+                    <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
+                    <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm border-b-2 pb-1" style="color:#fff2e4; border-color:#cf9b62;">Operadores</a>
+                    <a href="/admin/events" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Eventos</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="userName" class="text-sm" style="color:#e3be95;"></span>
+                    <button onclick="adminLogout()" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition" style="background:#cf9b62;color:#1a1a1a;">Cerrar Sesión</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Search -->
+        <div class="bg-white rounded-xl shadow p-4 mb-6">
+            <div class="flex flex-wrap gap-4 items-center">
+                <div class="flex-1 min-w-[200px]">
+                    <input type="text" id="searchInput" placeholder="Buscar por nombre o email..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        oninput="debounceSearch()">
+                </div>
+                <span id="totalCount" class="text-sm text-gray-500"></span>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div id="operatorsTable" class="overflow-x-auto">
+                <div class="p-8 text-center text-gray-400 loading">Cargando operadores...</div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" class="flex justify-center mt-6 space-x-2"></div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('access_token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!token || !['superadmin', 'coordinator'].includes(user.user_type)) {
+                window.location.href = '/admin/login'; return;
+            }
+            document.getElementById('userName').textContent = user.first_name + ' ' + user.last_name;
+        })();
+
+        let currentPage = 0;
+        const pageSize = 20;
+        let searchTimeout;
+
+        function getAuthHeaders() { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }; }
+
+        function showToast(msg, type='info') {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            const bg = type==='error'?'bg-red-500':type==='success'?'bg-green-500':'bg-blue-500';
+            t.className = 'toast '+bg+' text-white px-6 py-3 rounded-lg shadow-lg';
+            t.textContent = msg;
+            c.appendChild(t);
+            setTimeout(()=>t.remove(), 4000);
+        }
+
+        function debounceSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(()=>{ currentPage=0; loadOperators(); }, 300); }
+
+        async function loadOperators() {
+            const container = document.getElementById('operatorsTable');
+            container.innerHTML = '<div class="p-8 text-center text-gray-400 loading">Cargando...</div>';
+            const search = document.getElementById('searchInput').value.trim().toLowerCase();
+            const skip = currentPage * pageSize;
+            let url = '/api/operators/?skip='+skip+'&limit='+pageSize;
+
+            try {
+                const res = await fetch(url, { headers: getAuthHeaders() });
+                if (res.status===401||res.status===403) { localStorage.clear(); window.location.href='/admin/login'; return; }
+                const data = await res.json();
+                let items = data.items || [];
+                if (search) items = items.filter(op => (op.first_name+' '+op.last_name).toLowerCase().includes(search) || (op.email||'').toLowerCase().includes(search));
+                document.getElementById('totalCount').textContent = data.total + ' operadores';
+                if (!items.length) { container.innerHTML = '<div class="p-8 text-center text-gray-400">No se encontraron operadores</div>'; document.getElementById('pagination').innerHTML=''; return; }
+
+                let html = '<table class="w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ciudad</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th></tr></thead><tbody class="divide-y divide-gray-200">';
+                items.forEach(op => {
+                    const name = (op.first_name||'')+' '+(op.last_name||'');
+                    html += '<tr id="row-'+op.id+'" class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium text-gray-900">'+name.trim()+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.email||'-')+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.phone||'-')+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.city||'-')+'</td><td class="px-4 py-3 text-center space-x-1"><button onclick="viewOp(\''+op.id+'\')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition">👁 Ver</button><button onclick="deleteOp(\''+op.id+'\',\''+name.trim().replace(/'/g,"\\'")+'\')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition">🗑 Eliminar</button></td></tr>';
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+                // Pagination
+                const tp = Math.ceil(data.total / pageSize);
+                let ph = '';
+                if (tp > 1) {
+                    if (currentPage > 0) ph += '<button onclick="goPage('+(currentPage-1)+')" class="px-3 py-1 rounded bg-white border hover:bg-gray-50">← Anterior</button>';
+                    ph += '<span class="px-3 py-1 text-sm text-gray-600">Página '+(currentPage+1)+' de '+tp+'</span>';
+                    if (currentPage < tp-1) ph += '<button onclick="goPage('+(currentPage+1)+')" class="px-3 py-1 rounded bg-white border hover:bg-gray-50">Siguiente →</button>';
+                }
+                document.getElementById('pagination').innerHTML = ph;
+            } catch(e) { console.error(e); }
+        }
+
+        function goPage(p) { currentPage = p; loadOperators(); }
+        function viewOp(id) { window.location.href = '/admin/operator/'+id; }
+
+        async function deleteOp(id, name) {
+            if (!confirm('¿Eliminar al operador "'+name+'"?\n\nEsta acción desactivará su cuenta.')) return;
+            try {
+                const r = await fetch('/api/operators/'+id, { method: 'DELETE', headers: getAuthHeaders() });
+                if (r.ok || r.status === 204) {
+                    showToast('Operador eliminado', 'success');
+                    const row = document.getElementById('row-'+id);
+                    if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+                } else {
+                    showToast('Error al eliminar', 'error');
+                }
+            } catch(e) { showToast('Error de conexión', 'error'); }
+        }
+
+        async function adminLogout() { localStorage.clear(); window.location.href = '/admin/login'; }
+
+        loadOperators();
+    </script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superadmin - Gestión de Admins</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
+    <style>.toast{animation:slideIn .3s ease-out}@keyframes slideIn{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="flex justify-between h-16">
+            <div class="flex items-center space-x-4">
+                <img src="/static/frontend/logo.jpeg" alt="A&C" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62">
+                <span class="text-sm font-bold" style="color:#fff2e4">A&C Logística</span>
+                <a href="/admin" class="ml-4 text-sm" style="color:#f8d9b6">Dashboard</a>
+                <a href="/admin/superadmin" class="text-sm border-b-2 pb-1" style="color:#fff2e4;border-color:#cf9b62">⚙️ Superadmin</a>
+                <a href="/admin/operators" class="text-sm" style="color:#f8d9b6">Operadores</a>
+                <a href="/admin/events" class="text-sm" style="color:#f8d9b6">Eventos</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="userName" class="text-sm" style="color:#e3be95"></span>
+                <button onclick="localStorage.clear();location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm" style="background:#cf9b62;color:#1a1a1a">Salir</button>
+            </div>
+        </div></div>
+    </nav>
+
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">🔐 Gestión de Administradores</h1>
+            <button onclick="showCreateModal()" class="px-5 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">+ Nuevo Admin</button>
+        </div>
+
+        <div id="adminsTable" class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="p-8 text-center text-gray-400">Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h2 id="modalTitle" class="text-lg font-bold text-gray-800 mb-4">Nuevo Administrador</h2>
+            <form id="adminForm" class="space-y-3">
+                <input type="hidden" id="editId">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs text-gray-500">Nombre*</label><input id="fName" required class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                    <div><label class="text-xs text-gray-500">Apellido*</label><input id="lName" required class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs text-gray-500">Tipo Documento</label><select id="docType" class="w-full px-3 py-2 border rounded-lg text-sm"><option>CC</option><option>CE</option><option>TI</option><option>PA</option></select></div>
+                    <div><label class="text-xs text-gray-500">Documento*</label><input id="docNum" required class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                </div>
+                <div><label class="text-xs text-gray-500">Email (opcional)</label><input id="email" type="email" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="correo@ejemplo.com"></div>
+                <div><label class="text-xs text-gray-500">Teléfono</label><input id="phone" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="text-xs text-gray-500">Contraseña*</label><input id="password" type="password" required class="w-full px-3 py-2 border rounded-lg text-sm" minlength="8"></div>
+                <div><label class="text-xs text-gray-500">Rol</label><select id="userType" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="coordinator">Coordinador</option><option value="superadmin">Superadmin</option></select></div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="saveAdmin()" class="flex-1 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">Guardar</button>
+                    <button type="button" onclick="closeModal()" class="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-200 text-gray-700">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function(){const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');if(!t||u.user_type!=='superadmin'){location.href='/admin/login';return}document.getElementById('userName').textContent=u.first_name+' '+u.last_name})();
+    function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
+    function toast(m,t){const c=document.getElementById('toast-container'),e=document.createElement('div');e.className='toast '+(t==='error'?'bg-red-500':t==='success'?'bg-green-500':'bg-blue-500')+' text-white px-6 py-3 rounded-lg shadow-lg';e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),4000)}
+
+    async function loadAdmins(){
+        const container=document.getElementById('adminsTable');
+        try{
+            const r=await fetch('/api/auth/admins',{headers:authH()});
+            if(!r.ok){container.innerHTML='<p class="p-8 text-center text-red-500">Error al cargar</p>';return}
+            const admins=await r.json();
+            if(!admins.length){container.innerHTML='<p class="p-8 text-center text-gray-400">No hay administradores</p>';return}
+            let h='<table class="w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Documento</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th></tr></thead><tbody class="divide-y">';
+            admins.forEach(a=>{
+                const role=a.user_type==='superadmin'?'<span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-semibold">Superadmin</span>':'<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">Coordinador</span>';
+                const status=a.is_active?'<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Activo</span>':'<span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Inactivo</span>';
+                h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${a.is_active?`<button onclick="deactivateAdmin('${a.id}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`:''}</td></tr>`;
+            });
+            h+='</tbody></table>';
+            container.innerHTML=h;
+        }catch(e){toast('Error','error')}
+    }
+
+    function showCreateModal(){
+        document.getElementById('modalTitle').textContent='Nuevo Administrador';
+        document.getElementById('editId').value='';
+        document.getElementById('adminForm').reset();
+        document.getElementById('password').required=true;
+        document.getElementById('modal').classList.remove('hidden');
+    }
+
+    async function editAdmin(id){
+        try{
+            const r=await fetch('/api/auth/admins',{headers:authH()});const admins=await r.json();
+            const a=admins.find(x=>x.id===id);if(!a)return;
+            document.getElementById('modalTitle').textContent='Editar Administrador';
+            document.getElementById('editId').value=id;
+            document.getElementById('fName').value=a.first_name;
+            document.getElementById('lName').value=a.last_name;
+            document.getElementById('docNum').value=a.document_number;
+            document.getElementById('email').value=a.email||'';
+            document.getElementById('phone').value=a.phone||'';
+            document.getElementById('userType').value=a.user_type;
+            document.getElementById('password').value='';
+            document.getElementById('password').required=false;
+            document.getElementById('modal').classList.remove('hidden');
+        }catch(e){toast('Error','error')}
+    }
+
+    function closeModal(){document.getElementById('modal').classList.add('hidden')}
+
+    async function saveAdmin(){
+        const id=document.getElementById('editId').value;
+        const body={first_name:document.getElementById('fName').value,last_name:document.getElementById('lName').value,document_type:document.getElementById('docType').value,document_number:document.getElementById('docNum').value,email:document.getElementById('email').value||undefined,phone:document.getElementById('phone').value||undefined,user_type:document.getElementById('userType').value};
+        const pw=document.getElementById('password').value;
+        if(pw)body.password=pw;
+        try{
+            let r;
+            if(id){r=await fetch('/api/auth/admins/'+id,{method:'PUT',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify(body)})}
+            else{if(!pw){toast('La contraseña es requerida','error');return}r=await fetch('/api/auth/admins',{method:'POST',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify(body)})}
+            if(r.ok||r.status===201){toast(id?'Actualizado':'Creado','success');closeModal();loadAdmins()}
+            else{const e=await r.json();toast(e.detail||'Error','error')}
+        }catch(e){toast('Error','error')}
+    }
+
+    async function deactivateAdmin(id){
+        if(!confirm('¿Desactivar este administrador?'))return;
+        try{const r=await fetch('/api/auth/admins/'+id,{method:'DELETE',headers:authH()});if(r.ok||r.status===204){toast('Desactivado','success');loadAdmins()}else toast('Error','error')}catch(e){toast('Error','error')}
+    }
+
+    loadAdmins();
+    </script>
+</body>
+</html>

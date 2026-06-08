@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}A&C Logística - Producción de Eventos{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-white">
+
+  <!-- Hero -->
+  <section class="max-w-6xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
+    <div class="inline-block px-4 py-1 rounded-full text-sm font-medium mb-6" style="background:rgba(207,155,98,0.2); color:#976e41;">
+      Gestión de Personal Eventual
+    </div>
+    <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6" style="color:#5d4224;">
+      Conectamos talento<br>con <span style="color:#cf9b62;">eventos increíbles</span>
+    </h1>
+    <p class="text-lg md:text-xl max-w-2xl mb-10" style="color:#785631;">
+      Somos la empresa líder en suministro de personal logístico, de seguridad, PMT, montaje, aseo y protocolo para eventos masivos en Colombia.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <a href="/enrolamiento" class="px-8 py-4 rounded-xl font-bold text-lg transition shadow-lg" style="background:#cf9b62; color:#1a1a1a;">
+        Trabaja con nosotros
+      </a>
+      <a href="/enrolamiento/login" class="border px-8 py-4 rounded-xl font-semibold text-lg transition" style="border-color:#cf9b62; color:#5d4224;">
+        Iniciar Sesión
+      </a>
+      <a href="#servicios" class="border px-8 py-4 rounded-xl font-semibold text-lg transition" style="border-color:#976e41; color:#785631;">
+        Nuestros servicios
+      </a>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="max-w-6xl mx-auto px-6 pb-20">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
+        <div class="text-3xl font-extrabold" style="color:#cf9b62;">500+</div>
+        <div class="text-sm mt-1 text-gray-600">Eventos gestionados</div>
+      </div>
+      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
+        <div class="text-3xl font-extrabold" style="color:#cf9b62;">1,200+</div>
+        <div class="text-sm mt-1 text-gray-600">Operadores activos</div>
+      </div>
+      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
+        <div class="text-3xl font-extrabold" style="color:#cf9b62;">15+</div>
+        <div class="text-sm mt-1 text-gray-600">Ciudades cubiertas</div>
+      </div>
+      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
+        <div class="text-3xl font-extrabold" style="color:#cf9b62;">98%</div>
+        <div class="text-sm mt-1 text-gray-600">Satisfacción del cliente</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Servicios -->
+  <section id="servicios" class="max-w-6xl mx-auto px-6 pb-20">
+    <h2 class="text-3xl font-bold text-center mb-12" style="color:#5d4224;">Nuestros Servicios</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200 hover:border-opacity-60" style="--tw-border-opacity:1; border-color:rgba(207,155,98,0.4);">
+        <div class="text-3xl mb-3">📦</div>
+        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Logística y Montaje</h3>
+        <p class="text-sm text-gray-600">Coordinación general, montaje y desmontaje de infraestructura para eventos de cualquier escala.</p>
+      </div>
+      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
+        <div class="text-3xl mb-3">🛡️</div>
+        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Seguridad y Control</h3>
+        <p class="text-sm text-gray-600">Líderes y operadores de seguridad (Bouncer), control de acceso y acompañamiento VIP.</p>
+      </div>
+      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
+        <div class="text-3xl mb-3">🚦</div>
+        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">PMT - Tráfico</h3>
+        <p class="text-sm text-gray-600">Plan de Manejo de Tráfico vehicular y peatonal con personal certificado.</p>
+      </div>
+      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
+        <div class="text-3xl mb-3">🧹</div>
+        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Aseo y Mantenimiento</h3>
+        <p class="text-sm text-gray-600">Operadores de aseo especializados para mantener impecables tus eventos.</p>
+      </div>
+      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
+        <div class="text-3xl mb-3">🚨</div>
+        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Brigadas de Emergencia</h3>
+        <p class="text-sm text-gray-600">Brigadistas y coordinadores de emergencias capacitados para respuesta inmediata.</p>
+      </div>
+      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
+        <div class="text-3xl mb-3">🎯</div>
+        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Protocolo y Acomodación</h3>
+        <p class="text-sm text-gray-600">Personal de protocolo, acomodadores y azafatas para atención institucional.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="max-w-4xl mx-auto px-6 pb-20 text-center">
+    <div class="rounded-2xl p-10 shadow-2xl" style="background: linear-gradient(135deg, #cf9b62, #b48450);">
+      <h2 class="text-3xl font-bold mb-4" style="color:#1a1a1a;">¿Quieres ser parte de nuestro equipo?</h2>
+      <p class="mb-8 text-lg" style="color:#5d4224;">Regístrate y comienza a recibir invitaciones para eventos en tu ciudad. Maneja tu disponibilidad por WhatsApp.</p>
+      <a href="/enrolamiento" class="inline-block font-bold px-8 py-4 rounded-xl transition shadow-lg" style="background:#5d4224; color:#fff2e4;">
+        👉 Regístrate aquí
+      </a>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block footer %}
+<footer class="border-t" style="background:#5d4224; border-color:#785631;">
+  <div class="max-w-6xl mx-auto px-6 py-12">
+    <div class="grid md:grid-cols-3 gap-8 text-white">
+      <div>
+        <h3 class="font-bold text-lg mb-3" style="color:#cf9b62;">AyC Eventos</h3>
+        <p class="text-sm opacity-90">A y C LOGISTICA y PRODUCCION DE EVENTOS LTDA</p>
+        <p class="text-sm opacity-80 mt-2">Gestión de personal eventual para eventos masivos en Colombia.</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-lg mb-3" style="color:#cf9b62;">Contacto</h3>
+        <p class="text-sm opacity-90">📍 Cr 59D # 131-72, Bogotá - Suba</p>
+        <p class="text-sm opacity-90 mt-1">📱 +57 312 395 5552</p>
+        <p class="text-sm opacity-90 mt-1">📧 casas.logisticayeventos@gmail.com</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-lg mb-3" style="color:#cf9b62;">Enlaces</h3>
+        <a href="/enrolamiento" class="block text-sm opacity-90 hover:opacity-100 mb-1">Trabaja con nosotros</a>
+        <a href="/enrolamiento/login" class="block text-sm opacity-90 hover:opacity-100 mb-1">Iniciar Sesión</a>
+        <a href="#servicios" class="block text-sm opacity-90 hover:opacity-100">Servicios</a>
+      </div>
+    </div>
+    <div class="border-t mt-8 pt-6 text-center text-sm opacity-70" style="border-color:#785631;">
+      © 2025 AyC Eventos — A y C Logística y Producción de Eventos LTDA. Todos los derechos reservados.
+    </div>
+  </div>
+</footer>
+{% endblock %}

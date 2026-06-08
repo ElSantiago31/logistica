@@ -1,0 +1,26 @@
+{
+  "name": "AyC Eventos - Gestión de Personal",
+  "short_name": "AyC Eventos",
+  "description": "Gestión de personal eventual para eventos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#5d4224",
+  "theme_color": "#cf9b62",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/frontend/logo.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/frontend/logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "es-CO"
+}

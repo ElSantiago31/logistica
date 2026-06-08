@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Registro Exitoso - Logística{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto px-4 py-8">
+    <div class="bg-white rounded-xl shadow-lg p-8 text-center">
+        <div class="text-6xl mb-4">🎉</div>
+        <h1 class="text-2xl font-bold text-green-600 mb-2">¡Registro Exitoso!</h1>
+        <p class="text-gray-600 mb-6">Tu registro ha sido procesado correctamente.</p>
+
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <p class="text-green-800 font-medium">Pendiente de verificación y aprobación</p>
+            <p class="text-green-600 text-sm mt-1">El equipo de Logística revisará tu información y te contactará.</p>
+        </div>
+
+        <div id="photo-section" class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">📸 Sube tu foto (opcional)</h3>
+            <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-primary-500 transition">
+                <input type="file" id="photo-input" accept="image/*" class="hidden">
+                <p class="text-gray-500">Arrastra una foto aquí o haz clic para seleccionar</p>
+                <p class="text-xs text-gray-400 mt-1">JPG, PNG. Máximo 5MB</p>
+            </div>
+            <div id="photo-preview" class="hidden mt-3">
+                <img id="preview-img" class="w-32 h-32 object-cover rounded-lg mx-auto">
+            </div>
+            <button id="upload-btn" onclick="uploadPhoto()" class="hidden mt-3 bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 px-6 rounded-lg transition">
+                Subir Foto
+            </button>
+            <p id="upload-status" class="text-sm mt-2 hidden"></p>
+        </div>
+
+        <a href="/" class="text-primary-600 hover:text-primary-800 font-medium">
+            ← Volver al Inicio
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const params = new URLSearchParams(window.location.search);
+const userId = params.get('id');
+
+const dropZone = document.getElementById('drop-zone');
+const photoInput = document.getElementById('photo-input');
+const preview = document.getElementById('photo-preview');
+const previewImg = document.getElementById('preview-img');
+const uploadBtn = document.getElementById('upload-btn');
+
+dropZone.addEventListener('click', () => photoInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-primary-500'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-primary-500'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary-500');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+photoInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+    if (!file.type.startsWith('image/')) { alert('Solo se permiten imágenes'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+        previewImg.src = e.target.result;
+        preview.classList.remove('hidden');
+        uploadBtn.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+async function uploadPhoto() {
+    if (!userId || !photoInput.files[0]) return;
+    const formData = new FormData();
+    formData.append('file', photoInput.files[0]);
+    const status = document.getElementById('upload-status');
+    status.textContent = 'Subiendo...';
+    status.classList.remove('hidden');
+    try {
+        const resp = await fetch(`/api/operators/${userId}/photo`, { method: 'POST', body: formData });
+        if (resp.ok) {
+            status.textContent = '✅ Foto subida correctamente';
+            status.className = 'text-sm mt-2 text-green-600';
+        } else {
+            status.textContent = '⚠️ Error subiendo foto (puedes subirla después)';
+            status.className = 'text-sm mt-2 text-yellow-600';
+        }
+    } catch(e) {
+        status.textContent = '⚠️ Error de conexión';
+        status.className = 'text-sm mt-2 text-yellow-600';
+    }
+}
+</script>
+{% endblock %}

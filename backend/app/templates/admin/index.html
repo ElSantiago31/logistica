@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Logística Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .toast { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .role-card { transition: all 0.2s ease; }
+        .role-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Toast container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Navbar -->
+    <nav style="background: linear-gradient(135deg, #5d4224 0%, #785631 100%);" class="text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                    <div class="leading-tight">
+                        <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                        <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                    </div>
+                    <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
+                    <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Operadores</a>
+                    <a href="/admin/events" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Eventos</a>
+                    <a id="superadminLink" href="/admin/superadmin" class="hover:opacity-80 font-medium text-sm hidden" style="color:#ffebd6;">⚙️ Superadmin</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="userName" class="text-sm" style="color:#e3be95;"></span>
+                    <button onclick="adminLogout()" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition" style="background:#cf9b62;color:#1a1a1a;">
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+            <!-- Active Events Card -->
+            <div class="bg-white rounded-xl shadow-lg p-8 border-l-4 border-primary-500 flex items-center">
+                <div class="flex-shrink-0 bg-primary-50 rounded-xl p-4 mr-6">
+                    <svg class="w-12 h-12 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-500 font-medium uppercase tracking-wide">Eventos Activos</div>
+                    <div id="statEvents" class="text-4xl font-bold text-gray-800 mt-1">-</div>
+                    <div class="text-xs text-gray-400 mt-1">Publicado / En progreso</div>
+                </div>
+            </div>
+            <!-- Total Operators Card -->
+            <div class="bg-white rounded-xl shadow-lg p-8 border-l-4 border-green-500 flex items-center">
+                <div class="flex-shrink-0 bg-green-50 rounded-xl p-4 mr-6">
+                    <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-500 font-medium uppercase tracking-wide">Total Operadores</div>
+                    <div id="statOperators" class="text-4xl font-bold text-green-600 mt-1">-</div>
+                    <div class="text-xs text-gray-400 mt-1">Registrados en el sistema</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operators by Role -->
+        <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-xl font-bold text-gray-800">Operadores por Rol</h2>
+            <a href="/admin/operators" class="text-primary-600 hover:text-primary-800 text-sm font-medium">Ver todos los operadores →</a>
+        </div>
+        <div id="rolesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="col-span-full p-8 text-center text-gray-400 loading">Cargando...</div>
+        </div>
+    </div>
+
+    <script>
+        // Auth check
+        (function() {
+            const token = localStorage.getItem('access_token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!token || !['superadmin', 'coordinator'].includes(user.user_type)) {
+                window.location.href = '/admin/login';
+                return;
+            }
+            document.getElementById('userName').textContent = `${user.first_name} ${user.last_name}`;
+            if (user.user_type === 'superadmin') {
+                document.getElementById('superadminLink').classList.remove('hidden');
+            }
+        })();
+
+        function getAuthHeaders() {
+            return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') };
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bg = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-blue-500';
+            toast.className = `toast ${bg} text-white px-6 py-3 rounded-lg shadow-lg`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // Role colors for card accents
+        const roleColors = [
+            'border-blue-400', 'border-green-400', 'border-purple-400',
+            'border-orange-400', 'border-pink-400', 'border-teal-400',
+            'border-yellow-400', 'border-indigo-400', 'border-red-400',
+            'border-cyan-400',
+        ];
+        const roleBgColors = [
+            'bg-blue-50', 'bg-green-50', 'bg-purple-50',
+            'bg-orange-50', 'bg-pink-50', 'bg-teal-50',
+            'bg-yellow-50', 'bg-indigo-50', 'bg-red-50',
+            'bg-cyan-50',
+        ];
+        const roleTextColors = [
+            'text-blue-700', 'text-green-700', 'text-purple-700',
+            'text-orange-700', 'text-pink-700', 'text-teal-700',
+            'text-yellow-700', 'text-indigo-700', 'text-red-700',
+            'text-cyan-700',
+        ];
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/operators/dashboard/stats', {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.clear();
+                    window.location.href = '/admin/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                // Update stats
+                document.getElementById('statEvents').textContent = data.active_events || 0;
+                document.getElementById('statOperators').textContent = data.total_operators || 0;
+
+                // Render role cards
+                const container = document.getElementById('rolesContainer');
+                const roles = data.operators_by_role || [];
+
+                if (roles.length === 0) {
+                    container.innerHTML = '<div class="col-span-full p-8 text-center text-gray-400">No hay roles configurados</div>';
+                    return;
+                }
+
+                // Track multi-role operators
+                const memberRoleCount = {};
+                roles.forEach(r => r.members.forEach(m => { memberRoleCount[m.id] = (memberRoleCount[m.id]||0)+1; }));
+
+                let html = '';
+                roles.forEach((role, idx) => {
+                    const colorIdx = idx % roleColors.length;
+                    const borderColor = roleColors[colorIdx];
+                    const bgColor = roleBgColors[colorIdx];
+                    const textColor = roleTextColors[colorIdx];
+
+                    html += `
+                    <div class="role-card bg-white rounded-xl shadow overflow-hidden border-t-4 ${borderColor}">
+                        <div class="px-5 py-4 flex items-center justify-between ${bgColor}">
+                            <h3 class="font-bold ${textColor} text-base">${role.role_name}</h3>
+                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold text-white" style="background:#785631;">
+                                ${role.count}
+                            </span>
+                        </div>
+                        <div class="px-5 py-3">
+                    `;
+
+                    if (role.members.length === 0) {
+                        html += '<p class="text-sm text-gray-400 italic py-2">Sin operadores asignados</p>';
+                    } else {
+                        html += '<ul class="divide-y divide-gray-100">';
+                        role.members.forEach(member => {
+                            const isMulti = memberRoleCount[member.id] > 1;
+                            html += `
+                            <li class="py-2">
+                                <div class="flex items-center min-w-0">
+                                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white mr-3 flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}" style="background:${isMulti ? '#eab308' : '#cf9b62'};">
+                                        ${member.name.charAt(0)}
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center flex-wrap gap-1">
+                                            <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600">${member.name}</a>
+                                            ${isMulti ? '<span class="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-semibold">MULTI</span>' : ''}
+                                        </div>
+                                        <div class="text-xs text-gray-400">${member.city || ''}</div>
+                                    </div>
+                                    ${member.phone ? `<a href="tel:${member.phone}" class="text-xs text-primary-600 hover:text-primary-800 flex-shrink-0 ml-2 whitespace-nowrap">${member.phone}</a>` : ''}
+                                </div>
+                            </li>`;
+                        });
+                        html += '</ul>';
+                    }
+
+                    html += `
+                        </div>
+                    </div>`;
+                });
+
+                // Sin experiencia section
+                const sinExp = data.sin_experiencia || [];
+                let sinExpHtml = '';
+                if (sinExp.length > 0) {
+                    sinExpHtml = `
+                    <div class="mb-4 mt-8 flex items-center justify-between">
+                        <h2 class="text-xl font-bold text-gray-800">⚠️ Sin Experiencia Asignada</h2>
+                        <span class="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800">${sinExp.length}</span>
+                    </div>
+                    <div class="bg-white rounded-xl shadow overflow-hidden border-t-4 border-amber-400">
+                        <div class="px-5 py-4 flex items-center justify-between bg-amber-50">
+                            <h3 class="font-bold text-amber-700 text-base">Operadores sin rol asignado</h3>
+                        </div>
+                        <div class="px-5 py-3">
+                            <ul class="divide-y divide-gray-100">`;
+                    sinExp.forEach(member => {
+                        sinExpHtml += `
+                            <li class="py-2 flex items-center justify-between">
+                                <div class="flex items-center min-w-0">
+                                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white mr-3 flex-shrink-0" style="background:#9ca3af;">
+                                        ${member.name.charAt(0)}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600 truncate">${member.name}</a>
+                                        <div class="text-xs text-gray-400">${member.city || ''}</div>
+                                    </div>
+                                </div>
+                                ${member.phone ? `<a href="tel:${member.phone}" class="text-xs text-primary-600 hover:text-primary-800 flex-shrink-0 ml-2">${member.phone}</a>` : ''}
+                            </li>`;
+                    });
+                    sinExpHtml += `</ul></div></div>`;
+                }
+                // Append sin experiencia after role cards
+                container.insertAdjacentHTML('afterend', sinExpHtml);
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error('Error loading dashboard:', err);
+                showToast('Error al cargar el dashboard', 'error');
+            }
+        }
+
+        async function adminLogout() {
+            try {
+                await fetch('/api/auth/me', { headers: getAuthHeaders() });
+            } catch(e) {}
+            localStorage.clear();
+            window.location.href = '/admin/login';
+        }
+
+        // Initial load
+        loadDashboard();
+    </script>
+</body>
+</html>

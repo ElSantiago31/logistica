@@ -94,10 +94,10 @@ async def revoke_token(db: AsyncSession, jti: str, user_id: uuid.UUID, reason: s
     await db.commit()
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
-    """Authenticate a user by email and password. Returns User or None."""
+async def authenticate_user(db: AsyncSession, document_number: str, password: str) -> User | None:
+    """Authenticate a user by document number and password. Returns User or None."""
     result = await db.execute(
-        select(User).where(User.email == email, User.is_active == True)
+        select(User).where(User.document_number == document_number, User.is_active == True)
     )
     user = result.scalar_one_or_none()
     if not user:

@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}Check-in — AyC Eventos{% endblock %}
+{% block head %}
+<script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
+<script src="/static/js/db.js"></script>
+<script src="/static/js/scanner.js"></script>
+<script src="/static/js/sync.js"></script>
+<style>
+    #scanner-container { width: 100%; max-width: 350px; margin: 0 auto; }
+    #scanner-container video { border-radius: 12px; }
+    .operator-card { transition: all 0.2s; cursor: pointer; }
+    .operator-card:hover { transform: translateY(-2px); }
+    .operator-card.checked-in { border-left: 4px solid #22c55e; background: #f0fdf4; }
+    .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold" style="color:#5d4224;">Check-in de Operadores</h1>
+            <p id="event-name" class="text-gray-500 text-sm">Cargando evento...</p>
+        </div>
+        <div class="flex gap-2">
+            <span id="online-badge" class="status-badge bg-green-100 text-green-700">🟢 Online</span>
+            <span id="offline-badge" class="status-badge bg-gray-100 text-gray-700 hidden">📴 Offline</span>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mb-6">
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-total" class="text-2xl font-bold" style="color:#cf9b62;">0</div>
+            <div class="text-xs text-gray-500">Asignados</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-checked" class="text-2xl font-bold text-green-600">0</div>
+            <div class="text-xs text-gray-500">Check-in</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-pending" class="text-2xl font-bold text-yellow-600">0</div>
+            <div class="text-xs text-gray-500">Pendientes</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-sync" class="text-2xl font-bold text-blue-600">0</div>
+            <div class="text-xs text-gray-500">Pend. Sync</div>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left: Scanner + Search -->
+        <div>
+            <!-- Scanner toggle -->
+            <button id="btn-scanner" onclick="toggleScanner()"
+                class="w-full py-3 rounded-xl font-bold text-white mb-4 transition"
+                style="background:#5d4224;">
+                📷 Activar Escáner QR
+            </button>
+
+            <div id="scanner-container" class="mb-4 hidden"></div>
+
+            <!-- Manual search -->
+            <div class="relative mb-4">
+                <input type="text" id="search-input" placeholder="Buscar por nombre o cédula..."
+                    class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-amber-400"
+                    oninput="searchOperator(this.value)">
+            </div>
+
+            <!-- Download offline button -->
+            <button id="btn-offline" onclick="downloadForOffline()"
+                class="w-full py-2 rounded-lg text-sm font-medium border-2 mb-2 transition"
+                style="border-color:#cf9b62; color:#5d4224;">
+                📥 Descargar datos offline
+            </button>
+            <p class="text-xs text-gray-400 text-center mb-4" id="last-download"></p>
+
+            <!-- Search results -->
+            <div id="search-results" class="space-y-2"></div>
+        </div>
+
+        <!-- Right: Operator detail + check-in -->
+        <div id="operator-panel" class="hidden">
+            <div class="bg-white rounded-xl border p-6">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl" id="op-avatar">
+                        👤
+                    </div>
+                    <div>
+                        <h3 id="op-name" class="text-lg font-bold" style="color:#5d4224;"></h3>
+                        <p id="op-doc" class="text-sm text-gray-500"></p>
+                        <p id="op-role" class="text-sm font-medium" style="color:#cf9b62;"></p>
+                    </div>
+                </div>
+
+                <div id="op-status-box" class="rounded-lg p-3 mb-4 text-center">
+                    <span id="op-status-text" class="font-medium"></span>
+                </div>
+
+                <div id="checkin-actions" class="space-y-2">
+                    <button id="btn-checkin" onclick="doCheckIn()"
+                        class="w-full py-3 rounded-xl font-bold text-white transition"
+                        style="background:#22c55e;">
+                        ✅ Registrar Ingreso
+                    </button>
+                    <button id="btn-noshow" onclick="markNoShow()"
+                        class="w-full py-2 rounded-lg text-sm font-medium border border-red-300 text-red-600">
+                        ❌ No Asistió
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent check-ins -->
+            <div class="mt-4">
+                <h4 class="text-sm font-semibold text-gray-500 mb-2">Últimos ingresos</h4>
+                <div id="recent-checkins" class="space-y-1 max-h-40 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EVENT_ID = "{{ event_id }}";
+let currentOperator = null;
+let scannerActive = false;
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+    loadEventData();
+    OfflineDB.init();
+    SyncManager.startAutoSync();
+    
+    // Update online/offline badges
+    updateConnectionStatus();
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+    
+    // Listen for sync events
+    window.addEventListener('sync-complete', updateSyncCount);
+});
+
+function updateConnectionStatus() {
+    const online = navigator.onLine;
+    document.getElementById('online-badge').classList.toggle('hidden', !online);
+    document.getElementById('offline-badge').classList.toggle('hidden', online);
+}
+
+async function loadEventData() {
+    try {
+        const resp = await fetch(`/api/events/${EVENT_ID}/offline-data`);
+        if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById('event-name').textContent = data.name;
+            updateStats(data.assignments?.length || 0, 0);
+        }
+    } catch (e) {
+        // Try offline data
+        const events = await OfflineDB.getCachedEvents();
+        const ev = events.find(e => e.id === EVENT_ID);
+        if (ev) document.getElementById('event-name').textContent = ev.name;
+    }
+}
+
+function updateStats(total, checked) {
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-checked').textContent = checked;
+    document.getElementById('stat-pending').textContent = total - checked;
+}
+
+async function updateSyncCount() {
+    const pending = await OfflineDB.getPendingAttendance();
+    document.getElementById('stat-sync').textContent = pending.length;
+}
+
+function toggleScanner() {
+    if (scannerActive) {
+        Scanner.stop();
+        scannerActive = false;
+        document.getElementById('scanner-container').classList.add('hidden');
+        document.getElementById('btn-scanner').textContent = '📷 Activar Escáner QR';
+    } else {
+        document.getElementById('scanner-container').classList.remove('hidden');
+        Scanner.init('scanner-container', async (text) => {
+            const parsed = Scanner.parse(text);
+            if (parsed.type === 'assignment_id') {
+                await showOperator(parsed.value);
+            } else if (parsed.type === 'document_number') {
+                await searchOperator(parsed.value);
+            }
+            // Auto-stop after scan
+            toggleScanner();
+        });
+        scannerActive = true;
+        document.getElementById('btn-scanner').textContent = '⏹ Detener Escáner';
+    }
+}
+
+async function searchOperator(query) {
+    if (!query || query.length < 2) {
+        document.getElementById('search-results').innerHTML = '';
+        return;
+    }
+    
+    const results = await Scanner.manualSearch(EVENT_ID, query);
+    const container = document.getElementById('search-results');
+    container.innerHTML = results.slice(0, 10).map(op => `
+        <div class="operator-card bg-white rounded-lg p-3 border cursor-pointer" onclick="showOperator('${op.id}')">
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="font-medium">${op.full_name}</span>
+                    <span class="text-xs text-gray-400 ml-2">${op.document_number}</span>
+                </div>
+                <span class="status-badge ${op.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${op.status}</span>
+            </div>
+            <div class="text-xs text-gray-500">${op.role_name || 'Operador'}</div>
+        </div>
+    `).join('');
+}
+
+async function showOperator(assignmentId) {
+    // Find operator data
+    let operator = null;
+    
+    // Try offline DB first
+    if (OfflineDB.db) {
+        const ops = await OfflineDB.getEventOperators(EVENT_ID);
+        operator = ops.find(o => o.id === assignmentId);
+    }
+    
+    if (!operator) {
+        // Try online
+        try {
+            const resp = await fetch(`/api/events/${EVENT_ID}/operators/search?q=${assignmentId}`);
+            if (resp.ok) {
+                const results = await resp.json();
+                operator = results[0];
+            }
+        } catch (e) {}
+    }
+    
+    if (!operator) {
+        alert('Operador no encontrado');
+        return;
+    }
+    
+    currentOperator = operator;
+    
+    document.getElementById('op-name').textContent = operator.full_name;
+    document.getElementById('op-doc').textContent = operator.document_number;
+    document.getElementById('op-role').textContent = operator.role_name || 'Operador';
+    document.getElementById('operator-panel').classList.remove('hidden');
+}
+
+async function doCheckIn() {
+    if (!currentOperator) return;
+    
+    if (navigator.onLine) {
+        // Online check-in
+        try {
+            const resp = await fetch(`/api/sync/events/${EVENT_ID}/check-in`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    operator_id: currentOperator.operator_id || currentOperator.id,
+                    assignment_id: currentOperator.id,
+                    method: scannerActive ? 'qr' : 'manual'
+                })
+            });
+            
+            if (resp.ok) {
+                showCheckInResult('✅ Check-in registrado', true);
+            } else if (resp.status === 409) {
+                showCheckInResult('⚠️ Ya registrado', false);
+            } else {
+                // Fall back to offline
+                await offlineCheckIn();
+            }
+        } catch (e) {
+            await offlineCheckIn();
+        }
+    } else {
+        await offlineCheckIn();
+    }
+}
+
+async function offlineCheckIn() {
+    const record = await OfflineDB.logAttendance(
+        EVENT_ID,
+        currentOperator.operator_id || currentOperator.id
+    );
+    showCheckInResult('📴 Guardado offline — se sincronizará después', true);
+    updateSyncCount();
+}
+
+function showCheckInResult(msg, success) {
+    const box = document.getElementById('op-status-box');
+    box.className = `rounded-lg p-3 mb-4 text-center ${success ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`;
+    document.getElementById('op-status-text').textContent = msg;
+    document.getElementById('checkin-actions').classList.add('hidden');
+    
+    // Add to recent list
+    const list = document.getElementById('recent-checkins');
+    const item = document.createElement('div');
+    item.className = 'text-xs bg-gray-50 rounded p-2 flex justify-between';
+    item.innerHTML = `<span>${currentOperator.full_name}</span><span class="text-gray-400">${new Date().toLocaleTimeString()}</span>`;
+    list.prepend(item);
+}
+
+async function downloadForOffline() {
+    const btn = document.getElementById('btn-offline');
+    btn.textContent = '⏳ Descargando...';
+    btn.disabled = true;
+    
+    const result = await SyncManager.downloadEvent(EVENT_ID);
+    
+    if (result.success) {
+        btn.textContent = `✅ ${result.operators} operadores guardados`;
+        document.getElementById('last-download').textContent = `Última descarga: ${new Date().toLocaleTimeString()}`;
+    } else {
+        btn.textContent = '❌ Error al descargar';
+    }
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = '📥 Descargar datos offline'; }, 3000);
+}
+
+function markNoShow() {
+    // Update status via API or queue offline
+    showCheckInResult('❌ Marcado como No Asistió', false);
+}
+</script>
+{% endblock %}

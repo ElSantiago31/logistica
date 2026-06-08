@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle Operador - Logística Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { primary: { 50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224' } } } } }
+    </script>
+    <style>.toast{animation:slideIn .3s ease-out}@keyframes slideIn{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <nav style="background: linear-gradient(135deg, #5d4224 0%, #785631 100%);" class="text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="flex justify-between h-16">
+            <div class="flex items-center space-x-4">
+                <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                <div class="leading-tight">
+                    <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                    <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                </div>
+                <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
+                <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Operadores</a>
+                <a href="/admin/events" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Eventos</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="userName" class="text-sm" style="color:#e3be95;"></span>
+                <button onclick="localStorage.clear();window.location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a;">Cerrar Sesión</button>
+            </div>
+        </div></div>
+    </nav>
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <a href="/admin/operators" class="text-primary-600 hover:text-primary-800 text-sm font-medium mb-4 inline-block">← Volver a operadores</a>
+        <div id="detail" class="bg-white rounded-xl shadow-lg overflow-hidden"><div class="p-8 text-center text-gray-400">Cargando...</div></div>
+    </div>
+    <script>
+    (function(){
+        const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
+        if(!t||!['superadmin','coordinator'].includes(u.user_type)){window.location.href='/admin/login';return}
+        document.getElementById('userName').textContent=u.first_name+' '+u.last_name;
+    })();
+    const opId=window.location.pathname.split('/').pop();
+    let allRoles=[];
+    function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
+    function toast(m,t){const c=document.getElementById('toast-container'),e=document.createElement('div');e.className='toast '+(t==='error'?'bg-red-500':t==='success'?'bg-green-500':'bg-blue-500')+' text-white px-6 py-3 rounded-lg shadow-lg';e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),4000)}
+
+    async function load(){
+        try{
+            const r=await fetch('/api/operators/'+opId,{headers:authH()});
+            if(!r.ok){toast('No encontrado','error');return}
+            const o=await r.json();
+            // Load roles for badges
+            const rr=await fetch('/api/operators/dashboard/stats',{headers:authH()});
+            if(rr.ok){const sd=await rr.json();allRoles=sd.operators_by_role||[]}
+            render(o);
+        }catch(e){toast('Error','error')}
+    }
+
+    function renderRoleBadges(o){
+        let ids=[];
+        try{ids=JSON.parse(o.experience_roles||'[]')}catch(e){}
+        if(!ids.length) return '<p class="text-sm text-gray-400 italic">Sin roles asignados</p>';
+        const assigned=allRoles.filter(r=>ids.includes(r.role_id));
+        if(!assigned.length) return '<p class="text-sm text-gray-400 italic">Sin roles asignados</p>';
+        const colors=['bg-blue-100 text-blue-800','bg-green-100 text-green-800','bg-purple-100 text-purple-800','bg-orange-100 text-orange-800','bg-pink-100 text-pink-800','bg-teal-100 text-teal-800','bg-yellow-100 text-yellow-800','bg-indigo-100 text-indigo-800'];
+        let html = '<div class="flex flex-wrap gap-2">';
+        assigned.forEach((r,i) => {
+            html += '<span class="inline-block text-xs font-semibold px-3 py-1 rounded-full '+(colors[i%colors.length])+'">'+r.role_name+'</span>';
+        });
+        html += '</div>';
+        if(assigned.length > 1){
+            html += '<p class="text-xs text-yellow-700 font-semibold mt-2">⚠️ Operador MULTI-ROL ('+assigned.length+' roles)</p>';
+        }
+        return html;
+    }
+
+    function render(o){
+        const n=(o.first_name||'')+' '+(o.last_name||'');
+        document.getElementById('detail').innerHTML=`
+        <div class="bg-gradient-to-r from-primary-800 to-primary-600 text-white p-6">
+            <div class="flex items-center space-x-4">
+                <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl">👤</div>
+                <div>
+                    <h1 class="text-2xl font-bold">${n.trim()}</h1>
+                    <p class="text-primary-200">${o.email||'-'}</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h3 class="text-sm font-medium text-gray-500 mb-2">Información Personal</h3>
+                <div class="space-y-2">
+                    <p class="text-sm"><span class="text-gray-500">Documento:</span> <strong>${o.document_type||''} ${o.document_number||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Teléfono:</span> <strong>${o.phone||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">WhatsApp:</span> <strong>${o.whatsapp||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Ciudad:</span> <strong>${o.city||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Dirección:</span> <strong>${o.address||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Localidad/Barrio:</span> <strong>${o.locality||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Tipo sanguíneo:</span> <strong>${o.blood_type||'-'}</strong></p>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-500 mb-2">Roles / Experiencia</h3>
+                ${renderRoleBadges(o)}
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-500 mb-2">Información Laboral</h3>
+                <div class="space-y-2">
+                    <p class="text-sm"><span class="text-gray-500">EPS:</span> <strong>${o.eps_name||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">ARL:</span> <strong>${o.arl_name||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Contacto emergencia:</span> <strong>${o.emergency_contact_name||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Tel. emergencia:</span> <strong>${o.emergency_contact_phone||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Exp. Protocolo:</span> <strong>${o.has_protocol_experience===true?'Sí':o.has_protocol_experience===false?'No':'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Tamaño Evento:</span> <strong>${o.event_size_experience||'-'}</strong></p>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-500 mb-2">👕 Tallas Uniforme</h3>
+                <div class="space-y-2">
+                    <p class="text-sm"><span class="text-gray-500">Zapatos:</span> <strong>${o.shoe_size||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Camisa:</span> <strong>${o.shirt_size||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Pantalón:</span> <strong>${o.pants_size||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Chaqueta:</span> <strong>${o.jacket_size||'-'}</strong></p>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-500 mb-2">📊 Estadísticas</h3>
+                <div class="space-y-2">
+                    <p class="text-sm"><span class="text-gray-500">Eventos realizados:</span> <strong>${o.total_events||0}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Calificación:</span> <strong>${o.rating_avg?o.rating_avg.toFixed(1):'-'}</strong></p>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 pb-6 border-t pt-4">
+            <h3 class="text-sm font-medium text-gray-500 mb-3">Notas Internas</h3>
+            <div class="mb-4">
+                <textarea id="adminNotes" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm outline-none" placeholder="Agregar notas sobre el operador...">${o.notes||''}</textarea>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="saveNotes()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">💾 Guardar Notas</button>
+                <button onclick="deactivateOp()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">🗑️ Eliminar Operador</button>
+            </div>
+        </div>`;
+    }
+
+    async function saveNotes(){
+        const n=document.getElementById('adminNotes').value;
+        try{
+            const r=await fetch('/api/operators/'+opId,{method:'PUT',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify({notes:n})});
+            if(r.ok)toast('Guardado','success');else toast('Error','error');
+        }catch(e){toast('Error','error')}
+    }
+
+    async function deactivateOp(){
+        if(!confirm('¿Eliminar este operador?\n\nEsta acción desactivará su cuenta permanentemente.'))return;
+        try{
+            const r=await fetch('/api/operators/'+opId,{method:'DELETE',headers:authH()});
+            if(r.ok||r.status===204){toast('Desactivado','success');setTimeout(()=>window.location.href='/admin/operators',1000)}
+            else toast('Error','error');
+        }catch(e){toast('Error','error')}
+    }
+
+    load();
+    </script>
+</body>
+</html>

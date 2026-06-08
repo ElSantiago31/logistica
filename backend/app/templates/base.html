@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#cf9b62">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/static/frontend/manifest.json">
+    <title>{% block title %}AyC Eventos{% endblock %}</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+    <!-- Tailwind custom config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#fff2e4',
+                            100: '#ffebd6',
+                            200: '#f8d9b6',
+                            300: '#e3be95',
+                            400: '#d5aa7b',
+                            500: '#cf9b62',
+                            600: '#b48450',
+                            700: '#976e41',
+                            800: '#785631',
+                            900: '#5d4224',
+                        },
+                        brand: '#cf9b62',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .toast {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .htmx-indicator {
+            display: none;
+        }
+
+        .htmx-request .htmx-indicator {
+            display: inline-block;
+        }
+
+        .htmx-request.htmx-indicator {
+            display: inline-block;
+        }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Navigation bar -->
+    <nav class="text-white shadow-lg" id="main-nav"
+        style="background: linear-gradient(135deg, #5d4224 0%, #785631 100%);">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <img src="/static/frontend/logo.jpeg" alt="A&C Logística"
+                        class="h-11 w-11 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                    <div class="leading-tight">
+                        <a href="/" class="text-base font-bold tracking-wide block" style="color: #fff2e4;">A&amp;C
+                            Logística</a>
+                        <span class="text-xs opacity-70" style="color: #ffebd6;">Producción de Eventos</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/admin" class="hover:text-primary-300 transition" style="color: #f8d9b6;">Admin</a>
+                    <a href="/enrolamiento" class="px-3 py-1 rounded-lg font-semibold transition hover:opacity-90"
+                        style="background:#cf9b62; color:#1a1a1a;">Trabaja con nosotros</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Main content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    {% block footer %}
+    <footer class="text-center py-3 mt-8" style="background:#5d4224; color:#f8d9b6;">
+        <p class="text-sm">&copy; 2025 AyC Eventos — A y C Logística y Producción de Eventos LTDA | 📞 +57 312 395 5552</p>
+    </footer>
+    {% endblock %}
+
+    {% block scripts %}{% endblock %}
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/frontend/sw.js').catch(()=>{});
+    }
+    </script>
+</body>
+
+</html>

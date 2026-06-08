@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 # --- Login ---
 class LoginRequest(BaseModel):
-    email: EmailStr
+    document_number: str = Field(..., min_length=5, max_length=20, description="Número de documento")
     password: str = Field(..., min_length=6, max_length=100)
 
 
@@ -85,6 +85,15 @@ class OperatorRegisterRequest(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    locality: Optional[str] = None
     blood_type: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
+    whatsapp: Optional[str] = None
+    has_protocol_experience: Optional[bool] = None
+    event_size_experience: Optional[str] = None
+    shoe_size: Optional[str] = None
+    shirt_size: Optional[str] = None
+    pants_size: Optional[str] = None
+    jacket_size: Optional[str] = None
+    experience_roles: Optional[list[str]] = None  # list of role IDs

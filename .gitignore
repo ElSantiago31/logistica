@@ -26,6 +26,11 @@ backend/.env
 .DS_Store
 Thumbs.db
 
+# Temp
+gen_palette.py
+temp.py
+*.xlsx
+
 # Data
 data/
 *.db
