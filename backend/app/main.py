@@ -7,11 +7,11 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.dependencies.rate_limit import limiter
 from app.routers import auth as auth_router
 from app.routers import operators as operators_router
 from app.routers import catalogs as catalogs_router
@@ -29,9 +29,6 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
     yield
 
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title=settings.APP_NAME,

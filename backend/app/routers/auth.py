@@ -4,8 +4,6 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,9 +24,9 @@ from app.services.auth import (
     decode_token, revoke_token,
 )
 from app.dependencies.auth import get_current_user, get_current_active_user, require_superadmin
+from app.dependencies.rate_limit import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _build_login_response(user: User) -> LoginResponse:
