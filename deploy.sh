@@ -50,11 +50,11 @@ if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
     echo "Getting SSL certificate for $DOMAIN..."
     mkdir -p /var/www/certbot
     docker run --rm \
+        -p 80:80 \
         -v /etc/letsencrypt:/etc/letsencrypt \
         -v /var/www/certbot:/var/www/certbot \
         certbot/certbot certonly \
-        --webroot \
-        --webroot-path=/var/www/certbot \
+        --standalone \
         -d $DOMAIN \
         -d www.$DOMAIN \
         --email $EMAIL \
@@ -66,6 +66,10 @@ fi
 # 6. Build and start services
 echo "Building and starting services..."
 docker compose -f docker-compose.prod.yml up -d --build
+
+# Wait for backend to be healthy
+echo "Waiting for services to start..."
+sleep 15
 
 # 7. Run migrations
 echo "Running migrations..."
