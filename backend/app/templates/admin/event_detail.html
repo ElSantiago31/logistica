@@ -8,85 +8,97 @@
     <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
 </head>
 <body class="bg-gray-50 min-h-screen">
+    <!-- Navbar -->
     <nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="flex justify-between h-16">
-            <div class="flex items-center space-x-4">
-                <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62;">
-                <div class="leading-tight">
-                    <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
-                    <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-2 sm:space-x-4">
+                    <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-8 w-8 sm:h-10 sm:w-10 rounded-full object-cover border-2 flex-shrink-0" style="border-color:#cf9b62;">
+                    <div class="leading-tight hidden sm:block">
+                        <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                        <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                    </div>
+                    <a href="/admin" class="ml-2 sm:ml-4 hover:opacity-80 font-medium text-xs sm:text-sm" style="color:#f8d9b6;">Dashboard</a>
+                    <a href="/admin/operators" class="hover:opacity-80 font-medium text-xs sm:text-sm" style="color:#f8d9b6;">Operadores</a>
+                    <a href="/admin/events" class="hover:opacity-80 font-medium text-xs sm:text-sm border-b-2 pb-1" style="color:#fff2e4; border-color:#cf9b62;">Eventos</a>
                 </div>
-                <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
-                <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Operadores</a>
-                <a href="/admin/events" class="hover:opacity-80 font-medium text-sm border-b-2 pb-1" style="color:#fff2e4; border-color:#cf9b62;">Eventos</a>
+                <div class="flex items-center space-x-2 sm:space-x-4">
+                    <a id="superadminLink" href="/admin/superadmin" class="hidden px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold hover:opacity-90" style="background:#785631; color:#fff2e4;">⚙️</a>
+                    <span id="userName" class="text-xs sm:text-sm hidden sm:inline" style="color:#e3be95;"></span>
+                    <button onclick="localStorage.clear();location.href='/admin/login'" class="px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a">Salir</button>
+                </div>
             </div>
-            <div class="flex items-center space-x-4">
-                <a id="superadminLink" href="/admin/superadmin" class="hidden px-3 py-1 rounded-lg text-sm font-semibold hover:opacity-90" style="background:#785631; color:#fff2e4;">⚙️ Superadmin</a>
-                <span id="superadminSep" class="hidden text-gray-400">|</span>
-                <span id="userName" class="text-sm" style="color:#e3be95;"></span>
-                <button onclick="localStorage.clear();location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a">Cerrar Sesión</button>
-            </div>
-        </div></div>
+        </div>
     </nav>
 
-    <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex justify-between items-start mb-4">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900" id="evName"></h2>
-                    <p class="text-gray-500 mt-1" id="evClient"></p>
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <!-- Event Info Card -->
+        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4">
+                <div class="min-w-0">
+                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900 truncate" id="evName"></h2>
+                    <p class="text-gray-500 mt-1 text-sm" id="evClient"></p>
                 </div>
-                <div class="flex gap-2 items-center">
-                    <span id="evStatusBadge" class="px-3 py-1 rounded-full text-sm font-medium"></span>
-                    <div id="evActions" class="flex gap-2"></div>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm" id="evDetails"></div>
-        </div>
-        <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">Personal Requerido</h3>
-            <div id="staffNeedsTable"></div>
-        </div>
-        <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                <h3 class="text-lg font-semibold text-gray-800">Asignaciones</h3>
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="showAssignModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">+ Asignar</button>
-                    <button onclick="sendInvitations()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">📱 Invitar WA</button>
-                    <a href="/admin/events/{{ event_id }}/checkin" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm">📷 Check-in</a>
-                    <a href="/admin/events/{{ event_id }}/payroll" class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 text-sm">💰 Nómina</a>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <span id="evStatusBadge" class="px-3 py-1 rounded-full text-xs sm:text-sm font-medium"></span>
+                    <div id="evActions" class="flex flex-wrap gap-2"></div>
                 </div>
             </div>
-            <div id="assignmentsTable"></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-sm" id="evDetails"></div>
+        </div>
+
+        <!-- Staff Needs -->
+        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-800 mb-4">Personal Requerido</h3>
+            <div class="overflow-x-auto -mx-4 sm:mx-0">
+                <div id="staffNeedsTable" class="min-w-full px-4 sm:px-0"></div>
+            </div>
+        </div>
+
+        <!-- Assignments -->
+        <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                <h3 class="text-base sm:text-lg font-semibold text-gray-800">Asignaciones</h3>
+                <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <button onclick="showAssignModal()" class="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">+ Asignar</button>
+                    <button onclick="sendInvitations()" class="bg-emerald-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-emerald-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">📱 Invitar WA</button>
+                    <a href="/admin/events/{{ event_id }}/checkin" class="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 text-xs sm:text-sm flex-1 sm:flex-none text-center block">📷 Check-in</a>
+                    <a href="/admin/events/{{ event_id }}/payroll" class="bg-amber-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-amber-700 text-xs sm:text-sm flex-1 sm:flex-none text-center block">💰 Nómina</a>
+                </div>
+            </div>
+            <div class="overflow-x-auto -mx-4 sm:mx-0">
+                <div id="assignmentsTable" class="min-w-full px-4 sm:px-0"></div>
+            </div>
         </div>
     </div>
 
-    <div id="assignModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+    <!-- Assign Modal -->
+    <div id="assignModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50">
+        <div class="bg-white rounded-t-lg sm:rounded-lg p-4 sm:p-6 w-full sm:max-w-2xl max-h-[85vh] sm:max-h-[80vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold">Buscar y Asignar Operadores</h3>
+                <h3 class="text-base sm:text-lg font-semibold">Buscar y Asignar Operadores</h3>
                 <button onclick="closeAssignModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
-            <div class="flex gap-2 mb-4">
-                <input type="text" id="searchOps" placeholder="Buscar por nombre, email, doc..." class="flex-1 border rounded-lg px-3 py-2" oninput="searchOperators()">
-                <select id="filterExpRole" class="border rounded-lg px-3 py-2" onchange="searchOperators()"><option value="">Todos los cargos</option></select>
-                <select id="assignRole" class="border rounded-lg px-3 py-2"></select>
+            <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                <input type="text" id="searchOps" placeholder="Buscar por nombre, email, doc..." class="w-full sm:flex-1 border rounded-lg px-3 py-2 text-sm" oninput="searchOperators()">
+                <select id="filterExpRole" class="border rounded-lg px-3 py-2 text-sm w-full sm:w-auto" onchange="searchOperators()"><option value="">Todos los cargos</option></select>
+                <select id="assignRole" class="border rounded-lg px-3 py-2 text-sm w-full sm:w-auto"></select>
             </div>
             <div id="opsResults" class="space-y-2 max-h-60 overflow-y-auto"></div>
             <div class="mt-4 flex justify-end gap-2">
-                <button onclick="closeAssignModal()" class="px-4 py-2 border rounded-lg">Cancelar</button>
-                <button onclick="assignSelected()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Asignar Seleccionados</button>
+                <button onclick="closeAssignModal()" class="px-4 py-2 border rounded-lg text-sm">Cancelar</button>
+                <button onclick="assignSelected()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">Asignar Seleccionados</button>
             </div>
         </div>
     </div>
-    <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50"></div>
+    <div id="toast" class="hidden fixed bottom-4 right-4 left-4 sm:left-auto px-4 py-2 rounded-lg text-white z-50 text-center sm:text-left text-sm"></div>
 
 <script>
 (function(){
     const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
     if(!t||!['superadmin','coordinator'].includes(u.user_type)){location.href='/admin/login';return}
     document.getElementById('userName').textContent=u.first_name+' '+u.last_name;
-    if(u.user_type==='superadmin'){document.getElementById('superadminLink').classList.remove('hidden');document.getElementById('superadminSep').classList.remove('hidden');}
+    if(u.user_type==='superadmin'){document.getElementById('superadminLink').classList.remove('hidden');document.getElementById('superadminSep')?.classList.remove('hidden');}
 })();
 const EVENT_ID='{{ event_id }}';
 function getToken(){return localStorage.getItem('access_token');}
@@ -102,11 +114,11 @@ async function loadEvent(){
     const SL={draft:'Borrador',published:'Publicado',in_progress:'En Progreso',completed:'Completado',cancelled:'Cancelado'};
     const SC={draft:'bg-gray-100 text-gray-800',published:'bg-blue-100 text-blue-800',in_progress:'bg-yellow-100 text-yellow-800',completed:'bg-green-100 text-green-800',cancelled:'bg-red-100 text-red-800'};
     document.getElementById('evStatusBadge').textContent=SL[ev.status]||ev.status;
-    document.getElementById('evStatusBadge').className=`px-3 py-1 rounded-full text-sm font-medium ${SC[ev.status]||'bg-gray-100'}`;
+    document.getElementById('evStatusBadge').className=`px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${SC[ev.status]||'bg-gray-100'}`;
     let actions='';
-    if(ev.status==='draft'){actions+=`<button onclick="changeEventStatus('published')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">📢 Publicar</button><button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm">Cancelar</button>`}
-    else if(ev.status==='published'){actions+=`<button onclick="changeEventStatus('in_progress')" class="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 text-sm">▶ Iniciar</button><button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm">Cancelar</button>`}
-    else if(ev.status==='in_progress'){actions+=`<button onclick="changeEventStatus('completed')" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">✓ Completar</button>`}
+    if(ev.status==='draft'){actions+=`<button onclick="changeEventStatus('published')" class="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 text-xs sm:text-sm">📢 Publicar</button><button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 text-xs sm:text-sm">Cancelar</button>`}
+    else if(ev.status==='published'){actions+=`<button onclick="changeEventStatus('in_progress')" class="bg-yellow-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-yellow-600 text-xs sm:text-sm">▶ Iniciar</button><button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 text-xs sm:text-sm">Cancelar</button>`}
+    else if(ev.status==='in_progress'){actions+=`<button onclick="changeEventStatus('completed')" class="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 text-xs sm:text-sm">✓ Completar</button>`}
     document.getElementById('evActions').innerHTML=actions;
     const sd=new Date(ev.start_date).toLocaleDateString('es-CO'),ed=new Date(ev.end_date).toLocaleDateString('es-CO');
     document.getElementById('evDetails').innerHTML=`<div><span class="text-gray-500">Ubicación</span><div class="font-medium">${ev.city||ev.location}</div></div><div><span class="text-gray-500">Fecha Inicio</span><div class="font-medium">${sd}</div></div><div><span class="text-gray-500">Fecha Fin</span><div class="font-medium">${ed}</div></div><div><span class="text-gray-500">Personal</span><div class="font-medium">${ev.total_confirmed}/${ev.total_staff_needed}</div></div>`;
@@ -116,16 +128,50 @@ async function loadEvent(){
 function renderStaffNeeds(needs){
     currentStaffNeeds=needs;const div=document.getElementById('staffNeedsTable');
     if(!needs.length){div.innerHTML='<p class="text-gray-500">No se han definido necesidades de personal</p>';return}
-    div.innerHTML=`<table class="w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Necesarios</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Confirmados</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th></tr></thead><tbody class="divide-y">${needs.map(n=>`<tr><td class="px-4 py-2 font-medium">${n.role_name||'Sin rol'}</td><td class="px-4 py-2">${n.quantity_needed}</td><td class="px-4 py-2">${n.quantity_confirmed}</td><td class="px-4 py-2">${n.rate_per_shift?'$'+n.rate_per_shift.toLocaleString('es-CO'):'-'}</td></tr>`).join('')}</tbody></table>`;
+    div.innerHTML=`<table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th><th class="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Necesarios</th><th class="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Confirmados</th><th class="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th></tr></thead><tbody class="divide-y">${needs.map(n=>`<tr><td class="px-3 sm:px-4 py-2 font-medium">${n.role_name||'Sin rol'}</td><td class="px-3 sm:px-4 py-2">${n.quantity_needed}</td><td class="px-3 sm:px-4 py-2">${n.quantity_confirmed}</td><td class="px-3 sm:px-4 py-2">${n.rate_per_shift?'$'+n.rate_per_shift.toLocaleString('es-CO'):'-'}</td></tr>`).join('')}</tbody></table>`;
 }
 
 async function loadAssignments(){
     const token=getToken();const res=await fetch(`/api/events/${EVENT_ID}/assignments`,{headers:{'Authorization':'Bearer '+token}});const assignments=await res.json();
     const div=document.getElementById('assignmentsTable');
-    if(!assignments.length){div.innerHTML='<p class="text-gray-500">No hay operadores asignados</p>';return}
+    if(!assignments.length){div.innerHTML='<p class="text-gray-500 text-sm">No hay operadores asignados</p>';return}
     const SL={invited:'Invitado',confirmed:'Confirmado',rejected:'Rechazado',standby:'En espera',no_show:'No asistió',checked_in:'Check-in'};
     const SC={invited:'bg-yellow-100 text-yellow-800',confirmed:'bg-green-100 text-green-800',rejected:'bg-red-100 text-red-800',standby:'bg-gray-100 text-gray-800',no_show:'bg-red-100 text-red-800',checked_in:'bg-blue-100 text-blue-800'};
-    div.innerHTML=`<table class="w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operador</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th></tr></thead><tbody class="divide-y">${assignments.map(a=>`<tr><td class="px-4 py-2 font-medium">${a.operator_name}</td><td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td><td class="px-4 py-2 text-sm">${a.role_name||'-'}</td><td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs font-medium ${SC[a.status]||'bg-gray-100'}">${SL[a.status]||a.status}</span></td><td class="px-4 py-2 text-sm">${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</td><td class="px-4 py-2"><select onchange="changeAssignmentStatus('${a.id}',this.value)" class="text-xs border rounded px-2 py-1 bg-white"><option value="">Cambiar estado...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option></select></td></tr>`).join('')}</tbody></table>`;
+
+    // Mobile cards + desktop table
+    div.innerHTML=`
+    <!-- Desktop table (hidden on mobile) -->
+    <div class="hidden sm:block">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50"><tr>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operador</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+            </tr></thead>
+            <tbody class="divide-y">${assignments.map(a=>`<tr>
+                <td class="px-4 py-2 font-medium">${a.operator_name}</td>
+                <td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td>
+                <td class="px-4 py-2 text-sm">${a.role_name||'-'}</td>
+                <td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs font-medium ${SC[a.status]||'bg-gray-100'}">${SL[a.status]||a.status}</span></td>
+                <td class="px-4 py-2 text-sm">${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</td>
+                <td class="px-4 py-2"><select onchange="changeAssignmentStatus('${a.id}',this.value)" class="text-xs border rounded px-2 py-1 bg-white"><option value="">Cambiar...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option></select></td>
+            </tr>`).join('')}</tbody>
+        </table>
+    </div>
+    <!-- Mobile cards (shown only on mobile) -->
+    <div class="sm:hidden space-y-3">
+        ${assignments.map(a=>`<div class="border rounded-lg p-3 space-y-2">
+            <div class="flex justify-between items-start">
+                <div><div class="font-medium text-sm">${a.operator_name}</div><div class="text-xs text-gray-500">${a.operator_phone||'-'}</div></div>
+                <span class="px-2 py-1 rounded-full text-xs font-medium ${SC[a.status]||'bg-gray-100'}">${SL[a.status]||a.status}</span>
+            </div>
+            <div class="flex justify-between text-xs text-gray-600"><span>Rol: ${a.role_name||'-'}</span><span>${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</span></div>
+            <select onchange="changeAssignmentStatus('${a.id}',this.value)" class="w-full text-xs border rounded px-2 py-1.5 bg-white"><option value="">Cambiar estado...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option></select>
+        </div>`).join('')}
+    </div>`;
     assignedOps.clear();assignments.forEach(a=>{if(a.operator_user_id)assignedOps.add(a.operator_user_id)});
 }
 
@@ -144,11 +190,11 @@ function closeAssignModal(){document.getElementById('assignModal').classList.add
 async function loadAllOperators(){const token=getToken();const roleId=document.getElementById('filterExpRole').value;const q=document.getElementById('searchOps').value;let url='/api/operators/?limit=50&is_approved=true';if(q.length>=2)url+=`&search=${encodeURIComponent(q)}`;if(roleId)url+=`&experience_role_id=${encodeURIComponent(roleId)}`;try{const res=await fetch(url,{headers:{'Authorization':'Bearer '+token}});const data=await res.json();renderOpsResults(data.items||[])}catch(e){document.getElementById('opsResults').innerHTML='<p class="text-red-500 text-sm">Error</p>'}}
 async function searchOperators(){const token=getToken();const q=document.getElementById('searchOps').value;const roleId=document.getElementById('filterExpRole').value;let url='/api/operators/?limit=50&is_approved=true';if(q.length>=2)url+=`&search=${encodeURIComponent(q)}`;if(roleId)url+=`&experience_role_id=${encodeURIComponent(roleId)}`;try{const res=await fetch(url,{headers:{'Authorization':'Bearer '+token}});const data=await res.json();renderOpsResults(data.items||[])}catch(e){document.getElementById('opsResults').innerHTML='<p class="text-red-500 text-sm">Error</p>'}}
 
-function renderOpsResults(ops){const available=ops.filter(o=>!assignedOps.has(String(o.id)));if(!available.length){document.getElementById('opsResults').innerHTML='<p class="text-gray-500 text-sm">No hay disponibles</p>';return}document.getElementById('opsResults').innerHTML=available.map(o=>`<label class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"><input type="checkbox" value="${o.id}" onchange="toggleOp(this)" class="rounded"><span class="font-medium">${o.first_name} ${o.last_name}</span><span class="text-sm text-gray-500">${o.phone||''}</span><span class="text-xs text-gray-400">${o.city||''}</span></label>`).join('')}
+function renderOpsResults(ops){const available=ops.filter(o=>!assignedOps.has(String(o.id)));if(!available.length){document.getElementById('opsResults').innerHTML='<p class="text-gray-500 text-sm">No hay disponibles</p>';return}document.getElementById('opsResults').innerHTML=available.map(o=>`<label class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"><input type="checkbox" value="${o.id}" onchange="toggleOp(this)" class="rounded flex-shrink-0"><span class="font-medium text-sm">${o.first_name} ${o.last_name}</span><span class="text-xs text-gray-500">${o.phone||''}</span><span class="text-xs text-gray-400">${o.city||''}</span></label>`).join('')}
 function toggleOp(cb){if(cb.checked)selectedOps.add(cb.value);else selectedOps.delete(cb.value)}
 async function assignSelected(){if(!selectedOps.size){showToast('Selecciona al menos uno','bg-yellow-500');return}const token=getToken();const roleId=document.getElementById('assignRole').value||null;const body={operator_ids:Array.from(selectedOps),role_id:roleId};const res=await fetch(`/api/events/${EVENT_ID}/assign`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});if(res.ok){showToast('Asignados','bg-green-500');closeAssignModal();loadAssignments()}else showToast('Error','bg-red-500')}
 
-function showToast(msg,cls){const t=document.getElementById('toast');t.textContent=msg;t.className=`fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${cls}`;setTimeout(()=>t.className='hidden',3000)}
+function showToast(msg,cls){const t=document.getElementById('toast');t.textContent=msg;t.className=`fixed bottom-4 right-4 left-4 sm:left-auto px-4 py-2 rounded-lg text-white z-50 text-center sm:text-left text-sm ${cls}`;setTimeout(()=>t.className='hidden',3000)}
 async function sendInvitations(){const token=getToken();if(!confirm('¿Encolar invitaciones WhatsApp?'))return;const res=await fetch(`/api/whatsapp/events/${EVENT_ID}/invite`,{method:'POST',headers:{'Authorization':'Bearer '+token}});const data=await res.json();showToast(data.message||'Error',res.ok?'bg-green-500':'bg-red-500')}
 
 async function changeAssignmentStatus(assignmentId,newStatus){if(!newStatus)return;const token=getToken();const SL={confirmed:'Confirmado',rejected:'Rechazado',standby:'En espera',no_show:'No asistió',invited:'Invitado'};if(!confirm(`¿Cambiar estado a "${SL[newStatus]||newStatus}"?`))return;const res=await fetch(`/api/whatsapp/assignments/${assignmentId}/status?new_status=${newStatus}`,{method:'PATCH',headers:{'Authorization':'Bearer '+token}});if(res.ok){showToast(`Estado cambiado a ${SL[newStatus]}`,'bg-green-500');loadAssignments()}else{const data=await res.json().catch(()=>({}));showToast(data.detail||'Error al cambiar estado','bg-red-500')}}
