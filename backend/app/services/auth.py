@@ -24,10 +24,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 # --- JWT utilities ---
-def create_access_token(user_id: uuid.UUID, email: str, user_type: str, role_name: str | None = None) -> dict:
+def create_access_token(user_id: uuid.UUID, email: str, user_type: str, role_name: str | None = None, expires_delta_minutes: int | None = None) -> dict:
     """Create access token and return dict with token + expiry."""
     jti = str(uuid.uuid4())
-    expires = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    exp_minutes = expires_delta_minutes or settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+    expires = datetime.now(timezone.utc) + timedelta(minutes=exp_minutes)
     payload = {
         "sub": str(user_id),
         "email": email,
@@ -42,7 +43,7 @@ def create_access_token(user_id: uuid.UUID, email: str, user_type: str, role_nam
     return {
         "token": token,
         "jti": jti,
-        "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "expires_in": exp_minutes * 60,
     }
 
 

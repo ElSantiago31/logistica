@@ -396,6 +396,95 @@ async def delete_admin(
     await db.commit()
 
 
+@router.post("/forgot-password")
+async def forgot_password(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Request password reset — verifies document number + phone."""
+    data = await request.json()
+    document_number = data.get("document_number", "").strip()
+    phone = data.get("phone", "").strip()
+
+    if not document_number or not phone:
+        raise HTTPException(status_code=400, detail="Documento y teléfono son requeridos")
+
+    # Find user by document and phone
+    result = await db.execute(
+        select(User).where(
+            User.document_number == document_number,
+            User.phone == phone,
+            User.is_active == True,
+        )
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        # Don't reveal if user exists or not
+        return {"message": "Si los datos son correctos, se generó un token de recuperación"}
+
+    # Generate reset token (JWT with 15 min expiry)
+    from app.services.auth import create_access_token
+    reset_token = create_access_token(
+        user.id, user.email, user.user_type,
+        role_name=None, expires_delta_minutes=15
+    )
+
+    return {
+        "message": "Datos verificados",
+        "reset_token": reset_token["token"],
+        "user_name": f"{user.first_name} {user.last_name}",
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset password using a valid reset token."""
+    data = await request.json()
+    reset_token = data.get("reset_token", "")
+    new_password = data.get("new_password", "")
+    confirm_password = data.get("confirm_password", "")
+
+    if not reset_token or not new_password:
+        raise HTTPException(status_code=400, detail="Token y nueva contraseña son requeridos")
+
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
+
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+
+    # Decode and validate reset token
+    from app.services.auth import decode_token
+    payload = decode_token(reset_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Token de recuperación inválido o expirado")
+
+    user_id = payload.get("sub")
+    result = await db.execute(
+        select(User).where(User.id == uuid.UUID(user_id), User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    user.password_hash = hash_password(new_password)
+
+    audit = AuditLog(
+        user_id=user.id,
+        action="password_reset",
+        resource_type="user",
+        resource_id=user.id,
+        details="Contraseña restablecida",
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {"message": "Contraseña actualizada exitosamente"}
+
+
 @router.get("/me", response_model=UserBrief)
 async def get_me(user: User = Depends(get_current_active_user)):
     """Get current user info."""

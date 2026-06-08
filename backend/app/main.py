@@ -124,6 +124,11 @@ async def operator_login(request: Request):
     return templates.TemplateResponse("landing/operator_login.html", {"request": request})
 
 
+@app.get("/enrolamiento/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request):
+    return templates.TemplateResponse("landing/forgot_password.html", {"request": request})
+
+
 @app.get("/enrolamiento/perfil", response_class=HTMLResponse)
 async def operator_profile(request: Request):
     return templates.TemplateResponse("landing/operator_profile.html", {"request": request})
