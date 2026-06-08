@@ -21,10 +21,12 @@
                     <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
                 </div>
                 <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
-                <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Operadores</a>
+                <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm border-b-2 pb-1" style="color:#fff2e4; border-color:#cf9b62;">Operadores</a>
                 <a href="/admin/events" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Eventos</a>
             </div>
             <div class="flex items-center space-x-4">
+                <a id="superadminLink" href="/admin/superadmin" class="hidden px-3 py-1 rounded-lg text-sm font-semibold hover:opacity-90" style="background:#785631; color:#fff2e4;">⚙️ Superadmin</a>
+                <span id="superadminSep" class="hidden text-gray-400">|</span>
                 <span id="userName" class="text-sm" style="color:#e3be95;"></span>
                 <button onclick="localStorage.clear();window.location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a;">Cerrar Sesión</button>
             </div>
@@ -39,6 +41,7 @@
         const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
         if(!t||!['superadmin','coordinator'].includes(u.user_type)){window.location.href='/admin/login';return}
         document.getElementById('userName').textContent=u.first_name+' '+u.last_name;
+        if(u.user_type==='superadmin'){document.getElementById('superadminLink').classList.remove('hidden');document.getElementById('superadminSep').classList.remove('hidden');}
     })();
     const opId=window.location.pathname.split('/').pop();
     let allRoles=[];
@@ -50,7 +53,6 @@
             const r=await fetch('/api/operators/'+opId,{headers:authH()});
             if(!r.ok){toast('No encontrado','error');return}
             const o=await r.json();
-            // Load roles for badges
             const rr=await fetch('/api/operators/dashboard/stats',{headers:authH()});
             if(rr.ok){const sd=await rr.json();allRoles=sd.operators_by_role||[]}
             render(o);

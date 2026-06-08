@@ -13,16 +13,20 @@
     <nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="flex justify-between h-16">
             <div class="flex items-center space-x-4">
-                <img src="/static/frontend/logo.jpeg" alt="A&C" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62">
-                <span class="text-sm font-bold" style="color:#fff2e4">A&C Logística</span>
-                <a href="/admin" class="ml-4 text-sm" style="color:#f8d9b6">Dashboard</a>
-                <a href="/admin/superadmin" class="text-sm border-b-2 pb-1" style="color:#fff2e4;border-color:#cf9b62">⚙️ Superadmin</a>
-                <a href="/admin/operators" class="text-sm" style="color:#f8d9b6">Operadores</a>
-                <a href="/admin/events" class="text-sm" style="color:#f8d9b6">Eventos</a>
+                <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                <div class="leading-tight">
+                    <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                    <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                </div>
+                <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
+                <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Operadores</a>
+                <a href="/admin/events" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Eventos</a>
             </div>
             <div class="flex items-center space-x-4">
-                <span id="userName" class="text-sm" style="color:#e3be95"></span>
-                <button onclick="localStorage.clear();location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm" style="background:#cf9b62;color:#1a1a1a">Salir</button>
+                <a id="superadminLink" href="/admin/superadmin" class="px-3 py-1 rounded-lg text-sm font-semibold hover:opacity-90 border-b-2 pb-1" style="background:#785631; color:#fff2e4; border-color:#cf9b62;">⚙️ Superadmin</a>
+                <span class="text-gray-400">|</span>
+                <span id="userName" class="text-sm" style="color:#e3be95;"></span>
+                <button onclick="localStorage.clear();location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a">Cerrar Sesión</button>
             </div>
         </div></div>
     </nav>

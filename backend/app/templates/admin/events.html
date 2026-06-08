@@ -1,102 +1,132 @@
-{% extends "base.html" %}
-{% block title %}Eventos - Admin{% endblock %}
-{% block content %}
-<div class="min-h-screen bg-gray-50">
-  <nav class="bg-white shadow-sm border-b">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-      <div class="flex items-center gap-4">
-        <a href="/admin" class="text-gray-600 hover:text-gray-900">← Dashboard</a>
-        <h1 class="text-xl font-bold text-gray-800">Gestión de Eventos</h1>
-      </div>
-      <a href="/admin/events/create" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">+ Nuevo Evento</a>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eventos - Logística Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
+    <style>.toast{animation:slideIn .3s ease-out}@keyframes slideIn{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="flex justify-between h-16">
+            <div class="flex items-center space-x-4">
+                <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="h-10 w-10 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                <div class="leading-tight">
+                    <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                    <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                </div>
+                <a href="/admin" class="ml-4 hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Dashboard</a>
+                <a href="/admin/operators" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Operadores</a>
+                <a href="/admin/events" class="hover:opacity-80 font-medium text-sm border-b-2 pb-1" style="color:#fff2e4; border-color:#cf9b62;">Eventos</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a id="superadminLink" href="/admin/superadmin" class="hidden px-3 py-1 rounded-lg text-sm font-semibold hover:opacity-90" style="background:#785631; color:#fff2e4;">⚙️ Superadmin</a>
+                <span id="superadminSep" class="hidden text-gray-400">|</span>
+                <span id="userName" class="text-sm" style="color:#e3be95;"></span>
+                <button onclick="localStorage.clear();location.href='/admin/login'" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a">Cerrar Sesión</button>
+            </div>
+        </div></div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">Gestión de Eventos</h1>
+            <a href="/admin/events/create" class="px-4 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">+ Nuevo Evento</a>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-4 mb-6 flex gap-3 flex-wrap">
+            <select id="filterStatus" onchange="loadEvents()" class="border rounded-lg px-3 py-2 text-sm">
+                <option value="">Todos los estados</option>
+                <option value="draft">Borrador</option>
+                <option value="published">Publicado</option>
+                <option value="in_progress">En Progreso</option>
+                <option value="completed">Completado</option>
+                <option value="cancelled">Cancelado</option>
+            </select>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Evento</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ubicación</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personal</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="eventsTable" class="divide-y divide-gray-200"></tbody>
+            </table>
+            <div id="emptyState" class="hidden p-8 text-center text-gray-500">No hay eventos registrados</div>
+        </div>
+        <div id="pagination" class="flex justify-center gap-2 mt-4"></div>
     </div>
-  </nav>
 
-  <div class="max-w-7xl mx-auto px-4 py-6">
-    <div class="bg-white rounded-lg shadow p-4 mb-6 flex gap-3 flex-wrap">
-      <select id="filterStatus" onchange="loadEvents()" class="border rounded-lg px-3 py-2 text-sm">
-        <option value="">Todos los estados</option>
-        <option value="draft">Borrador</option>
-        <option value="published">Publicado</option>
-        <option value="in_progress">En Progreso</option>
-        <option value="completed">Completado</option>
-        <option value="cancelled">Cancelado</option>
-      </select>
-    </div>
+    <script>
+    (function(){
+        const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
+        if(!t||!['superadmin','coordinator'].includes(u.user_type)){location.href='/admin/login';return}
+        document.getElementById('userName').textContent=u.first_name+' '+u.last_name;
+        if(u.user_type==='superadmin'){document.getElementById('superadminLink').classList.remove('hidden');document.getElementById('superadminSep').classList.remove('hidden');}
+    })();
 
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-      <table class="w-full">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Evento</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ubicación</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personal</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="eventsTable" class="divide-y divide-gray-200"></tbody>
-      </table>
-      <div id="emptyState" class="hidden p-8 text-center text-gray-500">No hay eventos registrados</div>
-    </div>
-    <div id="pagination" class="flex justify-center gap-2 mt-4"></div>
-  </div>
-</div>
+    let currentOffset = 0;
+    const LIMIT = 15;
+    const STATUS_LABELS = {draft:'Borrador',published:'Publicado',in_progress:'En Progreso',completed:'Completado',cancelled:'Cancelado'};
+    const STATUS_COLORS = {draft:'bg-gray-100 text-gray-800',published:'bg-blue-100 text-blue-800',in_progress:'bg-yellow-100 text-yellow-800',completed:'bg-green-100 text-green-800',cancelled:'bg-red-100 text-red-800'};
 
-<script>
-let currentOffset = 0;
-const LIMIT = 15;
-function getToken() { return localStorage.getItem('access_token'); }
-const STATUS_LABELS = {draft:'Borrador',published:'Publicado',in_progress:'En Progreso',completed:'Completado',cancelled:'Cancelado'};
-const STATUS_COLORS = {draft:'bg-gray-100 text-gray-800',published:'bg-blue-100 text-blue-800',in_progress:'bg-yellow-100 text-yellow-800',completed:'bg-green-100 text-green-800',cancelled:'bg-red-100 text-red-800'};
+    async function loadEvents() {
+        const token = localStorage.getItem('access_token');
+        if (!token) { location.href='/admin/login'; return; }
+        const status = document.getElementById('filterStatus').value;
+        let url = `/api/events/?limit=${LIMIT}&offset=${currentOffset}`;
+        if (status) url += `&status=${status}`;
+        try {
+            const res = await fetch(url, {headers:{'Authorization':'Bearer '+token}});
+            if (res.status===401) { location.href='/admin/login'; return; }
+            const data = await res.json();
+            renderEvents(data.items);
+            renderPagination(data.total);
+        } catch(e) { console.error(e); }
+    }
 
-async function loadEvents() {
-  const token = getToken();
-  if (!token) { window.location.href='/admin/login'; return; }
-  const status = document.getElementById('filterStatus').value;
-  let url = `/api/events/?limit=${LIMIT}&offset=${currentOffset}`;
-  if (status) url += `&status=${status}`;
-  try {
-    const res = await fetch(url, {headers:{'Authorization':'Bearer '+token}});
-    if (res.status===401) { window.location.href='/admin/login'; return; }
-    const data = await res.json();
-    renderEvents(data.items);
-    renderPagination(data.total);
-  } catch(e) { console.error(e); }
-}
+    function renderEvents(items) {
+        const tbody = document.getElementById('eventsTable');
+        const empty = document.getElementById('emptyState');
+        if (!items.length) { tbody.innerHTML=''; empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+        tbody.innerHTML = items.map(e => {
+            const d = new Date(e.start_date).toLocaleDateString('es-CO');
+            const pct = e.total_staff_needed ? Math.round(e.total_confirmed/e.total_staff_needed*100) : 0;
+            return `<tr class="hover:bg-gray-50">
+                <td class="px-4 py-3"><div class="font-medium text-gray-900">${e.name}</div>
+                    ${e.client_name?`<div class="text-xs text-gray-500">Cliente: ${e.client_name}</div>`:''}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${e.city||e.location}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${d}</td>
+                <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[e.status]||'bg-gray-100'}">${STATUS_LABELS[e.status]||e.status}</span></td>
+                <td class="px-4 py-3 text-sm">${e.total_confirmed}/${e.total_staff_needed}
+                    <div class="w-16 bg-gray-200 rounded-full h-1.5 mt-1"><div class="bg-blue-600 h-1.5 rounded-full" style="width:${pct}%"></div></div></td>
+                <td class="px-4 py-3"><a href="/admin/events/${e.id}" class="text-blue-600 hover:underline text-sm">Ver detalle</a></td>
+            </tr>`;
+        }).join('');
+    }
 
-function renderEvents(items) {
-  const tbody = document.getElementById('eventsTable');
-  const empty = document.getElementById('emptyState');
-  if (!items.length) { tbody.innerHTML=''; empty.classList.remove('hidden'); return; }
-  empty.classList.add('hidden');
-  tbody.innerHTML = items.map(e => {
-    const d = new Date(e.start_date).toLocaleDateString('es-CO');
-    const pct = e.total_staff_needed ? Math.round(e.total_confirmed/e.total_staff_needed*100) : 0;
-    return `<tr class="hover:bg-gray-50">
-      <td class="px-4 py-3"><div class="font-medium text-gray-900">${e.name}</div>
-        ${e.client_name?`<div class="text-xs text-gray-500">Cliente: ${e.client_name}</div>`:''}</td>
-      <td class="px-4 py-3 text-sm text-gray-600">${e.city||e.location}</td>
-      <td class="px-4 py-3 text-sm text-gray-600">${d}</td>
-      <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[e.status]||'bg-gray-100'}">${STATUS_LABELS[e.status]||e.status}</span></td>
-      <td class="px-4 py-3 text-sm">${e.total_confirmed}/${e.total_staff_needed}
-        <div class="w-16 bg-gray-200 rounded-full h-1.5 mt-1"><div class="bg-blue-600 h-1.5 rounded-full" style="width:${pct}%"></div></div></td>
-      <td class="px-4 py-3"><a href="/admin/events/${e.id}" class="text-blue-600 hover:underline text-sm">Ver detalle</a></td>
-    </tr>`;
-  }).join('');
-}
-
-function renderPagination(total) {
-  const pages = Math.ceil(total/LIMIT);
-  const div = document.getElementById('pagination');
-  if (pages<=1) { div.innerHTML=''; return; }
-  let html = '';
-  for (let i=0;i<pages;i++) {
-    html += `<button onclick="currentOffset=${i*LIMIT};loadEvents()" class="px-3 py-1 rounded ${i*LIMIT===currentOffset?'bg-blue-600 text-white':'bg-white border'}">${i+1}</button>`;
-  }
-  div.innerHTML = html;
-}
-loadEvents();
-</script>
-{% endblock %}
+    function renderPagination(total) {
+        const pages = Math.ceil(total/LIMIT);
+        const div = document.getElementById('pagination');
+        if (pages<=1) { div.innerHTML=''; return; }
+        let html = '';
+        for (let i=0;i<pages;i++) {
+            html += `<button onclick="currentOffset=${i*LIMIT};loadEvents()" class="px-3 py-1 rounded ${i*LIMIT===currentOffset?'bg-blue-600 text-white':'bg-white border'}">${i+1}</button>`;
+        }
+        div.innerHTML = html;
+    }
+    loadEvents();
+    </script>
+</body>
+</html>

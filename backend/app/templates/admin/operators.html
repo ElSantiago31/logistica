@@ -37,6 +37,8 @@
                     <a href="/admin/events" class="hover:opacity-80 font-medium text-sm" style="color:#f8d9b6;">Eventos</a>
                 </div>
                 <div class="flex items-center space-x-4">
+                    <a id="superadminLink" href="/admin/superadmin" class="hidden px-3 py-1 rounded-lg text-sm font-semibold hover:opacity-90" style="background:#785631; color:#fff2e4;">⚙️ Superadmin</a>
+                    <span id="superadminSep" class="hidden text-gray-400">|</span>
                     <span id="userName" class="text-sm" style="color:#e3be95;"></span>
                     <button onclick="adminLogout()" class="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition" style="background:#cf9b62;color:#1a1a1a;">Cerrar Sesión</button>
                 </div>
@@ -76,6 +78,10 @@
                 window.location.href = '/admin/login'; return;
             }
             document.getElementById('userName').textContent = user.first_name + ' ' + user.last_name;
+            if (user.user_type === 'superadmin') {
+                document.getElementById('superadminLink').classList.remove('hidden');
+                document.getElementById('superadminSep').classList.remove('hidden');
+            }
         })();
 
         let currentPage = 0;
