@@ -1,0 +1,48 @@
+<!-- Admin responsive navbar — include with {% set active_page='dashboard' %} before including -->
+<nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-14 sm:h-16">
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <img src="/static/frontend/logo.jpeg" alt="A&C" class="h-8 w-8 sm:h-10 sm:w-10 rounded-full object-cover border-2 flex-shrink-0" style="border-color:#cf9b62;">
+                <div class="leading-tight hidden sm:block">
+                    <span class="text-sm font-bold block" style="color:#fff2e4;">A&C Logística</span>
+                    <span class="text-xs opacity-70" style="color:#ffebd6;">Producción de Eventos</span>
+                </div>
+                <div class="hidden sm:flex items-center space-x-1 ml-2 sm:ml-4">
+                    <a href="/admin" class="px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80 {{ 'border-b-2' if active_page=='dashboard' else '' }}" style="color:{{ '#fff2e4' if active_page=='dashboard' else '#f8d9b6' }}; {{ 'border-color:#cf9b62' if active_page=='dashboard' else '' }}">Dashboard</a>
+                    <a href="/admin/operators" class="px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80 {{ 'border-b-2' if active_page=='operators' else '' }}" style="color:{{ '#fff2e4' if active_page=='operators' else '#f8d9b6' }}; {{ 'border-color:#cf9b62' if active_page=='operators' else '' }}">Operadores</a>
+                    <a href="/admin/events" class="px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80 {{ 'border-b-2' if active_page=='events' else '' }}" style="color:{{ '#fff2e4' if active_page=='events' else '#f8d9b6' }}; {{ 'border-color:#cf9b62' if active_page=='events' else '' }}">Eventos</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <a id="superadminLink" href="/admin/superadmin" class="hidden px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold hover:opacity-90" style="background:#785631;color:#fff2e4;"><span class="hidden sm:inline">⚙️ Superadmin</span><span class="sm:hidden">⚙️</span></a>
+                <span id="userName" class="text-xs sm:text-sm hidden sm:inline" style="color:#e3be95;"></span>
+                <button onclick="adminLogout()" class="px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a">Salir</button>
+                <!-- Mobile hamburger -->
+                <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="sm:hidden p-2 rounded-lg hover:bg-white/10">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden sm:hidden border-t border-white/20 pb-3">
+        <div class="px-3 pt-2 space-y-1">
+            <a href="/admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10 {{ 'bg-white/10 font-semibold' if active_page=='dashboard' else '' }}" style="color:#f8d9b6;">📊 Dashboard</a>
+            <a href="/admin/operators" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10 {{ 'bg-white/10 font-semibold' if active_page=='operators' else '' }}" style="color:#f8d9b6;">👥 Operadores</a>
+            <a href="/admin/events" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10 {{ 'bg-white/10 font-semibold' if active_page=='events' else '' }}" style="color:#f8d9b6;">📅 Eventos</a>
+            <a id="superadminLinkM" href="/admin/superadmin" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">⚙️ Superadmin</a>
+        </div>
+    </div>
+</nav>
+<script>
+(function(){
+    var u=JSON.parse(localStorage.getItem('user')||'{}');
+    var el=document.getElementById('userName');if(el)el.textContent=u.first_name+' '+u.last_name;
+    if(u.user_type==='superadmin'){
+        var s=document.getElementById('superadminLink');if(s)s.classList.remove('hidden');
+        var sm=document.getElementById('superadminLinkM');if(sm)sm.classList.remove('hidden');
+    }
+})();
+function adminLogout(){localStorage.clear();location.href='/admin/login'}
+</script>
