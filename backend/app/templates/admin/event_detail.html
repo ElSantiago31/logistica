@@ -53,8 +53,6 @@
                 <div class="flex gap-2 flex-wrap">
                     <button onclick="showAssignModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">+ Asignar</button>
                     <button onclick="sendInvitations()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">📱 Invitar WA</button>
-                    <button onclick="sendReminder()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 text-sm">🔔 Recordatorio</button>
-                    <button onclick="sendPending()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">📤 Pendientes</button>
                     <a href="/admin/events/{{ event_id }}/checkin" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm">📷 Check-in</a>
                     <a href="/admin/events/{{ event_id }}/payroll" class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 text-sm">💰 Nómina</a>
                 </div>
@@ -152,8 +150,6 @@ async function assignSelected(){if(!selectedOps.size){showToast('Selecciona al m
 
 function showToast(msg,cls){const t=document.getElementById('toast');t.textContent=msg;t.className=`fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${cls}`;setTimeout(()=>t.className='hidden',3000)}
 async function sendInvitations(){const token=getToken();if(!confirm('¿Encolar invitaciones WhatsApp?'))return;const res=await fetch(`/api/whatsapp/events/${EVENT_ID}/invite`,{method:'POST',headers:{'Authorization':'Bearer '+token}});const data=await res.json();showToast(data.message||'Error',res.ok?'bg-green-500':'bg-red-500')}
-async function sendReminder(){const token=getToken();if(!confirm('¿Encolar recordatorios?'))return;const res=await fetch(`/api/whatsapp/events/${EVENT_ID}/remind`,{method:'POST',headers:{'Authorization':'Bearer '+token}});const data=await res.json();showToast(data.message||'Error',res.ok?'bg-teal-500':'bg-red-500')}
-async function sendPending(){const token=getToken();if(!confirm('¿Enviar mensajes pendientes?'))return;const res=await fetch('/api/whatsapp/send-pending',{method:'POST',headers:{'Authorization':'Bearer '+token}});const data=await res.json();showToast(`Enviados: ${data.sent||0}`,res.ok?'bg-blue-500':'bg-red-500')}
 
 loadEvent();
 </script>
