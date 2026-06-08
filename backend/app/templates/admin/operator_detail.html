@@ -22,8 +22,7 @@
     (function(){
         const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
         if(!t||!['superadmin','coordinator'].includes(u.user_type)){window.location.href='/admin/login';return}
-        document.getElementById('userName').textContent=u.first_name+' '+u.last_name;
-        if(u.user_type==='superadmin'){document.getElementById('superadminLink').classList.remove('hidden');document.getElementById('superadminSep').classList.remove('hidden');}
+                if(u.user_type==='superadmin'){}
     })();
     const opId=window.location.pathname.split('/').pop();
     let allRoles=[];
