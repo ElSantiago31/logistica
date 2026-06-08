@@ -92,7 +92,6 @@
                 </div>
                 <div class="flex items-center space-x-4" id="nav-links">
                     <!-- Guest: shown when NOT logged in -->
-                    <a href="/admin" id="nav-admin" class="hover:text-primary-300 transition" style="color: #f8d9b6;">Admin</a>
                     <a href="/enrolamiento" id="nav-enroll" class="px-3 py-1 rounded-lg font-semibold transition hover:opacity-90"
                         style="background:#cf9b62; color:#1a1a1a;">Trabaja con nosotros</a>
                     <!-- Logged in: shown when logged in -->
@@ -130,7 +129,6 @@
     (function() {
         const token = localStorage.getItem('access_token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const navAdmin = document.getElementById('nav-admin');
         const navEnroll = document.getElementById('nav-enroll');
         const navProfile = document.getElementById('nav-profile');
         const navPanel = document.getElementById('nav-panel');
@@ -138,7 +136,6 @@
 
         if (token && user && user.user_type) {
             // Logged in: hide guest links, show logged-in links
-            if (navAdmin) navAdmin.classList.add('hidden');
             if (navEnroll) navEnroll.classList.add('hidden');
 
             if (user.user_type === 'operator') {
