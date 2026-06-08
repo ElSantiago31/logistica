@@ -28,10 +28,10 @@
     <!-- Mobile menu -->
     <div id="mobile-menu" class="hidden sm:hidden border-t border-white/20 pb-3">
         <div class="px-3 pt-2 space-y-1">
-            <a href="/admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10 {{ 'bg-white/10 font-semibold' if active_page=='dashboard' else '' }}" style="color:#f8d9b6;">📊 Dashboard</a>
-            <a href="/admin/operators" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10 {{ 'bg-white/10 font-semibold' if active_page=='operators' else '' }}" style="color:#f8d9b6;">👥 Operadores</a>
-            <a href="/admin/events" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10 {{ 'bg-white/10 font-semibold' if active_page=='events' else '' }}" style="color:#f8d9b6;">📅 Eventos</a>
-            <a id="superadminLinkM" href="/admin/superadmin" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">⚙️ Superadmin</a>
+            <a href="/admin" data-nav="dashboard" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📊 Dashboard</a>
+            <a href="/admin/operators" data-nav="operators" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">👥 Operadores</a>
+            <a href="/admin/events" data-nav="events" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📅 Eventos</a>
+            <a id="superadminLinkM" href="/admin/superadmin" data-nav="superadmin" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">⚙️ Superadmin</a>
         </div>
     </div>
 </nav>
@@ -43,6 +43,21 @@
         var s=document.getElementById('superadminLink');if(s)s.classList.remove('hidden');
         var sm=document.getElementById('superadminLinkM');if(sm)sm.classList.remove('hidden');
     }
+    // Highlight active mobile menu item based on current URL
+    var path=window.location.pathname;
+    var map={'/admin':'dashboard','/admin/':'dashboard','/admin/operators':'operators','/admin/events':'events','/admin/superadmin':'superadmin'};
+    var active=map[path];
+    if(!active){
+        if(path.indexOf('/admin/operator')===0)active='operators';
+        else if(path.indexOf('/admin/event')===0)active='events';
+        else active='dashboard';
+    }
+    document.querySelectorAll('[data-nav]').forEach(function(a){
+        if(a.getAttribute('data-nav')===active){
+            a.classList.add('bg-white/10','font-semibold');
+            a.style.color='#fff2e4';
+        }
+    });
 })();
 function adminLogout(){localStorage.clear();location.href='/admin/login'}
 </script>
