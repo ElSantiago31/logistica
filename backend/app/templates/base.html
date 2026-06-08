@@ -79,27 +79,49 @@
     <!-- Navigation bar -->
     <nav class="text-white shadow-lg" id="main-nav"
         style="background: linear-gradient(135deg, #5d4224 0%, #785631 100%);">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-3">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-14 sm:h-16">
+                <div class="flex items-center space-x-2 sm:space-x-3">
                     <img src="/static/frontend/logo.jpeg" alt="A&C Logística"
-                        class="h-11 w-11 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+                        class="h-9 w-9 sm:h-11 sm:w-11 rounded-full object-cover border-2 flex-shrink-0" style="border-color:#cf9b62;">
                     <div class="leading-tight">
-                        <a href="/" class="text-base font-bold tracking-wide block" style="color: #fff2e4;">A&C
+                        <a href="/" class="text-sm sm:text-base font-bold tracking-wide block" style="color: #fff2e4;">A&C
                             Logística</a>
-                        <span class="text-xs opacity-70" style="color: #ffebd6;">Producción de Eventos</span>
+                        <span class="text-xs opacity-70 hidden sm:inline" style="color: #ffebd6;">Producción de Eventos</span>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4" id="nav-links">
+                <!-- Desktop nav links -->
+                <div class="hidden sm:flex items-center space-x-4" id="nav-links-desktop">
                     <!-- Guest: shown when NOT logged in -->
-                    <a href="/enrolamiento" id="nav-enroll" class="px-3 py-1 rounded-lg font-semibold transition hover:opacity-90"
+                    <a href="/enrolamiento" id="nav-enroll-d" class="px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 text-sm"
                         style="background:#cf9b62; color:#1a1a1a;">Trabaja con nosotros</a>
-                    <!-- Logged in: shown when logged in -->
-                    <a href="/enrolamiento/perfil" id="nav-profile" class="hidden hover:text-primary-300 transition" style="color: #f8d9b6;">Mi Perfil</a>
-                    <a href="/admin" id="nav-panel" class="hidden hover:text-primary-300 transition" style="color: #f8d9b6;">Panel</a>
-                    <button onclick="navLogout()" id="nav-logout" class="hidden px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 cursor-pointer"
+                    <!-- Logged in -->
+                    <a href="/enrolamiento/perfil" id="nav-profile-d" class="hidden hover:text-primary-300 transition text-sm" style="color: #f8d9b6;">Mi Perfil</a>
+                    <a href="/admin" id="nav-panel-d" class="hidden hover:text-primary-300 transition text-sm" style="color: #f8d9b6;">Panel</a>
+                    <button onclick="navLogout()" id="nav-logout-d" class="hidden px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 cursor-pointer text-sm"
                         style="background:#cf9b62; color:#1a1a1a;">Cerrar Sesión</button>
                 </div>
+                <!-- Mobile hamburger -->
+                <div class="flex items-center sm:hidden">
+                    <button onclick="toggleMobileMenu()" id="hamburger-btn" class="p-2 rounded-lg hover:bg-white/10 transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile menu dropdown -->
+        <div id="mobile-menu" class="hidden sm:hidden border-t border-white/20 pb-3">
+            <div class="px-3 pt-2 space-y-2">
+                <!-- Guest -->
+                <a href="/enrolamiento" id="nav-enroll-m" class="block px-3 py-2 rounded-lg font-semibold text-sm"
+                    style="background:#cf9b62; color:#1a1a1a;">Trabaja con nosotros</a>
+                <!-- Logged in -->
+                <a href="/enrolamiento/perfil" id="nav-profile-m" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10 transition" style="color: #f8d9b6;">Mi Perfil</a>
+                <a href="/admin" id="nav-panel-m" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10 transition" style="color: #f8d9b6;">Panel</a>
+                <button onclick="navLogout()" id="nav-logout-m" class="hidden w-full text-left px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer"
+                    style="background:#cf9b62; color:#1a1a1a;">Cerrar Sesión</button>
             </div>
         </div>
     </nav>
@@ -125,27 +147,33 @@
         navigator.serviceWorker.register('/static/frontend/sw.js').catch(()=>{});
     }
 
-    // --- Navbar: hide "Trabaja con nosotros" when logged in ---
+    // --- Navbar: toggle logged-in state for desktop + mobile ---
     (function() {
         const token = localStorage.getItem('access_token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const navEnroll = document.getElementById('nav-enroll');
-        const navProfile = document.getElementById('nav-profile');
-        const navPanel = document.getElementById('nav-panel');
-        const navLogout = document.getElementById('nav-logout');
 
-        if (token && user && user.user_type) {
-            // Logged in: hide guest links, show logged-in links
-            if (navEnroll) navEnroll.classList.add('hidden');
+        ['d','m'].forEach(suffix => {
+            const enroll = document.getElementById('nav-enroll-' + suffix);
+            const profile = document.getElementById('nav-profile-' + suffix);
+            const panel = document.getElementById('nav-panel-' + suffix);
+            const logout = document.getElementById('nav-logout-' + suffix);
 
-            if (user.user_type === 'operator') {
-                if (navProfile) navProfile.classList.remove('hidden');
-            } else {
-                if (navPanel) navPanel.classList.remove('hidden');
+            if (token && user && user.user_type) {
+                if (enroll) enroll.classList.add('hidden');
+                if (user.user_type === 'operator') {
+                    if (profile) profile.classList.remove('hidden');
+                } else {
+                    if (panel) panel.classList.remove('hidden');
+                }
+                if (logout) logout.classList.remove('hidden');
             }
-            if (navLogout) navLogout.classList.remove('hidden');
-        }
+        });
     })();
+
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobile-menu');
+        menu.classList.toggle('hidden');
+    }
 
     function navLogout() {
         localStorage.removeItem('access_token');
