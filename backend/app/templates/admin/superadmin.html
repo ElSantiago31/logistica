@@ -50,7 +50,8 @@
     </div>
 
     <script>
-    (function(){const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');if(!t||u.user_type!=='superadmin'){location.href='/admin/login';return}    function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
+    (function(){const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');if(!t||u.user_type!=='superadmin'){location.href='/admin/login';return}})();
+    function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
     function toast(m,t){const c=document.getElementById('toast-container'),e=document.createElement('div');e.className='toast '+(t==='error'?'bg-red-500':t==='success'?'bg-green-500':'bg-blue-500')+' text-white px-6 py-3 rounded-lg shadow-lg';e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),4000)}
 
     async function loadAdmins(){
