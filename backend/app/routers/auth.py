@@ -1,8 +1,11 @@
 """Auth router — login, register, refresh, logout, change password."""
+import json
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +28,7 @@ from app.services.auth import (
 from app.dependencies.auth import get_current_user, get_current_active_user, require_superadmin
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _build_login_response(user: User) -> LoginResponse:
@@ -50,9 +54,10 @@ def _build_login_response(user: User) -> LoginResponse:
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest = None, db: AsyncSession = Depends(get_db)):
     """Authenticate user by document number and return JWT tokens."""
-    user = await authenticate_user(db, request.document_number, request.password)
+    user = await authenticate_user(db, body.document_number, body.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -78,11 +83,12 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-async def register_operator(request: OperatorRegisterRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/minute")
+async def register_operator(request: Request, body: OperatorRegisterRequest = None, db: AsyncSession = Depends(get_db)):
     """Public registration for operators (from landing page)."""
     # Check if email already exists (only active users)
     existing = await db.execute(
-        select(User).where(User.email == request.email, User.is_active == True)
+        select(User).where(User.email == body.email, User.is_active == True)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -92,7 +98,7 @@ async def register_operator(request: OperatorRegisterRequest, db: AsyncSession =
 
     # Check if document number already exists (only active users)
     existing = await db.execute(
-        select(User).where(User.document_number == request.document_number, User.is_active == True)
+        select(User).where(User.document_number == body.document_number, User.is_active == True)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -102,13 +108,13 @@ async def register_operator(request: OperatorRegisterRequest, db: AsyncSession =
 
     # Create user (auto-approved on registration)
     user = User(
-        email=request.email,
-        password_hash=hash_password(request.password),
-        first_name=request.first_name,
-        last_name=request.last_name,
-        phone=request.phone,
-        document_type=request.document_type,
-        document_number=request.document_number,
+        email=body.email,
+        password_hash=hash_password(body.password),
+        first_name=body.first_name,
+        last_name=body.last_name,
+        phone=body.phone,
+        document_type=body.document_type,
+        document_number=body.document_number,
         user_type="operator",
         is_verified=True,
         is_approved=True,
@@ -117,25 +123,24 @@ async def register_operator(request: OperatorRegisterRequest, db: AsyncSession =
     await db.flush()
 
     # Create operator profile
-    import json
     operator = Operator(
         user_id=user.id,
-        eps_id=request.eps_id,
-        arl_id=request.arl_id,
-        city=request.city,
-        address=request.address,
-        locality=request.locality,
-        blood_type=request.blood_type,
-        emergency_contact_name=request.emergency_contact_name,
-        emergency_contact_phone=request.emergency_contact_phone,
-        whatsapp=request.whatsapp,
-        has_protocol_experience=request.has_protocol_experience,
-        event_size_experience=request.event_size_experience,
-        shoe_size=request.shoe_size,
-        shirt_size=request.shirt_size,
-        pants_size=request.pants_size,
-        jacket_size=request.jacket_size,
-        experience_roles=json.dumps([str(r) for r in request.experience_roles]) if request.experience_roles else None,
+        eps_id=body.eps_id,
+        arl_id=body.arl_id,
+        city=body.city,
+        address=body.address,
+        locality=body.locality,
+        blood_type=body.blood_type,
+        emergency_contact_name=body.emergency_contact_name,
+        emergency_contact_phone=body.emergency_contact_phone,
+        whatsapp=body.whatsapp,
+        has_protocol_experience=body.has_protocol_experience,
+        event_size_experience=body.event_size_experience,
+        shoe_size=body.shoe_size,
+        shirt_size=body.shirt_size,
+        pants_size=body.pants_size,
+        jacket_size=body.jacket_size,
+        experience_roles=json.dumps([str(r) for r in body.experience_roles]) if body.experience_roles else None,
     )
     db.add(operator)
 
@@ -144,14 +149,14 @@ async def register_operator(request: OperatorRegisterRequest, db: AsyncSession =
         action="register",
         resource_type="user",
         resource_id=user.id,
-        details=f"Operador registrado: {request.email}",
+        details=f"Operador registrado: {body.email}",
     )
     db.add(audit)
     await db.commit()
 
     return RegisterResponse(
         id=user.id,
-        email=user.email,
+        email=body.email,
         message="Registro exitoso. Bienvenido al sistema.",
     )
 
@@ -210,9 +215,6 @@ async def logout(
     db: AsyncSession = Depends(get_db),
 ):
     """Logout — revoke the current access token."""
-    # We need to get the JTI from the current token
-    # The dependency already validated it, so we extract from user context
-    # For simplicity, we'll accept the token in the body or header
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Use /logout/token endpoint with the JTI",
@@ -286,6 +288,10 @@ async def create_admin(
     for f in required:
         if not request.get(f):
             raise HTTPException(status_code=400, detail=f"Campo requerido: {f}")
+
+    # Validate password minimum length
+    if len(request["password"]) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
 
     # Check duplicate document
     existing = await db.execute(
@@ -363,6 +369,8 @@ async def update_admin(
             setattr(admin, field, request[field])
 
     if request.get("password"):
+        if len(request["password"]) < 6:
+            raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
         admin.password_hash = hash_password(request["password"])
 
     await db.commit()

@@ -7,6 +7,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from app.config import settings
 from app.routers import auth as auth_router
 from app.routers import operators as operators_router
@@ -26,13 +30,20 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,
 )
+
+# Rate limit error handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Register routers
 app.include_router(auth_router.router)
@@ -77,7 +88,7 @@ async def add_security_headers(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
     return response
 
 
