@@ -12,159 +12,157 @@
 
   <div id="not-logged" class="hidden text-center py-12">
     <p class="text-gray-500 mb-4">Debes iniciar sesión para ver tu perfil</p>
-    <a href="/enrolamiento/login" class="inline-block px-6 py-2 rounded-lg font-semibold text-white" style="background:#cf9b62; color:#1a1a1a;">Iniciar Sesión</a>
+    <a href="/enrolamiento/login" class="inline-block px-6 py-2 rounded-lg font-semibold" style="background:#cf9b62; color:#1a1a1a;">Iniciar Sesión</a>
+  </div>
+
+  <div id="photo-card" class="hidden bg-white rounded-xl shadow p-6 mb-6">
+    <h2 class="font-semibold text-gray-700 border-b pb-2 mb-4">📸 Mi Foto</h2>
+    <div class="flex items-center gap-6">
+      <div id="photo-avatar" class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0"></div>
+      <div class="flex-1">
+        <input type="file" id="photo-file" accept="image/jpeg,image/png,image/webp" class="hidden">
+        <button type="button" onclick="document.getElementById('photo-file').click()" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-50 transition">📷 Cambiar Foto</button>
+        <p class="text-xs text-gray-400 mt-2">JPG, PNG o WEBP. Máximo 5MB.</p>
+        <p id="photo-status" class="text-xs mt-1 hidden"></p>
+      </div>
+    </div>
   </div>
 
   <form id="profile-form" class="hidden space-y-6">
-    <!-- Datos Personales -->
     <div class="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">📋 Datos Personales</h2>
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Nombres</label>
-          <input type="text" id="first_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Apellidos</label>
-          <input type="text" id="last_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly>
-        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Nombres</label><input type="text" id="first_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Apellidos</label><input type="text" id="last_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly></div>
       </div>
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Tipo Doc</label>
-          <input type="text" id="document_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Número Doc</label>
-          <input type="text" id="document_number" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly>
-        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Tipo Doc</label><input type="text" id="document_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Número Doc</label><input type="text" id="document_number" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly></div>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-        <input type="tel" id="phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-      </div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label><input type="tel" id="phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"></div>
     </div>
 
-    <!-- Datos Laborales -->
     <div class="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">👷 Datos Laborales</h2>
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">EPS</label>
-          <select id="eps_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="">— Seleccionar —</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">ARL</label>
-          <select id="arl_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="">— Seleccionar —</option>
-          </select>
-        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">EPS</label><select id="eps_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">— Seleccionar —</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">ARL</label><select id="arl_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">— Seleccionar —</option></select></div>
       </div>
       <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
+          <select id="department" onchange="loadProfileCities()"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="">— Seleccionar —</option>
+          </select>
+        </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
-          <input type="text" id="city" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-          <input type="text" id="address" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Localidad / Barrio</label>
-          <input type="text" id="locality" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
-          <input type="tel" id="whatsapp" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+          <select id="city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="">— Seleccione depto. —</option>
+          </select>
         </div>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Sangre</label>
-        <select id="blood_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-          <option value="">—</option>
-          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-        </select>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+        <div class="grid grid-cols-6 gap-2 mb-2">
+          <div class="col-span-2">
+            <select id="addr_tipo_via" onchange="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Tipo vía</option>
+              <option value="Calle">Calle</option><option value="Carrera">Carrera</option>
+              <option value="Diagonal">Diagonal</option><option value="Transversal">Transversal</option>
+              <option value="Autopista">Autopista</option><option value="Avenida">Avenida</option>
+              <option value="Avenida Calle">Avenida Calle</option><option value="Avenida Carrera">Avenida Carrera</option>
+              <option value="Circular">Circular</option><option value="Circunvalar">Circunvalar</option>
+              <option value="Manzana">Manzana</option><option value="Vereda">Vereda</option>
+              <option value="Kilómetro">Kilómetro</option>
+            </select>
+          </div>
+          <div class="col-span-1">
+            <input type="text" id="addr_num_via" placeholder="N°" oninput="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+          <div class="col-span-1">
+            <select id="addr_sep" onchange="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Sep.</option><option value="#">#</option><option value="-">-</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <input type="text" id="addr_num_sec" placeholder="N° sec." oninput="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-6 gap-2 mb-2">
+          <div class="col-span-2">
+            <select id="addr_comp_tipo" onchange="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Complemento</option>
+              <option value="Interior">Interior</option><option value="Apartamento">Apartamento</option>
+              <option value="Casa">Casa</option><option value="Local">Local</option>
+              <option value="Oficina">Oficina</option><option value="Bodega">Bodega</option>
+              <option value="Bloque">Bloque</option><option value="Torre">Torre</option>
+              <option value="Lote">Lote</option><option value="Etapa">Etapa</option>
+              <option value="Manzana">Manzana</option><option value="Piso">Piso</option>
+              <option value="Garaje">Garaje</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <input type="text" id="addr_comp_num" placeholder="N° complemento" oninput="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+          <div class="col-span-2">
+            <input type="text" id="addr_comp_extra" placeholder="Otro (Bis, Sur...)" oninput="updateAddrPreview()"
+              class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">
+          </div>
+        </div>
+        <div id="address-preview" class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 min-h-[36px]">
+          <span class="text-gray-400">La dirección aparecerá aquí...</span>
+        </div>
+        <input type="hidden" id="address">
       </div>
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Contacto Emergencia</label>
-          <input type="text" id="emergency_contact_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Tel. Emergencia</label>
-          <input type="tel" id="emergency_contact_phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Localidad</label><input type="text" id="locality" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label><input type="tel" id="whatsapp" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Sangre</label>
+        <select id="blood_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">—</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Contacto Emergencia</label><input type="text" id="emergency_contact_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Tel. Emergencia</label><input type="tel" id="emergency_contact_phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>
       </div>
     </div>
 
-    <!-- Experiencia -->
     <div class="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">🎯 Experiencia</h2>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Experiencia en eventos?</label>
-        <select id="has_protocol_experience" onchange="toggleExp(this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-          <option value="">—</option>
-          <option value="true">Sí</option>
-          <option value="false">No</option>
-        </select>
+        <select id="has_protocol_experience" onchange="toggleExp(this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">—</option><option value="true">Sí</option><option value="false">No</option></select>
       </div>
       <div id="exp-section" class="hidden space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Cargos con experiencia</label>
-          <div id="roles-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
-        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">Cargos con experiencia</label><div id="roles-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Tamaño Evento</label>
-          <select id="event_size_experience" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="">—</option>
-            <option value="100">Hasta 100</option>
-            <option value="500">100-500</option>
-            <option value="1000">500-1000</option>
-            <option value="2000">1000-2000</option>
-            <option value="2000+">Más de 2000</option>
-          </select>
+          <select id="event_size_experience" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">—</option><option value="100">Hasta 100</option><option value="500">100-500</option><option value="1000">500-1000</option><option value="2000">1000-2000</option><option value="2000+">Más de 2000</option></select>
         </div>
       </div>
     </div>
 
-    <!-- Tallas -->
     <div class="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">👕 Tallas</h2>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Zapatos</label>
-          <input type="text" id="shoe_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Camisa</label>
-          <select id="shirt_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Pantalón</label>
-          <input type="text" id="pants_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Chaqueta</label>
-          <select id="jacket_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
-          </select>
-        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Zapatos</label><input type="text" id="shoe_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Camisa</label><select id="shirt_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Pantalón</label><input type="text" id="pants_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">Chaqueta</label><select id="jacket_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option></select></div>
       </div>
     </div>
 
     <div id="msg" class="hidden text-sm p-3 rounded-lg"></div>
-
-    <button type="button" onclick="saveProfile()" id="save-btn"
-      class="w-full py-3 rounded-lg font-bold transition" style="background:#cf9b62; color:#1a1a1a;">
-      Guardar Cambios
-    </button>
+    <button type="button" onclick="saveProfile()" id="save-btn" class="w-full py-3 rounded-lg font-bold transition" style="background:#cf9b62; color:#1a1a1a;">Guardar Cambios</button>
   </form>
 </div>
 {% endblock %}
@@ -173,27 +171,125 @@
 <script>
 const API = '/api/operators/me/profile';
 let token = localStorage.getItem('access_token');
+let currentUserId = null;
+let colombiaCities = [];
+let savedCity = '';
 
-function authHeaders() {
-  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
+
+function loadProfileCities() {
+  const depSel = document.getElementById('department');
+  const citySel = document.getElementById('city');
+  const dep = depSel.value;
+  citySel.innerHTML = '<option value="">— Seleccionar ciudad —</option>';
+  if (!dep) return;
+  const found = colombiaCities.find(d => d.departamento === dep);
+  if (found) {
+    found.ciudades.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c; o.text = c;
+      citySel.add(o);
+    });
+    if (savedCity) { citySel.value = savedCity; savedCity = ''; }
+  }
 }
 
-function logout() {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('user');
-  window.location.href = '/enrolamiento/login';
+async function loadColombiaCities() {
+  try {
+    const resp = await fetch('/api/catalogs/cities');
+    if (resp.ok) {
+      colombiaCities = await resp.json();
+      const depSel = document.getElementById('department');
+      colombiaCities.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.departamento; o.text = d.departamento;
+        depSel.add(o);
+      });
+    }
+  } catch(e) { console.log('Cities not available'); }
+}
+function logout() { localStorage.removeItem('access_token'); localStorage.removeItem('user'); window.location.href = '/enrolamiento/login'; }
+function toggleExp(v) { document.getElementById('exp-section').classList.toggle('hidden', v !== 'true'); }
+
+function updateAddrPreview() {
+  const parts = [];
+  const tipoVia = document.getElementById('addr_tipo_via').value;
+  const numVia = document.getElementById('addr_num_via').value.trim();
+  const sep = document.getElementById('addr_sep').value;
+  const numSec = document.getElementById('addr_num_sec').value.trim();
+  const compTipo = document.getElementById('addr_comp_tipo').value;
+  const compNum = document.getElementById('addr_comp_num').value.trim();
+  const compExtra = document.getElementById('addr_comp_extra').value.trim();
+  if (tipoVia) parts.push(tipoVia);
+  if (numVia) parts.push(numVia);
+  if (sep && numSec) parts.push(sep + ' ' + numSec);
+  if (compTipo && compNum) parts.push(compTipo + ' ' + compNum);
+  if (compExtra) parts.push(compExtra);
+  const fullAddress = parts.join(' ');
+  const preview = document.getElementById('address-preview');
+  if (fullAddress) { preview.innerHTML = '📍 <strong>' + fullAddress + '</strong>'; }
+  else { preview.innerHTML = '<span class="text-gray-400">La dirección aparecerá aquí...</span>'; }
+  document.getElementById('address').value = fullAddress;
 }
 
-function toggleExp(v) {
-  document.getElementById('exp-section').classList.toggle('hidden', v !== 'true');
+function parseAddressToFields(addr) {
+  if (!addr) return;
+  const viaTypes = ['Avenida Carrera','Avenida Calle','Avenida','Autopista','Carrera','Calle','Diagonal','Transversal','Circular','Circunvalar','Manzana','Vereda','Kilómetro'];
+  for (const vt of viaTypes) {
+    if (addr.startsWith(vt + ' ')) {
+      document.getElementById('addr_tipo_via').value = vt;
+      addr = addr.substring(vt.length + 1).trim();
+      break;
+    }
+  }
+  // Split by # or -
+  const sepMatch = addr.match(/\s*([#\-])\s*/);
+  if (sepMatch) {
+    const before = addr.substring(0, addr.indexOf(sepMatch[0])).trim();
+    const after = addr.substring(addr.indexOf(sepMatch[0]) + sepMatch[0].length).trim();
+    document.getElementById('addr_num_via').value = before;
+    document.getElementById('addr_sep').value = sepMatch[1];
+    // After secondary number, look for complement
+    const compTypes = ['Apartamento','Interior','Casa','Local','Oficina','Bodega','Bloque','Torre','Lote','Etapa','Manzana','Piso','Garaje'];
+    let remaining = after;
+    for (const ct of compTypes) {
+      const idx = remaining.toLowerCase().indexOf(ct.toLowerCase());
+      if (idx !== -1) {
+        document.getElementById('addr_num_sec').value = remaining.substring(0, idx).trim();
+        document.getElementById('addr_comp_tipo').value = ct;
+        const afterComp = remaining.substring(idx + ct.length).trim();
+        if (afterComp) document.getElementById('addr_comp_num').value = afterComp;
+        remaining = '';
+        break;
+      }
+    }
+    if (remaining) document.getElementById('addr_num_sec').value = remaining;
+  } else {
+    document.getElementById('addr_num_via').value = addr;
+  }
+  updateAddrPreview();
 }
-
 function showMsg(text, ok) {
   const el = document.getElementById('msg');
   el.textContent = text;
-  el.className = `text-sm p-3 rounded-lg ${ok ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`;
+  el.className = 'text-sm p-3 rounded-lg ' + (ok ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600');
   setTimeout(() => el.classList.add('hidden'), 4000);
 }
+
+document.getElementById('photo-file').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.match(/image\/(jpeg|png|webp)/)) { alert('Solo JPG, PNG o WEBP'); return; }
+  if (file.size > 5*1024*1024) { alert('Máximo 5MB'); return; }
+  const status = document.getElementById('photo-status');
+  status.textContent = 'Subiendo...'; status.classList.remove('hidden');
+  const formData = new FormData(); formData.append('photo', file);
+  try {
+    const resp = await fetch('/api/operators/' + currentUserId + '/photo', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
+    if (resp.ok) { status.textContent = '✅ Foto actualizada'; status.className = 'text-xs mt-1 text-green-600'; loadProfile(); }
+    else { const err = await resp.json(); status.textContent = '⚠️ ' + (err.detail || 'Error'); status.className = 'text-xs mt-1 text-red-600'; }
+  } catch(e) { status.textContent = '⚠️ Error de conexión'; status.className = 'text-xs mt-1 text-red-600'; }
+});
 
 async function loadProfile() {
   if (!token) { document.getElementById('not-logged').classList.remove('hidden'); return; }
@@ -202,19 +298,36 @@ async function loadProfile() {
     if (!resp.ok) { logout(); return; }
     const data = await resp.json();
     document.getElementById('profile-form').classList.remove('hidden');
+    document.getElementById('photo-card').classList.remove('hidden');
     document.getElementById('user-email').textContent = data.email;
-
-    // Fill fields
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    currentUserId = user.id;
+    const o = data.operator || {};
     const f = data.user || {};
+    const avatarEl = document.getElementById('photo-avatar');
+    if (o.photo_path) {
+      avatarEl.innerHTML = '<img src="'+o.photo_path+'" class="w-24 h-24 rounded-full object-cover">';
+    } else {
+      avatarEl.innerHTML = '<span class="text-3xl font-bold text-gray-400">'+(f.first_name?f.first_name[0]:'')+(f.last_name?f.last_name[0]:'')+'</span>';
+    }
     document.getElementById('first_name').value = f.first_name || '';
     document.getElementById('last_name').value = f.last_name || '';
     document.getElementById('document_type').value = f.document_type || '';
     document.getElementById('document_number').value = f.document_number || '';
     document.getElementById('phone').value = f.phone || '';
-
-    const o = data.operator || {};
-    document.getElementById('city').value = o.city || '';
-    document.getElementById('address').value = o.address || '';
+    // Set department + city from saved data
+    if (o.city) {
+      savedCity = o.city;
+      // Find department for this city
+      for (const dep of colombiaCities) {
+        if (dep.ciudades.includes(o.city)) {
+          document.getElementById('department').value = dep.departamento;
+          loadProfileCities();
+          break;
+        }
+      }
+    }
+    parseAddressToFields(o.address || '');
     document.getElementById('locality').value = o.locality || '';
     document.getElementById('whatsapp').value = o.whatsapp || '';
     document.getElementById('blood_type').value = o.blood_type || '';
@@ -225,37 +338,23 @@ async function loadProfile() {
     document.getElementById('pants_size').value = o.pants_size || '';
     document.getElementById('jacket_size').value = o.jacket_size || '';
     document.getElementById('event_size_experience').value = o.event_size_experience || '';
-
     if (o.has_protocol_experience !== null && o.has_protocol_experience !== undefined) {
       document.getElementById('has_protocol_experience').value = String(o.has_protocol_experience);
       toggleExp(String(o.has_protocol_experience));
     }
-
-    // Load catalogs + set current values
-    const [epsResp, arlResp, rolesResp] = await Promise.all([
-      fetch('/api/catalogs/eps'), fetch('/api/catalogs/arl'), fetch('/api/catalogs/roles')
-    ]);
-    if (epsResp.ok) {
-      const eps = await epsResp.json();
-      const sel = document.getElementById('eps_id');
-      eps.forEach(e => { const op = document.createElement('option'); op.value=e.id; op.text=e.name; sel.add(op); });
-      if (o.eps_id) sel.value = o.eps_id;
-    }
-    if (arlResp.ok) {
-      const arl = await arlResp.json();
-      const sel = document.getElementById('arl_id');
-      arl.forEach(a => { const op = document.createElement('option'); op.value=a.id; op.text=a.name; sel.add(op); });
-      if (o.arl_id) sel.value = o.arl_id;
-    }
+    const [epsResp, arlResp, rolesResp] = await Promise.all([fetch('/api/catalogs/eps'), fetch('/api/catalogs/arl'), fetch('/api/catalogs/roles')]);
+    if (epsResp.ok) { const eps = await epsResp.json(); const sel = document.getElementById('eps_id'); eps.forEach(e => { const op = document.createElement('option'); op.value=e.id; op.text=e.name; sel.add(op); }); if (o.eps_id) sel.value = o.eps_id; }
+    if (arlResp.ok) { const arl = await arlResp.json(); const sel = document.getElementById('arl_id'); arl.forEach(a => { const op = document.createElement('option'); op.value=a.id; op.text=a.name; sel.add(op); }); if (o.arl_id) sel.value = o.arl_id; }
     if (rolesResp.ok) {
       const roles = await rolesResp.json();
       const savedRoles = o.experience_roles ? JSON.parse(o.experience_roles) : [];
       const container = document.getElementById('roles-container');
+      container.innerHTML = '';
       roles.forEach(r => {
         const label = document.createElement('label');
         label.className = 'flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer text-sm';
         const checked = savedRoles.includes(r.id) ? 'checked' : '';
-        label.innerHTML = `<input type="checkbox" name="experience_roles" value="${r.id}" ${checked} class="rounded"> ${r.name}`;
+        label.innerHTML = '<input type="checkbox" name="experience_roles" value="'+r.id+'" '+checked+' class="rounded"> '+r.name;
         container.appendChild(label);
       });
     }
@@ -263,9 +362,9 @@ async function loadProfile() {
 }
 
 async function saveProfile() {
+  updateAddrPreview(); // Ensure address is up to date
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Guardando...';
-
   const selectedRoles = Array.from(document.querySelectorAll('input[name="experience_roles"]:checked')).map(cb => cb.value);
   const data = {
     phone: document.getElementById('phone').value || undefined,
@@ -286,7 +385,6 @@ async function saveProfile() {
     jacket_size: document.getElementById('jacket_size').value || undefined,
     experience_roles: selectedRoles.length > 0 ? selectedRoles : undefined,
   };
-
   try {
     const resp = await fetch(API, { method:'PUT', headers:authHeaders(), body:JSON.stringify(data) });
     if (resp.ok) { showMsg('Perfil actualizado correctamente', true); }
@@ -295,6 +393,6 @@ async function saveProfile() {
   finally { btn.disabled=false; btn.textContent='Guardar Cambios'; }
 }
 
-loadProfile();
+loadColombiaCities().then(() => loadProfile());
 </script>
 {% endblock %}

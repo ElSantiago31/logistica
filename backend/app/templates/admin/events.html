@@ -13,14 +13,14 @@
 {% set active_page = 'events' %}
 {% include 'admin/_admin_nav.html' %}
 
-    <div class="max-w-7xl mx-auto px-4 py-6">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold text-gray-800">Gestión de Eventos</h1>
-            <a href="/admin/events/create" class="px-4 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">+ Nuevo Evento</a>
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-800">Gestión de Eventos</h1>
+            <a href="/admin/events/create" class="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-semibold text-white text-center" style="background:#785631">+ Nuevo Evento</a>
         </div>
 
-        <div class="bg-white rounded-xl shadow p-4 mb-6 flex gap-3 flex-wrap">
-            <select id="filterStatus" onchange="loadEvents()" class="border rounded-lg px-3 py-2 text-sm">
+        <div class="bg-white rounded-xl shadow p-3 sm:p-4 mb-4 sm:mb-6 flex gap-3 flex-wrap">
+            <select id="filterStatus" onchange="loadEvents()" class="border rounded-lg px-3 py-2 text-sm flex-1 sm:flex-none">
                 <option value="">Todos los estados</option>
                 <option value="draft">Borrador</option>
                 <option value="published">Publicado</option>
@@ -30,7 +30,8 @@
             </select>
         </div>
 
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        <!-- Desktop: Table -->
+        <div class="hidden md:block bg-white rounded-xl shadow-lg overflow-hidden">
             <table class="w-full">
                 <thead class="bg-gray-50">
                     <tr>
@@ -46,6 +47,11 @@
             </table>
             <div id="emptyState" class="hidden p-8 text-center text-gray-500">No hay eventos registrados</div>
         </div>
+
+        <!-- Mobile: Cards -->
+        <div id="eventsCards" class="md:hidden space-y-3"></div>
+        <div id="emptyStateMobile" class="md:hidden hidden bg-white rounded-xl shadow p-8 text-center text-gray-500">No hay eventos registrados</div>
+
         <div id="pagination" class="flex justify-center gap-2 mt-4"></div>
     </div>
 
@@ -53,7 +59,6 @@
     (function(){
         const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
         if(!t||!['superadmin','coordinator'].includes(u.user_type)){location.href='/admin/login';return}
-                if(u.user_type==='superadmin'){}
     })();
 
     let currentOffset = 0;
@@ -72,6 +77,7 @@
             if (res.status===401) { location.href='/admin/login'; return; }
             const data = await res.json();
             renderEvents(data.items);
+            renderCards(data.items);
             renderPagination(data.total);
         } catch(e) { console.error(e); }
     }
@@ -97,13 +103,41 @@
         }).join('');
     }
 
+    function renderCards(items) {
+        const container = document.getElementById('eventsCards');
+        const empty = document.getElementById('emptyStateMobile');
+        if (!items.length) { container.innerHTML=''; empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+        container.innerHTML = items.map(e => {
+            const d = new Date(e.start_date).toLocaleDateString('es-CO');
+            const pct = e.total_staff_needed ? Math.round(e.total_confirmed/e.total_staff_needed*100) : 0;
+            return `<a href="/admin/events/${e.id}" class="block bg-white rounded-xl shadow p-4 hover:shadow-md transition">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <div class="font-semibold text-gray-900 text-sm">${e.name}</div>
+                        ${e.client_name?`<div class="text-xs text-gray-500">Cliente: ${e.client_name}</div>`:''}
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[e.status]||'bg-gray-100'}">${STATUS_LABELS[e.status]||e.status}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                    <span>📍 ${e.city||e.location}</span>
+                    <span>📅 ${d}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-600">Personal: ${e.total_confirmed}/${e.total_staff_needed}</span>
+                    <div class="w-20 bg-gray-200 rounded-full h-1.5"><div class="bg-blue-600 h-1.5 rounded-full" style="width:${pct}%"></div></div>
+                </div>
+            </a>`;
+        }).join('');
+    }
+
     function renderPagination(total) {
         const pages = Math.ceil(total/LIMIT);
         const div = document.getElementById('pagination');
         if (pages<=1) { div.innerHTML=''; return; }
         let html = '';
         for (let i=0;i<pages;i++) {
-            html += `<button onclick="currentOffset=${i*LIMIT};loadEvents()" class="px-3 py-1 rounded ${i*LIMIT===currentOffset?'bg-blue-600 text-white':'bg-white border'}">${i+1}</button>`;
+            html += `<button onclick="currentOffset=${i*LIMIT};loadEvents()" class="px-3 py-1 rounded text-sm ${i*LIMIT===currentOffset?'bg-blue-600 text-white':'bg-white border'}">${i+1}</button>`;
         }
         div.innerHTML = html;
     }

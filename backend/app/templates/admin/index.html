@@ -174,12 +174,13 @@
                         html += '<ul class="divide-y divide-gray-100">';
                         role.members.forEach(member => {
                             const isMulti = memberRoleCount[member.id] > 1;
+                            const avatar = member.photo_thumbnail_path
+                                ? `<img src="${member.photo_thumbnail_path}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}">`
+                                : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}" style="background:${isMulti ? '#eab308' : '#cf9b62'};">${member.name.charAt(0)}</div>`;
                             html += `
                             <li class="py-2">
                                 <div class="flex items-center min-w-0">
-                                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white mr-3 flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}" style="background:${isMulti ? '#eab308' : '#cf9b62'};">
-                                        ${member.name.charAt(0)}
-                                    </div>
+                                    <div class="mr-3 flex-shrink-0">${avatar}</div>
                                     <div class="min-w-0 flex-1">
                                         <div class="flex items-center flex-wrap gap-1">
                                             <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600">${member.name}</a>
@@ -215,12 +216,13 @@
                         <div class="px-5 py-3">
                             <ul class="divide-y divide-gray-100">`;
                     sinExp.forEach(member => {
+                        const sinAvatar = member.photo_thumbnail_path
+                            ? `<img src="${member.photo_thumbnail_path}" class="w-7 h-7 rounded-full object-cover flex-shrink-0">`
+                            : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#9ca3af;">${member.name.charAt(0)}</div>`;
                         sinExpHtml += `
                             <li class="py-2 flex items-center justify-between">
                                 <div class="flex items-center min-w-0">
-                                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white mr-3 flex-shrink-0" style="background:#9ca3af;">
-                                        ${member.name.charAt(0)}
-                                    </div>
+                                    <div class="mr-3 flex-shrink-0">${sinAvatar}</div>
                                     <div class="min-w-0">
                                         <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600 truncate">${member.name}</a>
                                         <div class="text-xs text-gray-400">${member.city || ''}</div>

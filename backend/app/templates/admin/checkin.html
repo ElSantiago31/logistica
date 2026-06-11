@@ -2,9 +2,7 @@
 {% block title %}Check-in — AyC Eventos{% endblock %}
 {% block head %}
 <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
-<script src="/static/js/db.js"></script>
 <script src="/static/js/scanner.js"></script>
-<script src="/static/js/sync.js"></script>
 <style>
     #scanner-container { width: 100%; max-width: 350px; margin: 0 auto; }
     #scanner-container video { border-radius: 12px; }
@@ -20,8 +18,11 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h1 class="text-2xl font-bold" style="color:#5d4224;">Check-in de Operadores</h1>
-            <p id="event-name" class="text-gray-500 text-sm">Cargando evento...</p>
+            <div class="flex items-center gap-3 mb-1">
+                <a href="/admin" class="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-100 transition" style="color:#5d4224;">← Volver</a>
+                <h1 class="text-2xl font-bold" style="color:#5d4224;">Check-in de Operadores</h1>
+            </div>
+            <p id="event-name" class="text-gray-500 text-sm ml-1">Cargando evento...</p>
         </div>
         <div class="flex gap-2">
             <span id="online-badge" class="status-badge bg-green-100 text-green-700">🟢 Online</span>
@@ -126,20 +127,35 @@
 const EVENT_ID = "{{ event_id }}";
 let currentOperator = null;
 let scannerActive = false;
+let eventAssignments = [];
+
+// --- Auth helpers ---
+function getToken() { return localStorage.getItem('access_token'); }
+function authHeaders() {
+    const t = getToken();
+    const h = { 'Content-Type': 'application/json' };
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    return h;
+}
+
+// Auth guard
+(function() {
+    const t = getToken(), u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!t || !['superadmin', 'coordinator', 'admin'].includes(u.user_type)) {
+        location.href = '/admin/login';
+        return;
+    }
+})();
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadEventData();
-    OfflineDB.init();
-    SyncManager.startAutoSync();
-    
+    _getCacheDB(); // Initialize inline IndexedDB
+
     // Update online/offline badges
     updateConnectionStatus();
-    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('online', () => { updateConnectionStatus(); syncPendingRecords(); });
     window.addEventListener('offline', updateConnectionStatus);
-    
-    // Listen for sync events
-    window.addEventListener('sync-complete', updateSyncCount);
 });
 
 function updateConnectionStatus() {
@@ -149,18 +165,47 @@ function updateConnectionStatus() {
 }
 
 async function loadEventData() {
+    if (navigator.onLine) {
+        // Try online first
+        try {
+            const resp = await fetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
+                headers: authHeaders()
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                document.getElementById('event-name').textContent = data.name;
+                eventAssignments = data.assignments || [];
+                const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+                updateStats(eventAssignments.length, checked);
+                // Auto-cache for offline use
+                try { await _cacheEventData(EVENT_ID, data); } catch(e) {}
+                return;
+            } else if (resp.status === 401) {
+                location.href = '/admin/login';
+                return;
+            }
+        } catch (e) {}
+    }
+
+    // Offline fallback: load from IndexedDB (inline)
     try {
-        const resp = await fetch(`/api/events/${EVENT_ID}/offline-data`);
-        if (resp.ok) {
-            const data = await resp.json();
-            document.getElementById('event-name').textContent = data.name;
-            updateStats(data.assignments?.length || 0, 0);
+        const db = _getCacheDB();
+        if (db) {
+            const ev = await db.events.get(EVENT_ID);
+            if (ev) {
+                document.getElementById('event-name').textContent = ev.name + ' (offline)';
+                eventAssignments = await _getCachedOperators(EVENT_ID);
+                const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+                updateStats(eventAssignments.length, checked);
+                document.getElementById('last-download').textContent = 'Datos offline cargados';
+            } else {
+                document.getElementById('event-name').textContent = 'Sin datos offline — conéctate primero';
+            }
+        } else {
+            document.getElementById('event-name').textContent = 'Sin conexión — Dexie no disponible';
         }
-    } catch (e) {
-        // Try offline data
-        const events = await OfflineDB.getCachedEvents();
-        const ev = events.find(e => e.id === EVENT_ID);
-        if (ev) document.getElementById('event-name').textContent = ev.name;
+    } catch (dbErr) {
+        document.getElementById('event-name').textContent = 'Sin conexión y sin datos offline';
     }
 }
 
@@ -171,8 +216,13 @@ function updateStats(total, checked) {
 }
 
 async function updateSyncCount() {
-    const pending = await OfflineDB.getPendingAttendance();
-    document.getElementById('stat-sync').textContent = pending.length;
+    try {
+        const db = _getCacheDB();
+        if (db) {
+            const pending = await db.attendance.where('sync_status').equals('pending').count();
+            document.getElementById('stat-sync').textContent = pending;
+        }
+    } catch(e) {}
 }
 
 function toggleScanner() {
@@ -203,9 +253,20 @@ async function searchOperator(query) {
         document.getElementById('search-results').innerHTML = '';
         return;
     }
-    
-    const results = await Scanner.manualSearch(EVENT_ID, query);
+
+    // Search from loaded assignments
+    const q = query.toLowerCase();
+    const results = eventAssignments.filter(a =>
+        ['confirmed', 'checked_in', 'standby'].includes(a.status) &&
+        ((a.full_name && a.full_name.toLowerCase().includes(q)) ||
+        (a.document_number && a.document_number.includes(q)))
+    );
+
     const container = document.getElementById('search-results');
+    if (!results.length) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No se encontraron operadores</p>';
+        return;
+    }
     container.innerHTML = results.slice(0, 10).map(op => `
         <div class="operator-card bg-white rounded-lg p-3 border cursor-pointer" onclick="showOperator('${op.id}')">
             <div class="flex justify-between items-center">
@@ -213,7 +274,7 @@ async function searchOperator(query) {
                     <span class="font-medium">${op.full_name}</span>
                     <span class="text-xs text-gray-400 ml-2">${op.document_number}</span>
                 </div>
-                <span class="status-badge ${op.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${op.status}</span>
+                <span class="status-badge ${op.status === 'checked_in' ? 'bg-green-100 text-green-700' : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}">${op.status}</span>
             </div>
             <div class="text-xs text-gray-500">${op.role_name || 'Operador'}</div>
         </div>
@@ -221,59 +282,69 @@ async function searchOperator(query) {
 }
 
 async function showOperator(assignmentId) {
-    // Find operator data
-    let operator = null;
-    
-    // Try offline DB first
-    if (OfflineDB.db) {
-        const ops = await OfflineDB.getEventOperators(EVENT_ID);
-        operator = ops.find(o => o.id === assignmentId);
-    }
-    
+    // Find from loaded assignments first
+    let operator = eventAssignments.find(o => o.id === assignmentId);
+
     if (!operator) {
-        // Try online
+        // Try offline DB
         try {
-            const resp = await fetch(`/api/events/${EVENT_ID}/operators/search?q=${assignmentId}`);
-            if (resp.ok) {
-                const results = await resp.json();
-                operator = results[0];
-            }
-        } catch (e) {}
+            const ops = await _getCachedOperators(EVENT_ID);
+            operator = ops.find(o => o.id === assignmentId);
+        } catch(e) {}
     }
-    
+
     if (!operator) {
         alert('Operador no encontrado');
         return;
     }
-    
+
     currentOperator = operator;
-    
+
     document.getElementById('op-name').textContent = operator.full_name;
     document.getElementById('op-doc').textContent = operator.document_number;
     document.getElementById('op-role').textContent = operator.role_name || 'Operador';
     document.getElementById('operator-panel').classList.remove('hidden');
+
+    // Show current status
+    const statusBox = document.getElementById('op-status-box');
+    const statusText = document.getElementById('op-status-text');
+    const actions = document.getElementById('checkin-actions');
+
+    if (operator.status === 'checked_in') {
+        statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-green-50 text-green-700';
+        statusText.textContent = '✅ Ya registrado';
+        actions.classList.add('hidden');
+    } else {
+        statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-gray-50 text-gray-600';
+        statusText.textContent = `Estado: ${operator.status}`;
+        actions.classList.remove('hidden');
+    }
 }
 
 async function doCheckIn() {
     if (!currentOperator) return;
-    
+
     if (navigator.onLine) {
         // Online check-in
         try {
             const resp = await fetch(`/api/sync/events/${EVENT_ID}/check-in`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(),
                 body: JSON.stringify({
                     operator_id: currentOperator.operator_id || currentOperator.id,
                     assignment_id: currentOperator.id,
                     method: scannerActive ? 'qr' : 'manual'
                 })
             });
-            
+
             if (resp.ok) {
                 showCheckInResult('✅ Check-in registrado', true);
+                // Update local status
+                currentOperator.status = 'checked_in';
+                const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+                updateStats(eventAssignments.length, checked);
             } else if (resp.status === 409) {
-                showCheckInResult('⚠️ Ya registrado', false);
+                showCheckInResult('⚠️ Ya registrado anteriormente', false);
             } else {
                 // Fall back to offline
                 await offlineCheckIn();
@@ -287,12 +358,23 @@ async function doCheckIn() {
 }
 
 async function offlineCheckIn() {
-    const record = await OfflineDB.logAttendance(
-        EVENT_ID,
-        currentOperator.operator_id || currentOperator.id
-    );
-    showCheckInResult('📴 Guardado offline — se sincronizará después', true);
-    updateSyncCount();
+    try {
+        const db = _getCacheDB();
+        if (!db) throw new Error('Sin BD local');
+        await db.attendance.add({
+            event_id: EVENT_ID,
+            operator_id: currentOperator.operator_id || currentOperator.id,
+            assignment_id: currentOperator.id,
+            check_in_time: new Date().toISOString(),
+            check_in_method: scannerActive ? 'qr' : 'manual',
+            sync_status: 'pending'
+        });
+        showCheckInResult('📴 Guardado offline — se sincronizará después', true);
+        currentOperator.status = 'checked_in';
+        updateSyncCount();
+    } catch(e) {
+        showCheckInResult('❌ Error al guardar: ' + e.message, false);
+    }
 }
 
 function showCheckInResult(msg, success) {
@@ -300,7 +382,7 @@ function showCheckInResult(msg, success) {
     box.className = `rounded-lg p-3 mb-4 text-center ${success ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`;
     document.getElementById('op-status-text').textContent = msg;
     document.getElementById('checkin-actions').classList.add('hidden');
-    
+
     // Add to recent list
     const list = document.getElementById('recent-checkins');
     const item = document.createElement('div');
@@ -309,26 +391,136 @@ function showCheckInResult(msg, success) {
     list.prepend(item);
 }
 
+// --- Inline IndexedDB (no depende de db.js) ---
+let _cacheDB = null;
+function _getCacheDB() {
+    if (_cacheDB) return _cacheDB;
+    if (typeof Dexie === 'undefined') return null;
+    _cacheDB = new Dexie('ayc_events');
+    _cacheDB.version(1).stores({
+        events: 'id, name, status, start_date, location',
+        operators: 'id, event_id, full_name, document_number, role_name, status',
+        attendance: '++local_id, event_id, operator_id, sync_status',
+        sync_meta: 'key'
+    });
+    return _cacheDB;
+}
+
+async function _cacheEventData(eventId, data) {
+    const db = _getCacheDB();
+    if (!db) throw new Error('Dexie no cargó — recarga la página');
+    await db.events.put({
+        id: data.id, name: data.name, status: data.status,
+        start_date: data.start_date, end_date: data.end_date,
+        location: data.location, description: data.description,
+        downloaded_at: new Date().toISOString()
+    });
+    await db.operators.where('event_id').equals(eventId).delete();
+    if (data.assignments) {
+        for (const a of data.assignments) {
+            await db.operators.put({
+                id: a.id, event_id: eventId,
+                full_name: a.full_name, document_number: a.document_number,
+                role_name: a.role_name, status: a.status, photo_url: a.photo_url
+            });
+        }
+    }
+}
+
+async function _getCachedOperators(eventId) {
+    const db = _getCacheDB();
+    if (!db) return [];
+    return db.operators.where('event_id').equals(eventId).toArray();
+}
+
 async function downloadForOffline() {
     const btn = document.getElementById('btn-offline');
     btn.textContent = '⏳ Descargando...';
     btn.disabled = true;
-    
-    const result = await SyncManager.downloadEvent(EVENT_ID);
-    
-    if (result.success) {
-        btn.textContent = `✅ ${result.operators} operadores guardados`;
-        document.getElementById('last-download').textContent = `Última descarga: ${new Date().toLocaleTimeString()}`;
-    } else {
+    const logEl = document.getElementById('last-download');
+
+    try {
+        // Step 1: Fetch from API
+        logEl.textContent = 'Conectando al servidor...';
+        const resp = await fetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
+            headers: authHeaders()
+        });
+
+        if (!resp.ok) {
+            const errText = await resp.text().catch(() => '');
+            throw new Error(`Servidor respondió ${resp.status}: ${errText}`);
+        }
+
+        const eventData = await resp.json();
+        logEl.textContent = `Recibidos ${eventData.assignments?.length || 0} operadores. Guardando...`;
+
+        // Step 2: Cache in IndexedDB (inline, no depende de db.js)
+        await _cacheEventData(EVENT_ID, eventData);
+
+        // Update local assignments
+        eventAssignments = eventData.assignments || [];
+        const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+        updateStats(eventAssignments.length, checked);
+
+        btn.textContent = `✅ ${eventAssignments.length} operadores guardados`;
+        logEl.textContent = `✅ Descarga exitosa: ${new Date().toLocaleTimeString()}`;
+    } catch(e) {
+        console.error('Download error:', e);
         btn.textContent = '❌ Error al descargar';
+        logEl.textContent = `❌ ${e.message}`;
     }
     btn.disabled = false;
-    setTimeout(() => { btn.textContent = '📥 Descargar datos offline'; }, 3000);
+    setTimeout(() => { btn.textContent = '📥 Descargar datos offline'; }, 5000);
 }
 
-function markNoShow() {
-    // Update status via API or queue offline
-    showCheckInResult('❌ Marcado como No Asistió', false);
+async function syncPendingRecords() {
+    const db = _getCacheDB();
+    if (!db || !navigator.onLine) return;
+    try {
+        const pending = await db.attendance.where('sync_status').equals('pending').toArray();
+        if (!pending.length) return;
+        const records = pending.map(r => ({
+            event_id: r.event_id,
+            operator_id: r.operator_id,
+            assignment_id: r.assignment_id,
+            check_in_time: r.check_in_time,
+            check_in_method: r.check_in_method,
+        }));
+        const resp = await fetch('/api/sync/attendance', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ records })
+        });
+        if (resp.ok) {
+            const ids = pending.map(r => r.local_id);
+            await db.attendance.bulkDelete(ids);
+            updateSyncCount();
+            // Refresh stats from server
+            await loadEventData();
+        }
+    } catch(e) { console.error('Sync error:', e); }
+}
+
+async function markNoShow() {
+    if (!currentOperator) return;
+
+    if (!confirm(`¿Marcar "${currentOperator.full_name}" como No Asistió?`)) return;
+
+    try {
+        // Update via assignments API
+        const resp = await fetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=no_show`, {
+            method: 'PATCH',
+            headers: authHeaders()
+        });
+        if (resp.ok) {
+            currentOperator.status = 'no_show';
+            showCheckInResult('❌ Marcado como No Asistió', false);
+        } else {
+            showCheckInResult('❌ Error al actualizar', false);
+        }
+    } catch(e) {
+        showCheckInResult('📴 Guardado offline', false);
+    }
 }
 </script>
 {% endblock %}

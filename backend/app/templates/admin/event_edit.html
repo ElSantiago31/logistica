@@ -1,20 +1,20 @@
+{% set active_page = 'events' %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crear Evento - Logística Admin</title>
+    <title>Editar Evento - Logística Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
 </head>
 <body class="bg-gray-50 min-h-screen">
-{% set active_page = 'events' %}
-{% include 'admin/_admin_nav.html' %}
+    {% include 'admin/_admin_nav.html' %}
 
     <div class="max-w-3xl mx-auto px-4 py-6">
         <div class="flex items-center gap-3 mb-6">
-            <a href="/admin/events" class="text-gray-600 hover:text-gray-900 text-sm">← Eventos</a>
-            <h1 class="text-xl font-bold text-gray-800">Crear Evento</h1>
+            <a href="/admin/events/{{ event_id }}" class="text-gray-600 hover:text-gray-900 text-sm">← Volver al evento</a>
+            <h1 class="text-xl font-bold text-gray-800">Editar Evento</h1>
         </div>
         <form id="eventForm" class="space-y-6">
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
@@ -27,6 +27,10 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Ubicación *</label>
                         <input type="text" id="location" required class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                        <input type="text" id="address" class="w-full border rounded-lg px-3 py-2">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
@@ -53,7 +57,12 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
                     <textarea id="description" rows="3" class="w-full border rounded-lg px-3 py-2"></textarea>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notas internas</label>
+                    <textarea id="notes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+                </div>
             </div>
+            <!-- Staff Needs -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <div class="flex justify-between items-center">
                     <h2 class="text-lg font-semibold text-gray-800">Personal Requerido</h2>
@@ -63,8 +72,8 @@
             </div>
             <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
             <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
-                <a href="/admin/events" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-center">Cancelar</a>
-                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Crear Evento</button>
+                <a href="/admin/events/{{ event_id }}" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-center">Cancelar</a>
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">💾 Guardar Cambios</button>
             </div>
         </form>
     </div>
@@ -73,35 +82,71 @@
 (function(){
     const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
     if(!t||!['superadmin','coordinator'].includes(u.user_type)){location.href='/admin/login';return}
-        if(u.user_type==='superadmin'){}
 })();
+const EVENT_ID='{{ event_id }}';
 function getToken(){return localStorage.getItem('access_token');}
 function updateEndDateMin(){
     const sd=document.getElementById('start_date').value;
     if(sd) document.getElementById('end_date').min=sd;
 }
 let roles=[];
+
 async function loadRoles(){
     const token=getToken();
     const res=await fetch('/api/catalogs/roles',{headers:{'Authorization':'Bearer '+token}});
     const data=await res.json();
     roles=data.items||data;
-    addStaffRow();
 }
-function addStaffRow(){
+
+function addStaffRow(roleId='',qty=1,rate='',edu=''){
     const div=document.getElementById('staffRows');
-    const opts=roles.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+    const opts=roles.map(r=>`<option value="${r.id}" ${r.id===roleId?'selected':''}>${r.name}</option>`).join('');
+    const eduOpts=`<option value="">Sin requisito</option><option value="primaria" ${edu==='primaria'?'selected':''}>Primaria</option><option value="secundaria" ${edu==='secundaria'?'selected':''}>Secundaria</option><option value="tecnico" ${edu==='tecnico'?'selected':''}>Tecnico</option><option value="tecnologo" ${edu==='tecnologo'?'selected':''}>Tecnologo</option><option value="universitario" ${edu==='universitario'?'selected':''}>Universitario</option><option value="postgrado" ${edu==='postgrado'?'selected':''}>Postgrado</option>`;
     const row=document.createElement('div');
-    const eduOpts=`<option value="">Sin requisito</option><option value="primaria">Primaria</option><option value="secundaria">Secundaria</option><option value="tecnico">Tecnico</option><option value="tecnologo">Tecnologo</option><option value="universitario">Universitario</option><option value="postgrado">Postgrado</option>`;
     row.className='grid grid-cols-2 sm:grid-cols-[1fr_80px_130px_130px_40px] gap-2 items-center';
     row.innerHTML=`
         <select class="staff-role border rounded-lg px-3 py-2 text-sm col-span-2 sm:col-span-1"><option value="">Seleccionar rol</option>${opts}</select>
-        <input type="number" class="staff-qty border rounded-lg px-3 py-2 text-sm" min="1" value="1" placeholder="Cant.">
-        <input type="number" class="staff-rate border rounded-lg px-3 py-2 text-sm" step="1" placeholder="Costo/turno $">
+        <input type="number" class="staff-qty border rounded-lg px-3 py-2 text-sm" min="1" value="${qty}" placeholder="Cant.">
+        <input type="number" class="staff-rate border rounded-lg px-3 py-2 text-sm" step="1" value="${rate||''}" placeholder="Costo/turno $">
         <select class="staff-edu border rounded-lg px-2 py-2 text-xs">${eduOpts}</select>
         <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
     div.appendChild(row);
 }
+
+async function loadEvent(){
+    const token=getToken();
+    const res=await fetch(`/api/events/${EVENT_ID}`,{headers:{'Authorization':'Bearer '+token}});
+    if(!res.ok){showToast('Error cargando evento','bg-red-500');return}
+    const ev=await res.json();
+    if(!['draft','published'].includes(ev.status)){
+        showToast('Solo se pueden editar eventos en borrador o publicados','bg-red-500');
+        setTimeout(()=>window.location.href='/admin/events/'+EVENT_ID,1500);
+        return;
+    }
+    document.getElementById('name').value=ev.name||'';
+    document.getElementById('location').value=ev.location||'';
+    document.getElementById('address').value=ev.address||'';
+    // city will be set after loadCities populates the select
+    window._eventCity=ev.city||'';
+    document.getElementById('client_name').value=ev.client_name||'';
+    document.getElementById('client_phone').value=ev.client_phone||'';
+    document.getElementById('description').value=ev.description||'';
+    document.getElementById('notes').value=ev.notes||'';
+    if(ev.start_date){
+        const sd=new Date(ev.start_date);
+        document.getElementById('start_date').value=sd.toISOString().slice(0,16);
+    }
+    if(ev.end_date){
+        const ed=new Date(ev.end_date);
+        document.getElementById('end_date').value=ed.toISOString().slice(0,16);
+    }
+    // Load existing staff needs
+    await loadRoles();
+    if(ev.staff_needs&&ev.staff_needs.length){
+        ev.staff_needs.forEach(n=>addStaffRow(n.role_id,n.quantity_needed,n.rate_per_shift||'',n.education_level||''));
+    }
+}
+
 document.getElementById('eventForm').addEventListener('submit',async(e)=>{
     e.preventDefault();
     const sd=document.getElementById('start_date').value;
@@ -120,19 +165,22 @@ document.getElementById('eventForm').addEventListener('submit',async(e)=>{
         name:document.getElementById('name').value,
         description:document.getElementById('description').value||null,
         location:document.getElementById('location').value,
+        address:document.getElementById('address').value||null,
         city:document.getElementById('city').value||null,
         start_date:document.getElementById('start_date').value,
         end_date:document.getElementById('end_date').value,
         client_name:document.getElementById('client_name').value||null,
         client_phone:document.getElementById('client_phone').value||null,
-        staff_needs:staffNeeds
+        notes:document.getElementById('notes').value||null,
+        staff_needs:staffNeeds,
     };
     try{
-        const res=await fetch('/api/events/',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
-        if(res.ok){const ev=await res.json();window.location.href='/admin/events/'+ev.id;}
-        else{const err=await res.json();showToast(err.detail||'Error al crear evento','bg-red-500');}
+        const res=await fetch(`/api/events/${EVENT_ID}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
+        if(res.ok){showToast('Evento actualizado','bg-green-500');setTimeout(()=>window.location.href='/admin/events/'+EVENT_ID,1000);}
+        else{const err=await res.json();showToast(err.detail||'Error al actualizar','bg-red-500');}
     }catch(e){showToast('Error de conexión','bg-red-500');}
 });
+
 function showToast(msg,cls){
     const t=document.getElementById('toast');
     t.textContent=msg;t.className=`fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white ${cls}`;
@@ -142,9 +190,10 @@ async function loadCities(){
     try{const res=await fetch('/api/catalogs/cities');const data=await res.json();
     const sel=document.getElementById('city');
     sel.innerHTML='<option value="">Seleccionar ciudad</option>'+data.map(d=>`<optgroup label="${d.departamento}">${d.ciudades.map(c=>`<option value="${c}">${c}</option>`).join('')}</optgroup>`).join('');
+    if(window._eventCity){sel.value=window._eventCity;}
     }catch(e){console.error('Error cargando ciudades',e)}
 }
-loadRoles();loadCities();
+loadEvent().then(()=>loadCities());
 </script>
 </body>
 </html>

@@ -26,6 +26,25 @@
         <div id="step1" class="space-y-4">
             <h2 class="text-lg font-semibold text-gray-700 mb-3">📋 Datos Personales</h2>
 
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tipo Doc *</label>
+                    <select id="document_type" name="document_type" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        <option value="CC">Cédula (CC)</option>
+                        <option value="CE">C. Extranjería (CE)</option>
+                        <option value="TI">Tarjeta Id. (TI)</option>
+                        <option value="PP">Pasaporte (PP)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Número *</label>
+                    <input type="text" id="document_number" name="document_number" required minlength="5" placeholder="12345678"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                    <p class="text-xs text-blue-600 mt-1">🔑 Este será tu usuario para ingresar al sistema</p>
+                </div>
+            </div>
+
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                 <input type="email" id="email" name="email" required placeholder="tu@email.com"
@@ -36,7 +55,15 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña *</label>
                 <input type="password" id="password" name="password" required minlength="8" placeholder="Mínimo 8 caracteres"
+                    oninput="checkPasswordStrength()"
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                <div id="pw-rules" class="mt-1 text-xs space-y-0.5">
+                    <p id="pw-len" class="text-gray-400">✓ Mínimo 8 caracteres</p>
+                    <p id="pw-up" class="text-gray-400">✓ Al menos una mayúscula (A-Z)</p>
+                    <p id="pw-low" class="text-gray-400">✓ Al menos una minúscula (a-z)</p>
+                    <p id="pw-num" class="text-gray-400">✓ Al menos un número (0-9)</p>
+                    <p id="pw-spec" class="text-gray-400">✓ Al menos un carácter especial (!@#$%...)</p>
+                </div>
             </div>
 
             <div>
@@ -65,24 +92,6 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Tipo Doc *</label>
-                    <select id="document_type" name="document_type" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-                        <option value="CC">Cédula (CC)</option>
-                        <option value="CE">C. Extranjería (CE)</option>
-                        <option value="TI">Tarjeta Id. (TI)</option>
-                        <option value="PP">Pasaporte (PP)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Número *</label>
-                    <input type="text" id="document_number" name="document_number" required minlength="5" placeholder="12345678"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-                </div>
-            </div>
-
             <button type="button" onclick="goToStep(2)"
                 class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-lg transition">
                 Siguiente →
@@ -93,48 +102,122 @@
         <div id="step2" class="space-y-4 hidden">
             <h2 class="text-lg font-semibold text-gray-700 mb-3">👷 Datos Laborales</h2>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">EPS *</label>
                     <select id="eps_id" name="eps_id" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
                         <option value="">— Seleccionar —</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">ARL *</label>
                     <select id="arl_id" name="arl_id" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
                         <option value="">— Seleccionar —</option>
                     </select>
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad *</label>
-                <select id="city" name="city" required
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-                    <option value="">— Seleccionar —</option>
-                    <option value="Bucaramanga">Bucaramanga</option>
-                    <option value="Bogotá">Bogotá</option>
-                    <option value="Medellín">Medellín</option>
-                    <option value="Cali">Cali</option>
-                    <option value="Barranquilla">Barranquilla</option>
-                    <option value="Otra">Otra</option>
-                </select>
-            </div>
-
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Dirección de Residencia *</label>
-                    <input type="text" id="address" name="address" placeholder="Calle 10 # 5-20" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Departamento *</label>
+                    <select id="department" onchange="loadCities()" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                        <option value="">— Seleccionar —</option>
+                    </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Localidad / Barrio *</label>
-                    <input type="text" id="locality" name="locality" placeholder="Cabecera" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad *</label>
+                    <select id="city" name="city" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                        <option value="">— Seleccione departamento —</option>
+                    </select>
                 </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Dirección de Residencia *</label>
+                <!-- Componente 1: Tipo de vía -->
+                <div class="grid grid-cols-6 gap-2 mb-2">
+                    <div class="col-span-2">
+                        <select id="addr_tipo_via" onchange="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                            <option value="">Tipo vía</option>
+                            <option value="Calle">Calle</option>
+                            <option value="Carrera">Carrera</option>
+                            <option value="Diagonal">Diagonal</option>
+                            <option value="Transversal">Transversal</option>
+                            <option value="Autopista">Autopista</option>
+                            <option value="Avenida">Avenida</option>
+                            <option value="Avenida Calle">Avenida Calle</option>
+                            <option value="Avenida Carrera">Avenida Carrera</option>
+                            <option value="Circular">Circular</option>
+                            <option value="Circunvalar">Circunvalar</option>
+                            <option value="Manzana">Manzana</option>
+                            <option value="Vereda">Vereda</option>
+                            <option value="Kilómetro">Kilómetro</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <input type="text" id="addr_num_via" placeholder="N°" oninput="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                    </div>
+                    <div class="col-span-1">
+                        <select id="addr_sep" onchange="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                            <option value="">Sep.</option>
+                            <option value="#">#</option>
+                            <option value="-">-</option>
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <input type="text" id="addr_num_sec" placeholder="N° sec." oninput="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                    </div>
+                </div>
+                <!-- Componente 2: Complemento -->
+                <div class="grid grid-cols-6 gap-2 mb-2">
+                    <div class="col-span-2">
+                        <select id="addr_comp_tipo" onchange="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                            <option value="">Complemento</option>
+                            <option value="Interior">Interior</option>
+                            <option value="Apartamento">Apartamento</option>
+                            <option value="Casa">Casa</option>
+                            <option value="Local">Local</option>
+                            <option value="Oficina">Oficina</option>
+                            <option value="Bodega">Bodega</option>
+                            <option value="Bloque">Bloque</option>
+                            <option value="Torre">Torre</option>
+                            <option value="Lote">Lote</option>
+                            <option value="Etapa">Etapa</option>
+                            <option value="Manzana">Manzana</option>
+                            <option value="Piso">Piso</option>
+                            <option value="Garaje">Garaje</option>
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <input type="text" id="addr_comp_num" placeholder="N° complemento" oninput="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                    </div>
+                    <div class="col-span-2">
+                        <input type="text" id="addr_comp_extra" placeholder="Otro (Bis, Sur...)" oninput="updateAddressPreview()"
+                            class="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                    </div>
+                </div>
+                <!-- Vista previa -->
+                <div id="address-preview" class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 min-h-[36px]">
+                    <span class="text-gray-400">La dirección aparecerá aquí...</span>
+                </div>
+                <!-- Hidden field con el valor final -->
+                <input type="hidden" id="address" name="address">
+            </div>
+
+            <div class="mt-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Localidad / Barrio *</label>
+                <input type="text" id="locality" name="locality" placeholder="Cabecera" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
             </div>
 
             <div>
@@ -187,7 +270,7 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Tamaño Evento Exp. *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Cantidad de Personas por Evento *</label>
                     <select id="event_size_experience" name="event_size_experience"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                         <option value="">— Seleccionar —</option>
@@ -261,9 +344,14 @@
 
             <div id="summary" class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm"></div>
 
-            <p class="text-xs text-gray-500 text-center">
-                Al registrarte aceptas que tu información será verificada por el equipo de Logística.
-            </p>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" id="accept_data_treatment" class="mt-1 rounded text-primary-600 focus:ring-primary-500">
+                    <span class="text-sm text-gray-700">
+                        <strong>Autorizo el tratamiento de mis datos personales</strong> de conformidad con la Ley 1581 de 2012 (Ley de Protección de Datos Personales) y la Política de Tratamiento de Datos Personales de la empresa, para fines de vinculación laboral y gestión de eventos.
+                    </span>
+                </label>
+            </div>
 
             <div class="flex space-x-3">
                 <button type="button" onclick="goToStep(2)"
@@ -321,8 +409,45 @@ function goToStep(step) {
     currentStep = step;
 }
 
+function updateAddressPreview() {
+    const parts = [];
+    const tipoVia = document.getElementById('addr_tipo_via').value;
+    const numVia = document.getElementById('addr_num_via').value.trim();
+    const sep = document.getElementById('addr_sep').value;
+    const numSec = document.getElementById('addr_num_sec').value.trim();
+    const compTipo = document.getElementById('addr_comp_tipo').value;
+    const compNum = document.getElementById('addr_comp_num').value.trim();
+    const compExtra = document.getElementById('addr_comp_extra').value.trim();
+
+    if (tipoVia) parts.push(tipoVia);
+    if (numVia) parts.push(numVia);
+    if (sep && numSec) parts.push(sep + ' ' + numSec);
+    if (compTipo && compNum) parts.push(compTipo + ' ' + compNum);
+    if (compExtra) parts.push(compExtra);
+
+    const fullAddress = parts.join(' ');
+    const preview = document.getElementById('address-preview');
+
+    if (fullAddress) {
+        preview.innerHTML = '📍 <strong>' + fullAddress + '</strong>';
+    } else {
+        preview.innerHTML = '<span class="text-gray-400">La dirección aparecerá aquí...</span>';
+    }
+
+    // Update hidden field
+    document.getElementById('address').value = fullAddress;
+}
+
 function validateStep2() {
-    const step2Inputs = document.getElementById('step2').querySelectorAll('input:not(:disabled), select:not(:disabled)');
+    // Validate address components
+    updateAddressPreview();
+    const addr = document.getElementById('address').value;
+    if (!addr || addr.trim().length < 3) {
+        showToast('Completa al menos el tipo de vía y el número', 'error');
+        return false;
+    }
+
+    const step2Inputs = document.getElementById('step2').querySelectorAll('input:not(:disabled):not([type=hidden]), select:not(:disabled)');
     for (let el of step2Inputs) {
         if (!el.reportValidity()) {
             return false;
@@ -331,8 +456,27 @@ function validateStep2() {
     return true;
 }
 
+function checkPasswordStrength() {
+    const pw = document.getElementById('password').value;
+    const rules = {
+        'pw-len': pw.length >= 8,
+        'pw-up': /[A-Z]/.test(pw),
+        'pw-low': /[a-z]/.test(pw),
+        'pw-num': /[0-9]/.test(pw),
+        'pw-spec': /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw),
+    };
+    for (const [id, ok] of Object.entries(rules)) {
+        const el = document.getElementById(id);
+        el.className = ok ? 'text-green-600 text-xs' : 'text-gray-400 text-xs';
+        el.textContent = (ok ? '✅' : '✓') + el.textContent.substring(1);
+    }
+}
+
+function validatePasswordStrength(pw) {
+    return pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw);
+}
+
 function validateStep1() {
-    // Validar campos obligatorios usando HTML5
     const step1Inputs = document.getElementById('step1').querySelectorAll('input, select');
     for (let el of step1Inputs) {
         if (!el.reportValidity()) {
@@ -341,6 +485,11 @@ function validateStep1() {
     }
 
     const pw = document.getElementById('password').value;
+    if (!validatePasswordStrength(pw)) {
+        showToast('La contraseña no cumple con todos los requisitos', 'error');
+        return false;
+    }
+
     const cpw = document.getElementById('confirm_password').value;
     const errEl = document.getElementById('password-error');
     if (pw !== cpw) {
@@ -365,7 +514,7 @@ function buildSummary() {
     const fields = [
         ['Email', 'email'], ['Nombre', 'first_name'], ['Apellido', 'last_name'],
         ['Teléfono', 'phone'], ['Tipo Doc', 'document_type'], ['Número Doc', 'document_number'],
-        ['Ciudad', 'city'], ['Nivel de Estudio', 'education_level'], ['Tipo Sangre', 'blood_type'], ['EPS', 'eps_id'], ['ARL', 'arl_id'],
+        ['Departamento', 'department'], ['Ciudad', 'city'], ['Dirección', 'address'], ['Localidad', 'locality'], ['Nivel de Estudio', 'education_level'], ['Tipo Sangre', 'blood_type'], ['EPS', 'eps_id'], ['ARL', 'arl_id'],
     ];
     let html = '';
     fields.forEach(([label, id]) => {
@@ -387,6 +536,12 @@ function showToast(message, type = 'error') {
 
 async function submitForm() {
     if (!validateStep1()) { goToStep(1); return; }
+
+    // Validate data treatment acceptance
+    if (!document.getElementById('accept_data_treatment').checked) {
+        showToast('Debes aceptar el tratamiento de datos personales para registrarte', 'error');
+        return;
+    }
 
     const btn = document.getElementById('submit-btn');
     const text = document.getElementById('submit-text');
@@ -443,11 +598,30 @@ async function submitForm() {
     }
 }
 
-// Load EPS, ARL and Roles from API
+// Colombia cities data cache
+let colombiaCities = [];
+
+function loadCities() {
+    const depSel = document.getElementById('department');
+    const citySel = document.getElementById('city');
+    const dep = depSel.value;
+    citySel.innerHTML = '<option value="">— Seleccionar ciudad —</option>';
+    if (!dep) return;
+    const found = colombiaCities.find(d => d.departamento === dep);
+    if (found) {
+        found.ciudades.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.text = c;
+            citySel.add(o);
+        });
+    }
+}
+
+// Load EPS, ARL, Roles and Cities from API
 async function loadCatalogs() {
     try {
-        const [epsResp, arlResp, rolesResp] = await Promise.all([
-            fetch('/api/catalogs/eps'), fetch('/api/catalogs/arl'), fetch('/api/catalogs/roles')
+        const [epsResp, arlResp, rolesResp, citiesResp] = await Promise.all([
+            fetch('/api/catalogs/eps'), fetch('/api/catalogs/arl'), fetch('/api/catalogs/roles'), fetch('/api/catalogs/cities')
         ]);
         if (epsResp.ok) {
             const eps = await epsResp.json();
@@ -467,6 +641,15 @@ async function loadCatalogs() {
                 label.className = 'flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer text-sm';
                 label.innerHTML = `<input type="checkbox" name="experience_roles" value="${r.id}" class="rounded text-primary-600 focus:ring-primary-500"> ${r.name}`;
                 container.appendChild(label);
+            });
+        }
+        if (citiesResp.ok) {
+            colombiaCities = await citiesResp.json();
+            const depSel = document.getElementById('department');
+            colombiaCities.forEach(d => {
+                const o = document.createElement('option');
+                o.value = d.departamento; o.text = d.departamento;
+                depSel.add(o);
             });
         }
     } catch(e) { console.log('Catalogs not available', e); }

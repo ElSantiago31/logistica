@@ -22,10 +22,10 @@
     (function(){
         const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
         if(!t||!['superadmin','coordinator'].includes(u.user_type)){window.location.href='/admin/login';return}
-                if(u.user_type==='superadmin'){}
     })();
     const opId=window.location.pathname.split('/').pop();
     let allRoles=[];
+    const eduMap={primaria:'Primaria',secundaria:'Secundaria / Bachillerato',tecnico:'Técnico',tecnologo:'Tecnólogo',universitario:'Universitario',postgrado:'Postgrado'};
     function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
     function toast(m,t){const c=document.getElementById('toast-container'),e=document.createElement('div');e.className='toast '+(t==='error'?'bg-red-500':t==='success'?'bg-green-500':'bg-blue-500')+' text-white px-6 py-3 rounded-lg shadow-lg';e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),4000)}
 
@@ -60,10 +60,13 @@
 
     function render(o){
         const n=(o.first_name||'')+' '+(o.last_name||'');
+        const avatarHtml = o.photo_path
+            ? '<img src="'+o.photo_path+'" class="w-16 h-16 rounded-full object-cover border-2 border-white/40">'
+            : '<div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-xl font-bold text-white">'+(o.first_name?o.first_name[0]:'')+(o.last_name?o.last_name[0]:'')+'</div>';
         document.getElementById('detail').innerHTML=`
         <div class="bg-gradient-to-r from-primary-800 to-primary-600 text-white p-6">
             <div class="flex items-center space-x-4">
-                <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl">👤</div>
+                ${avatarHtml}
                 <div>
                     <h1 class="text-2xl font-bold">${n.trim()}</h1>
                     <p class="text-primary-200">${o.email||'-'}</p>
@@ -81,7 +84,7 @@
                     <p class="text-sm"><span class="text-gray-500">Dirección:</span> <strong>${o.address||'-'}</strong></p>
                     <p class="text-sm"><span class="text-gray-500">Localidad/Barrio:</span> <strong>${o.locality||'-'}</strong></p>
                     <p class="text-sm"><span class="text-gray-500">Tipo sanguíneo:</span> <strong>${o.blood_type||'-'}</strong></p>
-                    <p class="text-sm"><span class="text-gray-500">Nivel de Estudio:</span> <strong>${{primaria:'Primaria',secundaria:'Secundaria / Bachillerato',tecnico:'Técnico',tecnologo:'Tecnólogo',universitario:'Universitario',postgrado:'Postgrado'}[o.education_level]||'-'}</strong></p>
+                    <p class="text-sm"><span class="text-gray-500">Nivel de Estudio:</span> <strong>${eduMap[o.education_level]||'-'}</strong></p>
                 </div>
             </div>
             <div>
