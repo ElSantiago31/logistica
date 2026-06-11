@@ -1,17 +1,37 @@
 """Event service - CRUD and assignment logic."""
+import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
+
+# Colombia timezone (UTC-5)
+COLOMBIA_TZ = timezone(timedelta(hours=-5))
 
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.events import Event, EventStaffNeed, EventAssignment
+from app.models.events import Event, EventStaffNeed, EventAssignment, EventAuditLog
 from app.models.operators import Operator
 from app.models.roles import Role
 from app.models.users import User
 from app.schemas.events import EventCreate, EventUpdate
+
+
+async def _add_audit_log(db: AsyncSession, event_id: uuid.UUID, user_id: uuid.UUID,
+                         action: str, changes: dict = None):
+    """Helper to create an audit log entry."""
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    user_name = f"{user.first_name} {user.last_name}" if user else "Sistema"
+    log = EventAuditLog(
+        event_id=event_id,
+        user_id=user_id,
+        action=action,
+        changes=json.dumps(changes, ensure_ascii=False, default=str) if changes else None,
+        user_name=user_name,
+    )
+    db.add(log)
 
 
 async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) -> Event:
@@ -34,31 +54,161 @@ async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) 
     db.add(event)
     await db.flush()
 
+    staff_summary = []
     for need in data.staff_needs:
         sn = EventStaffNeed(
             event_id=event.id,
             role_id=need.role_id,
             quantity_needed=need.quantity_needed,
             rate_per_shift=need.rate_per_shift,
+            education_level=need.education_level,
         )
         db.add(sn)
+        staff_summary.append({"role_id": str(need.role_id), "qty": need.quantity_needed, "education_level": need.education_level})
+
+    # Audit log
+    await _add_audit_log(db, event.id, user_id, "created", {
+        "name": data.name, "location": data.location, "city": data.city,
+        "staff_needs": staff_summary,
+    })
 
     await db.commit()
     await db.refresh(event)
     return event
 
 
-async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate) -> Optional[Event]:
-    """Update event fields."""
+async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
+                       user_id: uuid.UUID = None) -> Optional[Event]:
+    """Update event fields including staff needs. Registers audit log."""
     event = await db.get(Event, event_id)
     if not event:
         return None
+
+    # Capture old values for audit
+    old_status = event.status
+    old_values = {
+        "name": event.name, "location": event.location, "address": event.address,
+        "city": event.city, "start_date": str(event.start_date),
+        "end_date": str(event.end_date), "client_name": event.client_name,
+        "client_phone": event.client_phone, "description": event.description,
+        "notes": event.notes, "status": event.status,
+    }
+
     update_data = data.model_dump(exclude_unset=True)
+
+    # Handle staff_needs separately
+    staff_needs_data = update_data.pop('staff_needs', None)
+
+    # Track changed fields (normalize datetimes to avoid false positives)
+    changed_fields = {}
     for key, value in update_data.items():
+        old_val = old_values.get(key)
+        # Normalize datetime comparison
+        if key in ('start_date', 'end_date', 'setup_date'):
+            try:
+                old_dt = datetime.fromisoformat(str(old_val).replace('Z', '+00:00'))
+                new_dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+                # Strip tzinfo from both to compare naive datetimes
+                old_naive = old_dt.replace(tzinfo=None)
+                new_naive = new_dt.replace(tzinfo=None)
+                if old_naive != new_naive:
+                    changed_fields[key] = {"antes": str(old_val), "despues": str(value)}
+                continue
+            except (ValueError, TypeError):
+                pass
+        if str(old_val) != str(value):
+            changed_fields[key] = {"antes": old_val, "despues": value}
         setattr(event, key, value)
+
+    # Determine action type
+    if 'status' in update_data and update_data['status'] != old_status:
+        action = "status_changed"
+    elif staff_needs_data is not None:
+        action = "staff_updated"
+    elif changed_fields:
+        action = "updated"
+    else:
+        action = "updated"
+
+    # Update staff needs if provided
+    if staff_needs_data is not None:
+        # Get old staff for audit (with role names)
+        result = await db.execute(
+            select(EventStaffNeed).where(EventStaffNeed.event_id == event_id)
+        )
+        existing = result.scalars().all()
+        old_staff = []
+        for sn in existing:
+            role_r = await db.execute(select(Role).where(Role.id == sn.role_id))
+            r = role_r.scalar_one_or_none()
+            old_staff.append({
+                "role_id": str(sn.role_id),
+                "role_name": r.name if r else "Desconocido",
+                "qty": sn.quantity_needed,
+                "rate": sn.rate_per_shift,
+                "education_level": sn.education_level,
+            })
+        for sn in existing:
+            await db.delete(sn)
+        await db.flush()
+
+        new_staff = []
+        for need in staff_needs_data:
+            role_r = await db.execute(select(Role).where(Role.id == need['role_id']))
+            r = role_r.scalar_one_or_none()
+            sn = EventStaffNeed(
+                event_id=event_id,
+                role_id=need['role_id'],
+                quantity_needed=need['quantity_needed'],
+                rate_per_shift=need.get('rate_per_shift'),
+                education_level=need.get('education_level'),
+            )
+            db.add(sn)
+            new_staff.append({
+                "role_id": str(need['role_id']),
+                "role_name": r.name if r else "Desconocido",
+                "qty": need['quantity_needed'],
+                "rate": need.get('rate_per_shift'),
+                "education_level": need.get('education_level'),
+            })
+
+        changed_fields["staff_needs"] = {"antes": old_staff, "despues": new_staff}
+
+    # Audit log
+    if user_id and changed_fields:
+        await _add_audit_log(db, event_id, user_id, action, changed_fields)
+
     await db.commit()
     await db.refresh(event)
     return event
+
+
+async def get_audit_logs(db: AsyncSession, event_id: uuid.UUID, limit: int = 50) -> List[dict]:
+    """Get audit logs for an event."""
+    result = await db.execute(
+        select(EventAuditLog)
+        .where(EventAuditLog.event_id == event_id)
+        .order_by(EventAuditLog.created_at.desc())
+        .limit(limit)
+    )
+    logs = result.scalars().all()
+
+    items = []
+    for log in logs:
+        changes = None
+        if log.changes:
+            try:
+                changes = json.loads(log.changes)
+            except (json.JSONDecodeError, TypeError):
+                changes = log.changes
+        items.append({
+            "id": str(log.id),
+            "action": log.action,
+            "user_name": log.user_name or "Sistema",
+            "changes": changes,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        })
+    return items
 
 
 async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
@@ -72,13 +222,15 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
     if not event:
         return None
 
-    # Auto-update status based on dates
-    now = datetime.now(timezone.utc)
+    # Auto-update status based on dates (using Colombia timezone)
+    now = datetime.now(COLOMBIA_TZ)
+    start = event.start_date.astimezone(COLOMBIA_TZ) if event.start_date.tzinfo else event.start_date.replace(tzinfo=COLOMBIA_TZ)
+    end = event.end_date.astimezone(COLOMBIA_TZ) if event.end_date.tzinfo else event.end_date.replace(tzinfo=COLOMBIA_TZ)
     status_changed = False
-    if event.status == 'published' and event.start_date <= now:
+    if event.status == 'published' and start <= now:
         event.status = 'in_progress'
         status_changed = True
-    elif event.status == 'in_progress' and event.end_date <= now:
+    elif event.status == 'in_progress' and end <= now:
         event.status = 'completed'
         status_changed = True
     if status_changed:
@@ -97,6 +249,7 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
             "quantity_needed": sn.quantity_needed,
             "quantity_confirmed": sn.quantity_confirmed,
             "rate_per_shift": sn.rate_per_shift,
+            "education_level": sn.education_level,
         })
 
     return {
@@ -139,7 +292,22 @@ async def list_events(
     events = result.scalars().all()
 
     items = []
+    now = datetime.now(COLOMBIA_TZ)
+    status_updates = []
     for e in events:
+        # Auto-correct status based on dates
+        start = e.start_date.astimezone(COLOMBIA_TZ) if e.start_date.tzinfo else e.start_date.replace(tzinfo=COLOMBIA_TZ)
+        end = e.end_date.astimezone(COLOMBIA_TZ) if e.end_date.tzinfo else e.end_date.replace(tzinfo=COLOMBIA_TZ)
+        if e.status == 'in_progress' and start > now:
+            e.status = 'published'
+            status_updates.append(e)
+        elif e.status == 'published' and start <= now and end > now:
+            e.status = 'in_progress'
+            status_updates.append(e)
+        elif e.status == 'in_progress' and end <= now:
+            e.status = 'completed'
+            status_updates.append(e)
+
         total_needed = sum(sn.quantity_needed for sn in e.staff_needs)
         total_confirmed = sum(sn.quantity_confirmed for sn in e.staff_needs)
         items.append({
@@ -163,6 +331,8 @@ async def list_events(
             "total_confirmed": total_confirmed,
             "created_at": e.created_at,
         })
+    if status_updates:
+        await db.commit()
     return items, total
 
 

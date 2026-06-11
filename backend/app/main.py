@@ -171,6 +171,11 @@ async def admin_event_detail(request: Request, event_id: str):
     return templates.TemplateResponse("admin/event_detail.html", {"request": request, "event_id": event_id})
 
 
+@app.get("/admin/events/{event_id}/edit", response_class=HTMLResponse)
+async def admin_event_edit(request: Request, event_id: str):
+    return templates.TemplateResponse("admin/event_edit.html", {"request": request, "event_id": event_id})
+
+
 @app.get("/admin/events/{event_id}/checkin", response_class=HTMLResponse)
 async def admin_checkin(request: Request, event_id: str):
     return templates.TemplateResponse("admin/checkin.html", {"request": request, "event_id": event_id})

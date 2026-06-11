@@ -1,4 +1,7 @@
+import json
+import os
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -7,6 +10,22 @@ from app.models.arl import ARL
 from app.models.roles import Role
 
 router = APIRouter(prefix="/api/catalogs", tags=["Catalogs"])
+
+# Load Colombia cities from local JSON (cached)
+_cities_cache = None
+
+def _load_cities():
+    global _cities_cache
+    if _cities_cache is None:
+        cities_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'colombia_cities.json')
+        with open(cities_path, 'r', encoding='utf-8') as f:
+            _cities_cache = json.load(f)
+    return _cities_cache
+
+@router.get("/cities")
+async def list_cities():
+    """Returns departments and cities of Colombia from local DIVIPOLA data."""
+    return _load_cities()
 
 @router.get("/eps")
 async def list_eps(db: AsyncSession = Depends(get_db)):

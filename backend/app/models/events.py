@@ -35,6 +35,7 @@ class Event(BaseModel):
     creator = relationship("User", foreign_keys=[created_by])
     staff_needs = relationship("EventStaffNeed", back_populates="event", cascade="all, delete-orphan")
     assignments = relationship("EventAssignment", back_populates="event", cascade="all, delete-orphan")
+    audit_logs = relationship("EventAuditLog", back_populates="event", cascade="all, delete-orphan", order_by="desc(EventAuditLog.created_at)")
 
     def __repr__(self):
         return f"<Event {self.name} ({self.status})>"
@@ -53,6 +54,10 @@ class EventStaffNeed(BaseModel):
     quantity_needed: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity_confirmed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     rate_per_shift: Mapped[float | None] = mapped_column(Float, nullable=True, comment="Tarifa para este evento/rol")
+    education_level: Mapped[str | None] = mapped_column(
+        String(50), nullable=True,
+        comment="Nivel educativo minimo requerido: primaria,secundaria,tecnico,tecnologo,universitario,postgrado",
+    )
 
     # Relationships
     event = relationship("Event", back_populates="staff_needs")
@@ -60,6 +65,33 @@ class EventStaffNeed(BaseModel):
 
     def __repr__(self):
         return f"<EventStaffNeed event={self.event_id} role={self.role_id} qty={self.quantity_needed}>"
+
+
+class EventAuditLog(BaseModel):
+    """Log de cambios en eventos - quién, qué, cuándo."""
+    __tablename__ = "event_audit_logs"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False,
+        comment="created | updated | status_changed | staff_updated | deleted",
+    )
+    changes: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="JSON con los campos que cambiaron",
+    )
+    user_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    # Relationships
+    event = relationship("Event", back_populates="audit_logs")
+    user = relationship("User")
+
+    def __repr__(self):
+        return f"<EventAuditLog event={self.event_id} action={self.action}>"
 
 
 class EventAssignment(BaseModel):

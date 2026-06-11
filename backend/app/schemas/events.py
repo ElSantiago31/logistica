@@ -11,6 +11,7 @@ class StaffNeedCreate(BaseModel):
     role_id: uuid.UUID
     quantity_needed: int = Field(ge=1)
     rate_per_shift: Optional[float] = None
+    education_level: Optional[str] = Field(None, description="Nivel educativo minimo requerido")
 
 
 class StaffNeedResponse(BaseModel):
@@ -20,6 +21,7 @@ class StaffNeedResponse(BaseModel):
     quantity_needed: int
     quantity_confirmed: int
     rate_per_shift: Optional[float]
+    education_level: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -59,6 +61,7 @@ class EventUpdate(BaseModel):
     client_phone: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = Field(None, pattern="^(draft|published|in_progress|completed|cancelled)$")
+    staff_needs: Optional[List[StaffNeedCreate]] = None
 
 
 class EventResponse(BaseModel):
@@ -95,6 +98,7 @@ class AssignmentResponse(BaseModel):
     id: uuid.UUID
     event_id: uuid.UUID
     operator_id: uuid.UUID
+    operator_user_id: Optional[str] = None
     role_id: Optional[uuid.UUID]
     role_name: Optional[str] = None
     operator_name: Optional[str] = None

@@ -43,7 +43,7 @@ class OperatorAdminUpdateRequest(OperatorUpdateRequest):
 # Detailed response
 class OperatorResponse(BaseModel):
     id: uuid.UUID
-    email: EmailStr
+    email: str
     first_name: str
     last_name: str
     phone: Optional[str]

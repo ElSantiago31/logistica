@@ -30,40 +30,46 @@ async def get_offline_data(
     if not event:
         raise HTTPException(404, "Evento no encontrado")
 
-    # Get assignments with operator info
+    from app.models.roles import Role
+
+    # Get assignments with operator info + role
     result = await db.execute(
-        select(EventAssignment, Operator, User)
+        select(EventAssignment, Operator, User, Role)
         .join(Operator, Operator.id == EventAssignment.operator_id)
         .join(User, User.id == Operator.user_id)
+        .outerjoin(Role, Role.id == EventAssignment.role_id)
         .where(EventAssignment.event_id == event_id)
     )
     rows = result.all()
 
     assignments = []
-    for assignment, operator, op_user in rows:
+    for assignment, operator, op_user, role in rows:
         assignments.append({
             "id": str(assignment.id),
             "operator_id": str(operator.id),
             "full_name": f"{op_user.first_name} {op_user.last_name}",
             "document_number": op_user.document_number or "",
-            "role_name": assignment.role_name or "Operador",
+            "role_name": role.name if role else "Operador",
             "status": assignment.status,
-            "photo_url": operator.photo_url,
+            "photo_url": operator.photo_thumbnail_path,
         })
 
-    # Log sync session
-    sync_session = SyncSession(
-        event_id=event_id,
-        synced_by=user.id,
-        session_type="download",
-        status="completed",
-        records_total=len(assignments),
-        records_synced=len(assignments),
-        started_at=datetime.utcnow(),
-        completed_at=datetime.utcnow(),
-    )
-    db.add(sync_session)
-    await db.commit()
+    # Log sync session (non-critical)
+    try:
+        sync_session = SyncSession(
+            event_id=event_id,
+            synced_by=user.id,
+            session_type="download",
+            status="completed",
+            records_total=len(assignments),
+            records_synced=len(assignments),
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        db.add(sync_session)
+        await db.commit()
+    except Exception:
+        await db.rollback()
 
     return {
         "id": str(event.id),
@@ -135,6 +141,14 @@ async def sync_attendance(
                 device_id=rec.get("device_id"),
             )
             db.add(log)
+
+            # Update assignment status to checked_in
+            assignment_id = rec.get("assignment_id")
+            if assignment_id:
+                assignment = await db.get(EventAssignment, assignment_id)
+                if assignment and assignment.status != "checked_in":
+                    assignment.status = "checked_in"
+
             synced += 1
         except Exception:
             failed += 1
@@ -265,6 +279,13 @@ async def check_in(
         is_offline=False,
     )
     db.add(log)
+
+    # Update assignment status to checked_in
+    if assignment_id:
+        assignment = await db.get(EventAssignment, assignment_id)
+        if assignment:
+            assignment.status = "checked_in"
+
     await db.commit()
 
     return {"status": "checked_in", "log_id": str(log.id)}

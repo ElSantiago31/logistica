@@ -1,3 +1,4 @@
+import io
 import json
 import uuid
 from typing import Optional
@@ -25,10 +26,9 @@ async def dashboard_stats(
     """Get dashboard statistics: active events, total operators, operators grouped by role."""
     from app.models.events import Event
     from app.models.roles import Role
-    from sqlalchemy import func, cast, Text as SaText
+    from sqlalchemy import func
     import json as json_mod
 
-    # Active events count
     active_events_result = await db.execute(
         select(func.count()).select_from(Event).where(
             Event.status.in_(["published", "in_progress"])
@@ -36,30 +36,26 @@ async def dashboard_stats(
     )
     active_events = active_events_result.scalar() or 0
 
-    # Total active operators count
     total_ops_result = await db.execute(
         select(func.count()).select_from(Operator).join(User, Operator.user_id == User.id).where(User.is_active == True)
     )
     total_operators = total_ops_result.scalar() or 0
 
-    # Get all roles
     roles_result = await db.execute(select(Role).order_by(Role.name))
     roles = roles_result.scalars().all()
 
-    # Get all operators with their experience_roles and user info
     ops_result = await db.execute(
         select(Operator, User).join(User, Operator.user_id == User.id).where(User.is_active == True)
     )
     all_operators = ops_result.all()
 
-    # Find operators with no experience roles
     sin_experiencia = []
     for op, user in all_operators:
         has_role = False
         if op.experience_roles:
             try:
                 exp_roles = json_mod.loads(op.experience_roles)
-                if exp_roles:  # non-empty list
+                if exp_roles:
                     has_role = True
             except (json_mod.JSONDecodeError, TypeError):
                 pass
@@ -69,14 +65,13 @@ async def dashboard_stats(
                 "name": f"{user.first_name} {user.last_name}",
                 "phone": user.phone or "",
                 "city": op.city or "",
+                "photo_thumbnail_path": op.photo_thumbnail_path or None,
             })
 
-    # Group operators by role
     operators_by_role = []
     for role in roles:
         members = []
         for op, user in all_operators:
-            # Check if operator has this role in experience_roles
             if op.experience_roles:
                 try:
                     exp_roles = json_mod.loads(op.experience_roles)
@@ -86,6 +81,7 @@ async def dashboard_stats(
                             "name": f"{user.first_name} {user.last_name}",
                             "phone": user.phone or "",
                             "city": op.city or "",
+                            "photo_thumbnail_path": op.photo_thumbnail_path or None,
                         })
                 except (json_mod.JSONDecodeError, TypeError):
                     pass
@@ -143,6 +139,8 @@ async def get_my_profile(
             "pants_size": operator.pants_size if operator else None,
             "jacket_size": operator.jacket_size if operator else None,
             "experience_roles": operator.experience_roles if operator else None,
+            "photo_path": operator.photo_path if operator else None,
+            "photo_thumbnail_path": operator.photo_thumbnail_path if operator else None,
         } if operator else {},
     }
 
@@ -189,6 +187,46 @@ async def update_my_profile(
     return {"message": "Perfil actualizado correctamente"}
 
 
+# --- Photo upload helper ---
+def _save_operator_photo(operator: Operator, user_id: uuid.UUID, file_contents: bytes, settings) -> str:
+    """Save operator photo with compression. Returns filename."""
+    import os
+    from PIL import Image as PILImage
+
+    os.makedirs(settings.PHOTOS_DIR, exist_ok=True)
+    os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
+
+    # Delete old photos if they exist
+    if operator.photo_path:
+        old_filename = operator.photo_path.split("/")[-1]
+        old_photo = os.path.join(settings.PHOTOS_DIR, old_filename)
+        old_thumb = os.path.join(settings.PHOTOS_THUMBNAIL_DIR, old_filename)
+        if os.path.exists(old_photo):
+            os.remove(old_photo)
+        if os.path.exists(old_thumb):
+            os.remove(old_thumb)
+
+    # Always save as compressed JPEG
+    filename = f"{user_id}_{uuid.uuid4().hex[:8]}.jpg"
+    photo_path = os.path.join(settings.PHOTOS_DIR, filename)
+    thumbnail_path = os.path.join(settings.PHOTOS_THUMBNAIL_DIR, filename)
+
+    with PILImage.open(io.BytesIO(file_contents)) as img:
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        # Compress original (max 800x800, quality 80)
+        img.thumbnail((800, 800))
+        img.save(photo_path, format="JPEG", quality=80, optimize=True)
+        # Generate thumbnail (300x300, quality 80)
+        thumb = img.copy()
+        thumb.thumbnail((300, 300))
+        thumb.save(thumbnail_path, format="JPEG", quality=80, optimize=True)
+
+    operator.photo_path = f"/static/photos/{filename}"
+    operator.photo_thumbnail_path = f"/static/photos/thumbnails/{filename}"
+    return filename
+
+
 # --- Admin endpoints ---
 
 @router.get("/", response_model=OperatorListResponse)
@@ -199,13 +237,18 @@ async def list_operators(
     is_active: bool = Query(True),
     search: Optional[str] = Query(None, min_length=1),
     experience_role_id: Optional[str] = Query(None),
+    city: Optional[str] = Query(None, description="Filtrar por ciudad del operador"),
+    education_level: Optional[str] = Query(None, description="Filtrar por nivel educativo minimo"),
+    exclude_event_id: Optional[str] = Query(None, description="Excluir operadores ya asignados a este evento"),
     current_user: User = Depends(require_admin_or_coordinator),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all operators. Supports search by name and filter by experience role."""
+    """List all operators. Supports search, city filter, education level filter, and role filter."""
     operators, total = await get_operators(
         db, skip, limit, is_approved, is_active,
         search=search, experience_role_id=experience_role_id,
+        city=city, education_level=education_level,
+        exclude_event_id=exclude_event_id,
     )
     return OperatorListResponse(items=operators, total=total)
 
@@ -262,12 +305,85 @@ async def upload_photo(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload a profile photo for the operator."""
+    """Upload a profile photo for the operator (authenticated)."""
+    import os
+    from app.config import settings
+
     if current_user.user_type not in ["superadmin", "coordinator"] and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
-    updated_operator = await upload_operator_photo(db, user_id, photo)
-    if not updated_operator:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found")
-        
-    return updated_operator
+    # Get operator profile directly
+    op_result = await db.execute(select(Operator).where(Operator.user_id == user_id))
+    operator = op_result.scalar_one_or_none()
+    if not operator:
+        raise HTTPException(status_code=404, detail="Operator not found")
+
+    # Validate
+    photo.file.seek(0, 2)
+    file_size = photo.file.tell()
+    photo.file.seek(0)
+    if file_size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Archivo muy grande. Max 5MB.")
+    if photo.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Tipo invalido. Solo JPEG, PNG, WEBP.")
+
+    try:
+        contents = await photo.read()
+        _save_operator_photo(operator, user_id, contents, settings)
+        await db.commit()
+        # Return fresh operator data
+        operator = await get_operator(db, user_id)
+        return operator
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando imagen: {str(e)}")
+
+
+@router.post("/{user_id}/enrollment-photo")
+async def upload_enrollment_photo(
+    user_id: uuid.UUID,
+    photo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Upload a profile photo during enrollment (no auth required)."""
+    import os
+    from app.config import settings
+
+    # Verify operator exists
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.user_type == "operator", User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador no encontrado")
+
+    # Ensure operator profile row exists
+    op_result = await db.execute(
+        select(Operator).where(Operator.user_id == user_id)
+    )
+    operator = op_result.scalar_one_or_none()
+    if not operator:
+        operator = Operator(user_id=user_id)
+        db.add(operator)
+        await db.flush()
+
+    # Validate file size (5MB max)
+    photo.file.seek(0, 2)
+    file_size = photo.file.tell()
+    photo.file.seek(0)
+    if file_size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Archivo muy grande. Max 5MB.")
+
+    if photo.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Tipo invalido. Solo JPEG, PNG, WEBP.")
+
+    try:
+        contents = await photo.read()
+        _save_operator_photo(operator, user_id, contents, settings)
+        await db.commit()
+        return {"message": "Foto subida correctamente", "photo_path": operator.photo_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando imagen: {str(e)}")

@@ -71,7 +71,7 @@ async def update_event(
     """Update an event."""
     if user.user_type not in ("superadmin", "coordinator"):
         raise HTTPException(403, "Sin permisos")
-    event = await svc.update_event(db, event_id, data)
+    event = await svc.update_event(db, event_id, data, user_id=user.id)
     if not event:
         raise HTTPException(404, "Evento no encontrado")
     result = await svc.get_event(db, event_id)
@@ -175,6 +175,19 @@ async def check_availability(
                 "name": name,
             })
     return results
+
+
+@router.get("/{event_id}/audit-logs")
+async def get_audit_logs(
+    event_id: uuid.UUID,
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Get audit logs for an event."""
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    return await svc.get_audit_logs(db, event_id, limit=limit)
 
 
 @router.get("/{event_id}/assignments", response_model=list[AssignmentResponse])
