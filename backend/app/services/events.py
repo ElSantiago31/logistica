@@ -286,7 +286,7 @@ async def list_events(
         query = query.where(Event.status == status)
         count_query = count_query.where(Event.status == status)
 
-    query = query.order_by(Event.start_date.desc()).limit(limit).offset(offset)
+    query = query.order_by(Event.created_at.desc()).limit(limit).offset(offset)
     total = (await db.execute(count_query)).scalar()
     result = await db.execute(query)
     events = result.scalars().all()
