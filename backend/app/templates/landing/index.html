@@ -2,24 +2,123 @@
 {% block title %}Registro de Operadores - Logística{% endblock %}
 {% block head %}
 <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
+<style>
+  /* Dark+Gold theme override for enrollment */
+  body{background:#050505!important}
+  main{position:relative}
+  main::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;
+    background:radial-gradient(ellipse at 50% 0%,rgba(207,155,98,0.06) 0%,transparent 60%);pointer-events:none}
+  .enroll-container{position:relative;z-index:1}
+  .enroll-card{background:rgba(10,10,10,0.92);border:1px solid rgba(207,155,98,0.25);border-radius:12px;padding:2rem;
+    box-shadow:0 0 40px rgba(207,155,98,0.08)}
+  .enroll-card h1,.enroll-card h2,.enroll-card h3{color:#cf9b62!important}
+  .enroll-card p,.enroll-card span,.enroll-card label{color:#d4b896!important}
+  .enroll-card p.text-gray-500,.enroll-card span.text-gray-500{color:#785631!important}
+  .enroll-card input,.enroll-card select{background:rgba(15,15,15,0.9)!important;border:1px solid rgba(207,155,98,0.3)!important;color:#f5f5f5!important;border-radius:8px}
+  .enroll-card input:focus,.enroll-card select:focus{border-color:#cf9b62!important;box-shadow:0 0 12px rgba(207,155,98,0.25)!important;outline:none}
+  .enroll-card input::placeholder{color:rgba(207,155,98,0.4)!important}
+  .enroll-card select option{background:#1a1a1a;color:#f5f5f5}
+  .enroll-card .bg-gray-50{background:rgba(20,20,20,0.8)!important;border:1px solid rgba(207,155,98,0.15)!important}
+  .enroll-card .bg-gray-100{background:rgba(20,20,20,0.8)!important;border:1px solid rgba(207,155,98,0.2)!important;color:#cf9b62!important}
+  .enroll-card .bg-blue-50{background:rgba(207,155,98,0.08)!important;border-color:rgba(207,155,98,0.3)!important}
+  .enroll-card .text-gray-700{color:#d4b896!important}
+  .enroll-card .text-gray-600{color:#976e41!important}
+  .enroll-card .text-gray-400{color:rgba(207,155,98,0.5)!important}
+  .enroll-card .text-blue-600{color:#cf9b62!important}
+  .enroll-card .text-red-500{color:#e87c6f!important}
+  .enroll-card .text-xs.text-blue-600{color:#cf9b62!important}
+  .enroll-card .border-gray-200{border-color:rgba(207,155,98,0.2)!important}
+  .enroll-card .border-gray-300{border-color:rgba(207,155,98,0.25)!important}
+  .enroll-card .hover\:bg-gray-50:hover{background:rgba(207,155,98,0.08)!important}
+  .enroll-card .progress-dot{width:2rem;height:2rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.875rem;font-weight:700;transition:all 0.3s}
+  .progress-dot.active{background:#cf9b62;color:#050505}
+  .progress-dot.inactive{background:rgba(207,155,98,0.15);color:#785631}
+  .progress-line{height:4px;width:4rem;transition:background 0.3s}
+  .progress-line.active{background:#cf9b62}
+  .progress-line.inactive{background:rgba(207,155,98,0.2)}
+  .btn-gold{background:linear-gradient(135deg,#cf9b62,#b48450);color:#050505;font-weight:700;padding:0.75rem 1rem;border-radius:8px;transition:all 0.3s;border:none;cursor:pointer}
+  .btn-gold:hover{box-shadow:0 0 20px rgba(207,155,98,0.4);transform:translateY(-1px)}
+  .btn-dark{background:rgba(207,155,98,0.1);color:#cf9b62;font-weight:700;padding:0.75rem 1rem;border-radius:8px;transition:all 0.3s;border:1px solid rgba(207,155,98,0.3);cursor:pointer}
+  .btn-dark:hover{background:rgba(207,155,98,0.2)}
+  /* Back buttons - override gray for dark theme */
+  .enroll-card button.bg-gray-200,.enroll-card button.flex-1.bg-gray-200{background:rgba(207,155,98,0.15)!important;border:1px solid rgba(207,155,98,0.3)!important;color:#cf9b62!important;font-weight:700}
+  .enroll-card button.bg-gray-200:hover,.enroll-card button.flex-1.bg-gray-200:hover{background:rgba(207,155,98,0.25)!important}
+  .btn-green{background:linear-gradient(135deg,#b48450,#cf9b62);color:#050505;font-weight:700;padding:0.75rem 1rem;border-radius:8px;transition:all 0.3s;border:none;cursor:pointer}
+  .btn-green:hover{box-shadow:0 0 20px rgba(207,155,98,0.4);transform:translateY(-1px)}
+  .text-gold{color:#cf9b62}
+  .text-gold-muted{color:#976e41}
+  /* Noise overlay like home */
+  .noise-overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.03;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  /* Sticky footer - always at bottom */
+  body{display:flex!important;flex-direction:column!important;min-height:100vh!important}
+  main{flex:1!important}
+  /* Hide "Trabaja con nosotros" and hamburger on enrollment page */
+  #nav-enroll-d,#nav-enroll-m,#hamburger-btn,#mobile-menu{display:none!important}
+  /* iPad / Tablet responsive */
+  @media(min-width:768px) and (max-width:1024px){
+    .enroll-container{max-width:680px!important}
+    .enroll-card{padding:2.5rem}
+    .enroll-card .grid.grid-cols-2{grid-template-columns:repeat(2,1fr);gap:1rem}
+    .enroll-card .grid.grid-cols-6{gap:0.5rem}
+    .enroll-card input,.enroll-card select{padding:0.65rem 0.75rem;font-size:0.95rem}
+    .enroll-card label{font-size:0.85rem}
+    .enroll-card h1{font-size:1.5rem}
+    .enroll-card h2{font-size:1.15rem}
+    #step2 .grid.grid-cols-2.gap-3:first-of-type{grid-template-columns:repeat(2,1fr)}
+    .enroll-card .bg-blue-50{padding:1rem}
+  }
+  @media(min-width:768px){
+    .enroll-container{max-width:640px}
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-lg mx-auto px-4 py-8">
+<div class="noise-overlay"></div>
+<div class="enroll-container max-w-lg mx-auto px-4 py-8">
     <!-- Header -->
     <div class="text-center mb-6">
-        <h1 class="text-2xl font-bold text-primary-800">📦 Registro de Operadores</h1>
-        <p class="text-gray-500 mt-1">Completa tu registro para participar en eventos</p>
+        <h1 class="text-2xl font-bold" style="color:#cf9b62">📦 Registro de Operadores</h1>
+        <p class="mt-1" style="color:#785631">Completa tu registro para participar en eventos</p>
     </div>
 
-    <!-- Progress Steps -->
-    <div class="flex items-center justify-center mb-8 space-x-2">
-        <div id="step1-dot" class="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center text-sm font-bold">1</div>
-        <div id="step1-line" class="w-16 h-1 bg-gray-300"></div>
-        <div id="step2-dot" class="w-8 h-8 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-sm font-bold">2</div>
-        <div id="step2-line" class="w-16 h-1 bg-gray-300"></div>
-        <div id="step3-dot" class="w-8 h-8 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-sm font-bold">3</div>
+    <!-- Checklist Antes de empezar -->
+    <div id="checklist-card" class="enroll-card mb-4">
+        <h2 class="text-lg font-semibold mb-3" style="color:#cf9b62">📝 Antes de empezar necesitas tener a la mano:</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm" style="color:#d4b896">
+            <div class="flex items-center gap-2">🪪 Tu cédula o documento de identidad</div>
+            <div class="flex items-center gap-2">🏥 Nombre de tu EPS</div>
+            <div class="flex items-center gap-2">🛡️ Nombre de tu ARL</div>
+            <div class="flex items-center gap-2">🩸 Tu tipo de sangre</div>
+            <div class="flex items-center gap-2">👕 Tu talla de ropa (camisa/chaqueta)</div>
+            <div class="flex items-center gap-2">📞 Un contacto de emergencia</div>
+        </div>
+        <button type="button" onclick="document.getElementById('checklist-card').classList.add('hidden');document.getElementById('form-card').classList.remove('hidden');"
+            class="w-full mt-4 py-3 rounded-lg font-bold transition" style="background:#cf9b62; color:#1a1a1a;">
+            ✅ ¡Ya estoy listo para registrarme!
+        </button>
     </div>
+
+    <div id="form-card" class="enroll-card hidden">
+    <!-- Progress Steps -->
+    <div class="flex items-center justify-center mb-2 space-x-2">
+        <div class="flex flex-col items-center">
+            <div id="step1-dot" class="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center text-sm font-bold">1</div>
+            <span class="text-xs mt-1" style="color:#785631">Datos Personales</span>
+        </div>
+        <div id="step1-line" class="w-12 h-1 bg-gray-300 mt-[-12px]"></div>
+        <div class="flex flex-col items-center">
+            <div id="step2-dot" class="w-8 h-8 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-sm font-bold">2</div>
+            <span class="text-xs mt-1" style="color:#785631">Datos Laborales</span>
+        </div>
+        <div id="step2-line" class="w-12 h-1 bg-gray-300 mt-[-12px]"></div>
+        <div class="flex flex-col items-center">
+            <div id="step3-dot" class="w-8 h-8 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-sm font-bold">3</div>
+            <span class="text-xs mt-1" style="color:#785631">Confirmar</span>
+        </div>
+    </div>
+    <p class="text-center text-xs mb-6" id="autosave-hint" style="color:rgba(207,155,98,0.4)">💾 Tu progreso se guarda automáticamente</p>
 
     <form id="register-form" class="space-y-0">
         <!-- Step 1: Datos Personales -->
@@ -54,22 +153,33 @@
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña *</label>
-                <input type="password" id="password" name="password" required minlength="8" placeholder="Mínimo 8 caracteres"
-                    oninput="checkPasswordStrength()"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                <div class="relative">
+                    <input type="password" id="password" name="password" required minlength="6" placeholder="Mínimo 6 caracteres"
+                        oninput="checkPasswordStrength()"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-10">
+                    <button type="button" onclick="togglePw('password',this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1" style="color:rgba(207,155,98,0.5)">
+                        <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.59 6.59m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+                    </button>
+                </div>
                 <div id="pw-rules" class="mt-1 text-xs space-y-0.5">
-                    <p id="pw-len" class="text-gray-400">✓ Mínimo 8 caracteres</p>
+                    <p id="pw-len" class="text-gray-400">✓ Mínimo 6 caracteres</p>
                     <p id="pw-up" class="text-gray-400">✓ Al menos una mayúscula (A-Z)</p>
                     <p id="pw-low" class="text-gray-400">✓ Al menos una minúscula (a-z)</p>
                     <p id="pw-num" class="text-gray-400">✓ Al menos un número (0-9)</p>
-                    <p id="pw-spec" class="text-gray-400">✓ Al menos un carácter especial (!@#$%...)</p>
                 </div>
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Confirmar Contraseña *</label>
-                <input type="password" id="confirm_password" name="confirm_password" required minlength="8" placeholder="Repite tu contraseña"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                <div class="relative">
+                    <input type="password" id="confirm_password" name="confirm_password" required minlength="6" placeholder="Repite tu contraseña"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-10">
+                    <button type="button" onclick="togglePw('confirm_password',this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1" style="color:rgba(207,155,98,0.5)">
+                        <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.59 6.59m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+                    </button>
+                </div>
                 <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
             </div>
 
@@ -284,12 +394,7 @@
             </div>
 
             <h3 class="text-md font-semibold text-gray-600 mt-2">👕 Tallas de Uniforme</h3>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Zapatos *</label>
-                    <input type="text" id="shoe_size" name="shoe_size" placeholder="40" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-                </div>
+            <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Camisa *</label>
                     <select id="shirt_size" name="shirt_size" required
@@ -297,11 +402,6 @@
                         <option value="">—</option>
                         <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
                     </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Pantalón *</label>
-                    <input type="text" id="pants_size" name="pants_size" placeholder="32" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Chaqueta *</label>
@@ -348,7 +448,7 @@
                 <label class="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" id="accept_data_treatment" class="mt-1 rounded text-primary-600 focus:ring-primary-500">
                     <span class="text-sm text-gray-700">
-                        <strong>Autorizo el tratamiento de mis datos personales</strong> de conformidad con la Ley 1581 de 2012 (Ley de Protección de Datos Personales) y la Política de Tratamiento de Datos Personales de la empresa, para fines de vinculación laboral y gestión de eventos.
+                        <strong>Autorizo el tratamiento de mis datos personales</strong> de conformidad con la <a href="https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=49981" target="_blank" rel="noopener noreferrer" style="color:#cf9b62;text-decoration:underline;">Ley 1581 de 2012 (Ley de Protección de Datos Personales)</a> y la <a href="/politica-tratamiento-datos" target="_blank" rel="noopener noreferrer" style="color:#cf9b62;text-decoration:underline;">Política de Tratamiento de Datos Personales de la empresa</a>, para fines de vinculación laboral y gestión de eventos.
                     </span>
                 </label>
             </div>
@@ -370,15 +470,17 @@
         </div>
     </form>
 
-    <p class="text-center text-sm text-gray-500 mt-4">
+    <p class="text-center text-sm mt-4" style="color:#785631">
         ¿Ya tienes cuenta? <a href="/enrolamiento/login" class="font-semibold" style="color:#cf9b62;">Inicia sesión aquí</a>
     </p>
+
+    </div><!-- /enroll-card -->
 
     <!-- Toast -->
     <div id="toast" class="fixed top-4 right-4 z-50 hidden">
         <div id="toast-content" class="px-4 py-3 rounded-lg shadow-lg text-white"></div>
     </div>
-</div>
+</div><!-- /enroll-container -->
 {% endblock %}
 
 {% block scripts %}
@@ -456,14 +558,28 @@ function validateStep2() {
     return true;
 }
 
+function togglePw(fieldId, btn) {
+    const field = document.getElementById(fieldId);
+    const open = btn.querySelector('.eye-open');
+    const closed = btn.querySelector('.eye-closed');
+    if (field.type === 'password') {
+        field.type = 'text';
+        open.classList.add('hidden');
+        closed.classList.remove('hidden');
+    } else {
+        field.type = 'password';
+        open.classList.remove('hidden');
+        closed.classList.add('hidden');
+    }
+}
+
 function checkPasswordStrength() {
     const pw = document.getElementById('password').value;
     const rules = {
-        'pw-len': pw.length >= 8,
+        'pw-len': pw.length >= 6,
         'pw-up': /[A-Z]/.test(pw),
         'pw-low': /[a-z]/.test(pw),
         'pw-num': /[0-9]/.test(pw),
-        'pw-spec': /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw),
     };
     for (const [id, ok] of Object.entries(rules)) {
         const el = document.getElementById(id);
@@ -473,7 +589,7 @@ function checkPasswordStrength() {
 }
 
 function validatePasswordStrength(pw) {
-    return pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw);
+    return pw.length >= 6 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
 }
 
 function validateStep1() {
@@ -568,9 +684,7 @@ async function submitForm() {
         has_protocol_experience: document.getElementById('has_protocol_experience').value || undefined,
         event_size_experience: document.getElementById('event_size_experience').value || undefined,
         education_level: document.getElementById('education_level').value || undefined,
-        shoe_size: document.getElementById('shoe_size').value || undefined,
         shirt_size: document.getElementById('shirt_size').value || undefined,
-        pants_size: document.getElementById('pants_size').value || undefined,
         jacket_size: document.getElementById('jacket_size').value || undefined,
     };
 
@@ -586,7 +700,8 @@ async function submitForm() {
         });
         if (resp.ok) {
             const result = await resp.json();
-            window.location.href = '/enrolamiento/success?id=' + result.id;
+            clearFormDraft();
+            window.location.href = '/enrolamiento/success?id=' + result.id + '&doc=' + encodeURIComponent(data.document_number);
         } else {
             const err = await resp.json();
             showToast(err.detail || 'Error en el registro', 'error');
@@ -655,5 +770,59 @@ async function loadCatalogs() {
     } catch(e) { console.log('Catalogs not available', e); }
 }
 loadCatalogs();
+
+// ===== AUTO-SAVE to localStorage =====
+const AUTOSAVE_KEY = 'enroll_autosave';
+const autosaveFields = [
+    'document_type','document_number','email','first_name','last_name','phone',
+    'eps_id','arl_id','department','city','locality','whatsapp','education_level',
+    'blood_type','has_protocol_experience','event_size_experience',
+    'shirt_size','jacket_size',
+    'emergency_contact_name','emergency_contact_phone',
+    'addr_tipo_via','addr_num_via','addr_sep','addr_num_sec','addr_comp_tipo','addr_comp_num','addr_comp_extra'
+];
+
+function saveFormDraft() {
+    const data = {};
+    autosaveFields.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) data[id] = el.value;
+    });
+    data._step = currentStep;
+    try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+function restoreFormDraft() {
+    try {
+        const raw = localStorage.getItem(AUTOSAVE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        autosaveFields.forEach(function(id) {
+            const el = document.getElementById(id);
+            if (el && data[id]) el.value = data[id];
+        });
+        updateAddressPreview();
+        // If we had saved data, show form directly
+        if (data._step && data._step >= 1) {
+            document.getElementById('checklist-card').classList.add('hidden');
+            document.getElementById('form-card').classList.remove('hidden');
+            if (data._step > 1) goToStep(data._step);
+        }
+        // Show hint that data was restored
+        const hint = document.getElementById('autosave-hint');
+        if (hint) hint.textContent = '💾 Datos previos restaurados';
+    } catch(e) {}
+}
+
+function clearFormDraft() {
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+}
+
+// Restore on load
+restoreFormDraft();
+
+// Auto-save on input changes
+document.getElementById('register-form').addEventListener('input', saveFormDraft);
+document.getElementById('register-form').addEventListener('change', saveFormDraft);
 </script>
 {% endblock %}

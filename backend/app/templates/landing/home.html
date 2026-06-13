@@ -1,130 +1,863 @@
-{% extends "base.html" %}
-{% block title %}A&C Logística - Producción de Eventos{% endblock %}
-{% block content %}
-<div class="min-h-screen bg-white">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A&C Logística - Producción de Eventos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Cinzel+Decorative:wght@400;700;900&family=Raleway:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Raleway',sans-serif;background:#050505;color:#f5f5f5;overflow-x:hidden}
 
-  <!-- Hero -->
-  <section class="max-w-6xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
-    <div class="inline-block px-4 py-1 rounded-full text-sm font-medium mb-6" style="background:rgba(207,155,98,0.2); color:#976e41;">
-      Gestión de Personal Eventual
+    /* Ruido global */
+    .noise{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;opacity:0.04;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+    /* ===== BROCHAZOS FUERTES ===== */
+    .brush-stroke-heavy{
+      position:absolute;
+      pointer-events:none;
+    }
+    .brush-stroke-heavy::before{
+      content:'';
+      position:absolute;
+      width:100%;height:100%;
+      filter:blur(0.5px);
+    }
+
+    /* Brochazo diagonal grande - dorado */
+    .brush-gold-1{
+      width:600px;height:120px;
+      background:linear-gradient(90deg,transparent 0%,rgba(207,155,98,0.7) 15%,rgba(207,155,98,0.85) 40%,rgba(180,132,80,0.6) 70%,transparent 100%);
+      transform:rotate(-32deg);
+      clip-path:polygon(0% 35%,3% 20%,8% 30%,12% 15%,18% 25%,22% 10%,28% 22%,33% 8%,38% 18%,42% 5%,48% 15%,53% 3%,58% 12%,62% 0%,68% 10%,73% 5%,78% 15%,82% 8%,88% 20%,92% 12%,97% 25%,100% 18%,100% 85%,97% 92%,92% 80%,88% 90%,82% 78%,78% 88%,73% 75%,68% 85%,62% 72%,58% 82%,53% 70%,48% 80%,42% 68%,38% 78%,33% 65%,28% 75%,22% 62%,18% 72%,12% 60%,8% 70%,3% 58%,0% 65%);
+      opacity:0.8;
+    }
+    /* Brochazo más fino y rasgado */
+    .brush-gold-2{
+      width:450px;height:60px;
+      background:linear-gradient(90deg,transparent 0%,rgba(207,155,98,0.5) 20%,rgba(207,155,98,0.65) 50%,rgba(180,132,80,0.4) 80%,transparent 100%);
+      transform:rotate(25deg);
+      clip-path:polygon(0% 40%,5% 25%,10% 38%,15% 20%,22% 35%,28% 15%,35% 30%,40% 10%,48% 28%,55% 8%,62% 25%,68% 12%,75% 30%,82% 18%,90% 35%,95% 22%,100% 30%,100% 75%,95% 85%,90% 70%,82% 82%,75% 68%,68% 80%,62% 65%,55% 78%,48% 62%,40% 75%,35% 58%,28% 72%,22% 55%,15% 68%,10% 52%,5% 65%,0% 60%);
+      opacity:0.7;
+    }
+    /* Brochazo ancho tipo raspadura */
+    .brush-gold-3{
+      width:350px;height:180px;
+      background:linear-gradient(135deg,rgba(207,155,98,0.6) 0%,rgba(180,132,80,0.3) 50%,rgba(93,66,36,0.15) 100%);
+      transform:rotate(-18deg);
+      clip-path:polygon(5% 10%,10% 5%,18% 12%,25% 3%,32% 8%,40% 2%,48% 10%,55% 4%,62% 12%,70% 6%,78% 14%,85% 8%,92% 15%,100% 10%,100% 90%,92% 95%,85% 88%,78% 96%,70% 85%,62% 93%,55% 82%,48% 90%,40% 80%,32% 88%,25% 78%,18% 85%,10% 75%,5% 82%,0% 70%,0% 30%,3% 20%);
+      opacity:0.5;
+    }
+    /* Brochazo corto violento */
+    .brush-gold-4{
+      width:280px;height:50px;
+      background:linear-gradient(90deg,transparent 5%,rgba(207,155,98,0.8) 25%,rgba(207,155,98,0.9) 50%,rgba(207,155,98,0.6) 75%,transparent 95%);
+      transform:rotate(38deg);
+      clip-path:polygon(5% 30%,10% 10%,18% 35%,25% 5%,32% 28%,38% 0%,45% 25%,52% 8%,58% 30%,65% 3%,72% 22%,78% 5%,85% 28%,92% 12%,100% 20%,100% 80%,92% 90%,85% 72%,78% 88%,72% 70%,65% 85%,58% 68%,52% 82%,45% 65%,38% 78%,32% 60%,25% 75%,18% 55%,10% 70%,5% 55%);
+      opacity:0.75;
+    }
+    /* Brochazo extra grande de fondo */
+    .brush-gold-5{
+      width:700px;height:200px;
+      background:linear-gradient(150deg,transparent 0%,rgba(93,66,36,0.2) 20%,rgba(180,132,80,0.15) 50%,transparent 80%);
+      transform:rotate(-12deg);
+      clip-path:polygon(0% 20%,5% 12%,12% 22%,18% 8%,25% 18%,30% 5%,38% 15%,42% 3%,50% 12%,55% 0%,62% 10%,68% 4%,75% 14%,80% 2%,88% 12%,95% 8%,100% 15%,100% 85%,95% 92%,88% 80%,80% 90%,75% 78%,68% 88%,62% 75%,55% 85%,50% 72%,42% 82%,38% 70%,30% 80%,25% 68%,18% 78%,12% 65%,5% 75%,0% 70%);
+      opacity:0.4;
+    }
+    /* Brochazo vertical */
+    .brush-gold-6{
+      width:80px;height:500px;
+      background:linear-gradient(180deg,transparent 0%,rgba(207,155,98,0.5) 20%,rgba(207,155,98,0.7) 50%,rgba(180,132,80,0.4) 80%,transparent 100%);
+      transform:rotate(15deg);
+      clip-path:polygon(20% 0%,35% 3%,25% 8%,40% 12%,28% 18%,42% 22%,30% 28%,45% 32%,32% 38%,48% 42%,35% 48%,50% 52%,38% 58%,45% 62%,30% 68%,42% 72%,28% 78%,38% 82%,25% 88%,35% 92%,22% 96%,30% 100%,80% 100%,75% 96%,82% 92%,70% 88%,78% 82%,65% 78%,75% 72%,62% 68%,72% 62%,58% 58%,70% 52%,55% 48%,68% 42%,52% 38%,65% 32%,50% 28%,60% 22%,48% 18%,58% 12%,45% 8%,55% 3%,70% 0%);
+      opacity:0.5;
+    }
+    /* Brochazo seco con cerdas marcadas */
+    .brush-dry-1{
+      width:500px;height:35px;
+      background:repeating-linear-gradient(90deg,rgba(207,155,98,0.7) 0px,rgba(207,155,98,0.7) 3px,transparent 3px,transparent 8px,rgba(207,155,98,0.5) 8px,rgba(207,155,98,0.5) 10px,transparent 10px,transparent 18px,rgba(180,132,80,0.6) 18px,rgba(180,132,80,0.6) 20px,transparent 20px,transparent 30px);
+      transform:rotate(-28deg);
+      filter:blur(0.3px);
+      opacity:0.6;
+    }
+    .brush-dry-2{
+      width:380px;height:25px;
+      background:repeating-linear-gradient(90deg,rgba(207,155,98,0.6) 0px,rgba(207,155,98,0.6) 4px,transparent 4px,transparent 12px,rgba(180,132,80,0.5) 12px,rgba(180,132,80,0.5) 14px,transparent 14px,transparent 25px,rgba(207,155,98,0.4) 25px,rgba(207,155,98,0.4) 27px,transparent 27px,transparent 40px);
+      transform:rotate(22deg);
+      filter:blur(0.3px);
+      opacity:0.55;
+    }
+
+    /* ===== BROCHAZOS CON FILTRO SVG (como el texto) ===== */
+    .svg-brush{
+      position:absolute;
+      pointer-events:none;
+    }
+    /* Brochazo gigante horizontal - filtro pesado */
+    .svg-brush-xl{
+      width:120%;height:250px;left:-10%;
+      background:linear-gradient(90deg,
+        transparent 0%,
+        #5d4224 5%,transparent 8%,
+        #b48450 12%,#cf9b62 18%,transparent 22%,
+        #b48450 30%,#cf9b62 35%,transparent 40%,
+        #5d4224 50%,#b48450 55%,#cf9b62 60%,transparent 65%,
+        #b48450 72%,#cf9b62 78%,transparent 82%,
+        #5d4224 88%,transparent 95%
+      );
+      filter:url(#brush-bg-heavy);
+      opacity:0.25;
+    }
+    /* Brochazo grande diagonal */
+    .svg-brush-lg{
+      width:900px;height:180px;
+      background:linear-gradient(90deg,
+        transparent 0%,
+        #cf9b62 10%,#b48450 20%,transparent 30%,
+        #5d4224 45%,#cf9b62 55%,#b48450 65%,transparent 75%,
+        #cf9b62 85%,transparent 95%
+      );
+      filter:url(#brush-bg-heavy);
+      opacity:0.3;
+    }
+    /* Brochazo mediano */
+    .svg-brush-md{
+      width:600px;height:120px;
+      background:linear-gradient(90deg,
+        transparent 0%,
+        #b48450 15%,#cf9b62 30%,transparent 45%,
+        #5d4224 60%,#b48450 75%,transparent 90%
+      );
+      filter:url(#brush-bg-med);
+      opacity:0.35;
+    }
+    /* Brochazo fino vertical */
+    .svg-brush-vert{
+      width:100px;height:600px;
+      background:linear-gradient(180deg,
+        transparent 0%,
+        #cf9b62 10%,#b48450 25%,transparent 35%,
+        #5d4224 50%,#cf9b62 65%,transparent 75%,
+        #b48450 85%,transparent 95%
+      );
+      filter:url(#brush-bg-med);
+      opacity:0.3;
+    }
+    /* Brochazo seco SVG */
+    .svg-brush-dry{
+      width:700px;height:40px;
+      background:repeating-linear-gradient(90deg,
+        #cf9b62 0px,#cf9b62 4px,transparent 4px,transparent 12px,
+        #b48450 12px,#b48450 15px,transparent 15px,transparent 28px,
+        #5d4224 28px,#5d4224 30px,transparent 30px,transparent 45px
+      );
+      filter:url(#brush-bg-fine);
+      opacity:0.4;
+    }
+    /* Brochazo circular/blob con SVG */
+    .svg-brush-blob{
+      width:400px;height:400px;
+      background:radial-gradient(ellipse at center,
+        #cf9b62 0%,#b48450 20%,#5d4224 35%,transparent 55%
+      );
+      filter:url(#brush-bg-heavy);
+      border-radius:50%;
+      opacity:0.15;
+    }
+
+    /* Salpicaduras grandes */
+    .splat{position:absolute;border-radius:50%;pointer-events:none}
+    .splat-1{width:30px;height:28px;background:radial-gradient(circle,rgba(207,155,98,0.8) 0%,rgba(207,155,98,0.3) 40%,transparent 70%);filter:blur(1px)}
+    .splat-2{width:18px;height:16px;background:radial-gradient(circle,rgba(207,155,98,0.7) 0%,transparent 60%);filter:blur(0.5px)}
+    .splat-3{width:12px;height:10px;background:radial-gradient(circle,rgba(180,132,80,0.6) 0%,transparent 55%)}
+    .splat-4{width:8px;height:7px;background:radial-gradient(circle,rgba(207,155,98,0.5) 0%,transparent 50%)}
+    .splat-line{position:absolute;height:2px;border-radius:1px;pointer-events:none;
+      background:linear-gradient(90deg,rgba(207,155,98,0.6),rgba(207,155,98,0.3),transparent)}
+
+    /* ===== HERO ===== */
+    .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem;padding-bottom:35vh;position:relative;overflow:hidden;z-index:2}
+    .hero::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 0%,rgba(5,5,5,0.8) 100%);pointer-events:none;z-index:1}
+
+    /* Logo real */
+    .logo-img{position:absolute;top:2.5rem;left:2.5rem;width:90px;height:90px;z-index:20;border-radius:50%;overflow:hidden;box-shadow:0 0 50px rgba(207,155,98,0.6),0 0 100px rgba(207,155,98,0.2)}
+    .logo-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+
+    .hero-content{position:relative;z-index:10;max-width:900px}
+    .hero-subtitle{font-family:'Raleway',sans-serif;font-size:0.8rem;letter-spacing:0.5em;text-transform:uppercase;color:#cf9b62;margin-bottom:2.5rem;font-weight:300;text-shadow:0 0 8px rgba(207,155,98,0.6),0 0 20px rgba(207,155,98,0.3),0 0 40px rgba(207,155,98,0.15)}
+    .hero-title{font-family:'Cinzel Decorative',serif;font-size:clamp(2.2rem,7vw,5.5rem);font-weight:900;line-height:1.1;color:#cf9b62;margin-bottom:1.5rem;text-transform:uppercase;letter-spacing:0.05em;text-shadow:0 0 10px rgba(207,155,98,0.8),0 0 30px rgba(207,155,98,0.5),0 0 60px rgba(207,155,98,0.3),0 0 100px rgba(207,155,98,0.15),3px 3px 12px rgba(0,0,0,0.9)}
+    .hero-title span{display:inline-block;position:relative;font-family:'Raleway',sans-serif;font-size:0.35em;font-weight:400;color:#ffffff;letter-spacing:0.55em;margin-top:2rem;padding:15px 40px;z-index:1}
+    .hero-title span::before{content:'';position:absolute;top:-10px;left:-20px;right:-80px;bottom:-10px;background:linear-gradient(to bottom, transparent 0%, #5d4224 5%, transparent 10%, #b48450 15%, #cf9b62 20%, transparent 25%, #b48450 35%, transparent 45%, #5d4224 50%, transparent 60%, #cf9b62 70%, transparent 80%, #b48450 90%, transparent 100%);z-index:-1;filter:url(#brush-heavy-text);transform:skewX(-25deg) rotate(-4deg);border-radius:40px 120px 30px 90px;-webkit-mask-image:linear-gradient(90deg, transparent 0%, black 10%, black 100%);mask-image:linear-gradient(90deg, transparent 0%, black 10%, black 100%);}
+    .hero-description{font-family:'Raleway',sans-serif;font-size:clamp(0.95rem,1.8vw,1.15rem);color:#cf9b62;max-width:650px;margin:0 auto 3rem;line-height:2;font-weight:300;letter-spacing:0.03em;text-shadow:0 0 6px rgba(207,155,98,0.4),0 0 15px rgba(207,155,98,0.15)}
+    .cta-buttons{display:flex;flex-direction:column;gap:1rem;align-items:center}
+    @media(min-width:640px){.cta-buttons{flex-direction:row;justify-content:center}}
+
+    /* Botones con borde rasgado */
+    .btn-primary{position:relative;padding:1.2rem 3rem;font-family:'Raleway',sans-serif;font-size:0.95rem;font-weight:600;text-transform:uppercase;letter-spacing:0.2em;color:#050505;text-decoration:none;background:linear-gradient(135deg,#cf9b62,#b48450);border:none;
+      clip-path:polygon(3% 0%,10% 2%,20% 0%,30% 3%,40% 0%,50% 2%,60% 0%,70% 3%,80% 0%,90% 2%,100% 3%,100% 97%,90% 100%,80% 98%,70% 100%,60% 98%,50% 100%,40% 98%,30% 100%,20% 98%,10% 100%,3% 98%,0% 97%,0% 3%);
+      transition:all 0.4s;box-shadow:0 0 25px rgba(207,155,98,0.5)}
+    .btn-primary:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 0 50px rgba(207,155,98,0.7)}
+    .btn-secondary{position:relative;padding:1.2rem 3rem;font-family:'Raleway',sans-serif;font-size:0.9rem;font-weight:400;text-transform:uppercase;letter-spacing:0.2em;color:#cf9b62;text-decoration:none;background:transparent;border:2px solid rgba(207,155,98,0.5);
+      clip-path:polygon(3% 0%,10% 2%,20% 0%,30% 3%,40% 0%,50% 2%,60% 0%,70% 3%,80% 0%,90% 2%,100% 3%,100% 97%,90% 100%,80% 98%,70% 100%,60% 98%,50% 100%,40% 98%,30% 100%,20% 98%,10% 100%,3% 98%,0% 97%,0% 3%);
+      transition:all 0.4s}
+    .btn-secondary:hover{background:rgba(207,155,98,0.1);border-color:#cf9b62;box-shadow:0 0 25px rgba(207,155,98,0.3)}
+
+    /* ===== STATS ===== */
+    .gallery-section,.stats,.services,.cta-section,footer{position:relative;z-index:2}
+    .stats{padding:6rem 2rem}
+    .stats-grid{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:2rem}
+    .stat-card{position:relative;background:rgba(10,10,10,0.85);padding:3rem 2rem;text-align:center;border:1px solid rgba(207,155,98,0.2);overflow:hidden;transition:all 0.4s}
+    .stat-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(207,155,98,0.08) 0%,transparent 50%);pointer-events:none}
+    .stat-card:hover{transform:translateY(-5px);border-color:rgba(207,155,98,0.5);box-shadow:0 0 30px rgba(207,155,98,0.2)}
+    .stat-number{font-family:'Cinzel',serif;font-size:3.5rem;font-weight:900;color:#cf9b62;margin-bottom:0.5rem;text-shadow:0 0 25px rgba(207,155,98,0.5)}
+    .stat-label{font-family:'Raleway',sans-serif;font-size:0.8rem;color:#976e41;text-transform:uppercase;letter-spacing:0.2em;font-weight:300}
+
+    /* ===== SERVICES ===== */
+    .services{padding:6rem 2rem;position:relative}
+    .section-title{font-family:'Cinzel',serif;font-size:clamp(1.8rem,4.5vw,3.2rem);font-weight:700;color:#cf9b62;text-align:center;margin-bottom:4rem;text-transform:uppercase;letter-spacing:0.12em;text-shadow:0 0 8px rgba(207,155,98,0.7),0 0 25px rgba(207,155,98,0.4),0 0 50px rgba(207,155,98,0.2)}
+    .services-grid{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:2rem}
+    .service-card{position:relative;background:rgba(10,10,10,0.9);padding:2.5rem;border:1px solid rgba(207,155,98,0.15);transition:all 0.4s;overflow:hidden}
+    .service-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:linear-gradient(90deg,#cf9b62,#b48450);transform:scaleX(0);transform-origin:left;transition:transform 0.4s}
+    .service-card:hover::before{transform:scaleX(1)}
+    .service-card:hover{transform:translateY(-8px);border-color:rgba(207,155,98,0.4);box-shadow:0 10px 40px rgba(207,155,98,0.15)}
+    .service-icon{font-size:2.5rem;margin-bottom:1.5rem}
+    .service-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:700;color:#cf9b62;margin-bottom:1rem;letter-spacing:0.05em}
+    .service-description{font-size:0.9rem;color:#b48450;line-height:1.8;font-weight:300}
+
+    /* ===== CTA ===== */
+    .cta-section{padding:8rem 2rem;position:relative}
+    .cta-card{max-width:800px;margin:0 auto;position:relative;background:linear-gradient(135deg,rgba(207,155,98,0.12) 0%,rgba(180,132,80,0.08) 100%);padding:4rem 3rem;text-align:center;border:2px solid rgba(207,155,98,0.3);overflow:hidden}
+    .cta-card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(207,155,98,0.1) 0%,transparent 50%);animation:pulse 8s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:0.8;transform:scale(1.1)}}
+    .cta-title{font-family:'Cinzel Decorative',serif;font-size:clamp(1.5rem,3.5vw,2.5rem);font-weight:700;color:#cf9b62;margin-bottom:1.5rem;text-transform:uppercase;position:relative;z-index:1;letter-spacing:0.08em}
+    .cta-description{font-family:'Raleway',sans-serif;font-size:1rem;color:#b48450;margin-bottom:2.5rem;line-height:1.9;position:relative;z-index:1;font-weight:300;letter-spacing:0.02em}
+
+    /* ===== FOOTER ===== */
+    footer{background:#080808;border-top:1px solid rgba(207,155,98,0.2);padding:4rem 2rem 2rem}
+    .footer-content{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:3rem;margin-bottom:3rem}
+    .footer-section h3{font-family:'Cinzel',serif;font-size:1rem;font-weight:700;color:#cf9b62;margin-bottom:1.5rem;text-transform:uppercase;letter-spacing:0.15em}
+    .footer-section p{font-size:0.9rem;color:#976e41;line-height:1.7;margin-bottom:0.5rem}
+    .footer-section a{font-size:0.9rem;color:#976e41;text-decoration:none;display:block;margin-bottom:0.5rem;transition:color 0.3s}
+    .footer-section a:hover{color:#cf9b62}
+    .footer-bottom{max-width:1200px;margin:0 auto;padding-top:2rem;border-top:1px solid rgba(207,155,98,0.15);text-align:center;font-size:0.85rem;color:#785631}
+
+    /* ===== PARALLAX ===== */
+    .parallax-layer{will-change:transform;transition:transform 0.1s linear}
+    .parallax-slow{will-change:transform}
+    .parallax-fast{will-change:transform}
+
+    /* ===== SCROLL REVEAL ===== */
+    .reveal{opacity:0;transform:translateY(60px);transition:opacity 0.8s cubic-bezier(0.25,0.46,0.45,0.94),transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94)}
+    .reveal.visible{opacity:1;transform:translateY(0)}
+    .reveal-left{opacity:0;transform:translateX(-80px);transition:opacity 0.8s ease,transform 0.8s ease}
+    .reveal-left.visible{opacity:1;transform:translateX(0)}
+    .reveal-right{opacity:0;transform:translateX(80px);transition:opacity 0.8s ease,transform 0.8s ease}
+    .reveal-right.visible{opacity:1;transform:translateX(0)}
+    .reveal-scale{opacity:0;transform:scale(0.85);transition:opacity 0.8s ease,transform 0.8s ease}
+    .reveal-scale.visible{opacity:1;transform:scale(1)}
+    .stat-card:nth-child(1){transition-delay:0s}
+    .stat-card:nth-child(2){transition-delay:0.15s}
+    .stat-card:nth-child(3){transition-delay:0.3s}
+    .stat-card:nth-child(4){transition-delay:0.45s}
+    .service-card:nth-child(1){transition-delay:0s}
+    .service-card:nth-child(2){transition-delay:0.1s}
+    .service-card:nth-child(3){transition-delay:0.2s}
+    .service-card:nth-child(4){transition-delay:0.3s}
+    .service-card:nth-child(5){transition-delay:0.4s}
+    .service-card:nth-child(6){transition-delay:0.5s}
+
+    /* Hero entrance animation */
+    .hero-content{animation:heroEnter 1.2s cubic-bezier(0.25,0.46,0.45,0.94) both}
+    .hero-subtitle{animation:fadeInUp 1s 0.3s both}
+    .hero-title{animation:fadeInUp 1s 0.5s both}
+    .hero-description{animation:fadeInUp 1s 0.7s both}
+    .cta-buttons{animation:fadeInUp 1s 0.9s both}
+    @keyframes heroEnter{0%{opacity:0;transform:translateY(40px)}100%{opacity:1;transform:translateY(0)}}
+    @keyframes fadeInUp{0%{opacity:0;transform:translateY(30px)}100%{opacity:1;transform:translateY(0)}}
+    .logo-img{animation:logoEnter 1.5s cubic-bezier(0.25,0.46,0.45,0.94) both}
+    @keyframes logoEnter{0%{opacity:0;transform:scale(0.5) rotate(-180deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
+
+    /* ===== GALLERY CAROUSEL ===== */
+    .gallery-section{padding:6rem 2rem;position:relative;overflow:hidden}
+    .gallery-title{font-family:'Cinzel',serif;font-size:clamp(1.8rem,4.5vw,3.2rem);font-weight:700;color:#cf9b62;text-align:center;margin-bottom:1rem;text-transform:uppercase;letter-spacing:0.12em;text-shadow:0 0 25px rgba(207,155,98,0.3)}
+    .gallery-subtitle{font-family:'Raleway',sans-serif;font-size:0.9rem;color:#976e41;text-align:center;margin-bottom:3rem;letter-spacing:0.15em;text-transform:uppercase;font-weight:300}
+
+    .carousel-wrapper{max-width:900px;margin:0 auto;position:relative;perspective:1200px;height:420px}
+    .carousel-scene{width:100%;height:100%;position:relative;transform-style:preserve-3d}
+    .carousel-ring{width:100%;height:100%;position:absolute;transform-style:preserve-3d;transition:transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94)}
+
+    .carousel-item{position:absolute;width:280px;height:350px;left:50%;top:50%;margin-left:-140px;margin-top:-175px;transform-style:preserve-3d;backface-visibility:hidden}
+    .carousel-item-img{width:100%;height:100%;position:relative;overflow:hidden;
+      clip-path:polygon(4% 0%,8% 2%,14% 0%,20% 1%,26% 0%,32% 2%,38% 0%,44% 1%,50% 0%,56% 2%,62% 0%,68% 1%,74% 0%,80% 2%,86% 0%,92% 1%,96% 0%,100% 3%,100% 97%,96% 100%,92% 98%,86% 100%,80% 99%,74% 100%,68% 98%,62% 100%,56% 99%,50% 100%,44% 98%,38% 100%,32% 99%,26% 100%,20% 98%,14% 100%,8% 99%,4% 100%,0% 97%,0% 3%);
+    }
+    .carousel-item-img::before{content:'';position:absolute;inset:-4px;
+      background:linear-gradient(135deg,#cf9b62 0%,#5d4224 20%,#cf9b62 35%,#b48450 50%,#5d4224 65%,#cf9b62 80%,#b48450 100%);
+      filter:url(#brush-bg-heavy);z-index:-1;
+      clip-path:polygon(2% 0%,7% 3%,13% 0%,19% 2%,25% 0%,31% 3%,37% 0%,43% 2%,49% 0%,55% 3%,61% 0%,67% 2%,73% 0%,79% 3%,85% 0%,91% 2%,97% 0%,100% 2%,100% 98%,97% 100%,91% 97%,85% 100%,79% 98%,73% 100%,67% 97%,61% 100%,55% 98%,49% 100%,43% 97%,37% 100%,31% 98%,25% 100%,19% 97%,13% 100%,7% 98%,2% 100%,0% 98%,0% 2%);
+    }
+    .carousel-item-img::after{content:'';position:absolute;inset:0;
+      background:linear-gradient(180deg,transparent 50%,rgba(5,5,5,0.4) 100%);pointer-events:none;
+      clip-path:polygon(4% 0%,8% 2%,14% 0%,20% 1%,26% 0%,32% 2%,38% 0%,44% 1%,50% 0%,56% 2%,62% 0%,68% 1%,74% 0%,80% 2%,86% 0%,92% 1%,96% 0%,100% 3%,100% 97%,96% 100%,92% 98%,86% 100%,80% 99%,74% 100%,68% 98%,62% 100%,56% 99%,50% 100%,44% 98%,38% 100%,32% 99%,26% 100%,20% 98%,14% 100%,8% 99%,4% 100%,0% 97%,0% 3%);
+    }
+    .carousel-item-img img{width:100%;height:100%;object-fit:cover;display:block}
+
+    /* Gold glow behind active item */
+    .carousel-item.active .carousel-item-img{box-shadow:0 0 60px rgba(207,155,98,0.4),0 0 120px rgba(207,155,98,0.15)}
+
+    /* Navigation arrows */
+    .carousel-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:30;background:none;border:2px solid rgba(207,155,98,0.4);color:#cf9b62;width:50px;height:50px;font-size:1.3rem;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;justify-content:center;
+      clip-path:polygon(10% 0%,25% 5%,50% 0%,75% 5%,90% 0%,100% 15%,100% 85%,90% 100%,75% 95%,50% 100%,25% 95%,10% 100%,0% 85%,0% 15%)}
+    .carousel-nav:hover{background:rgba(207,155,98,0.15);border-color:#cf9b62;box-shadow:0 0 25px rgba(207,155,98,0.3)}
+    .carousel-nav-prev{left:-10px}
+    .carousel-nav-next{right:-10px}
+
+    /* Dots */
+    .carousel-dots{display:flex;justify-content:center;gap:12px;margin-top:2rem;position:relative;z-index:10}
+    .carousel-dot{width:12px;height:12px;border-radius:50%;background:rgba(207,155,98,0.25);border:1px solid rgba(207,155,98,0.4);cursor:pointer;transition:all 0.4s}
+    .carousel-dot.active{background:#cf9b62;box-shadow:0 0 15px rgba(207,155,98,0.6);transform:scale(1.3)}
+    .carousel-dot:hover{background:rgba(207,155,98,0.5)}
+
+    /* Gallery brochazos */
+    .gallery-brush-1{position:absolute;pointer-events:none;width:500px;height:35px;
+      background:repeating-linear-gradient(90deg,rgba(207,155,98,0.5) 0px,rgba(207,155,98,0.5) 4px,transparent 4px,transparent 12px,rgba(180,132,80,0.4) 12px,rgba(180,132,80,0.4) 15px,transparent 15px,transparent 28px);
+      filter:blur(0.3px);opacity:0.3;transform:rotate(-5deg)}
+
+    @media(max-width:768px){
+      .carousel-wrapper{height:320px;perspective:900px}
+      .carousel-item{width:200px;height:260px;margin-left:-100px;margin-top:-130px}
+      .carousel-nav{width:40px;height:40px;font-size:1rem}
+      .carousel-nav-prev{left:0}
+      .carousel-nav-next{right:0}
+      .gallery-section{padding:4rem 1rem}
+    }
+    @media(max-width:480px){
+      .carousel-wrapper{height:280px}
+      .carousel-item{width:170px;height:220px;margin-left:-85px;margin-top:-110px}
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media(max-width:1024px){
+      .hero{padding:2rem; justify-content:flex-start; padding-top:25vh; min-height:auto; padding-bottom:15vh;}
+      .services-grid{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+      .stats-grid{grid-template-columns:repeat(2,1fr)}
+    }
+
+    @media(max-width:768px){
+      /* Layout */
+      .hero{padding:1rem 1.5rem; justify-content:flex-start; padding-top:22vh; min-height:auto; padding-bottom:12vh;}
+      .stats,.services{padding:4rem 1.5rem}
+      .gallery-section{padding:4rem 1rem}
+      .cta-section{padding:5rem 1.5rem}
+      footer{padding:3rem 1.5rem 1.5rem}
+
+      /* Logo */
+      .logo-img{width:65px;height:65px;top:1.5rem;left:1.5rem}
+
+      /* Hero */
+      .hero-subtitle{font-size:0.65rem;letter-spacing:0.3em;margin-bottom:1.5rem}
+      .hero-title span{font-size:0.3em;letter-spacing:0.35em;padding:10px 25px;margin-top:1.5rem}
+      .hero-title span::before{right:-15px;left:-15px;transform:skewX(-5deg) rotate(-2deg);border-radius:15px;-webkit-mask-image:linear-gradient(90deg, transparent 0%, black 10%, black 90%, transparent 100%);mask-image:linear-gradient(90deg, transparent 0%, black 10%, black 90%, transparent 100%);}
+      .hero-description{font-size:0.9rem;line-height:1.8;margin-bottom:2rem}
+      .cta-buttons{gap:0.8rem}
+      .btn-primary,.btn-secondary{padding:1rem 2rem;font-size:0.85rem;letter-spacing:0.15em}
+
+      /* Stats */
+      .stats-grid{grid-template-columns:repeat(2,1fr);gap:1rem}
+      .stat-card{padding:2rem 1rem}
+      .stat-number{font-size:2.5rem}
+      .stat-label{font-size:0.7rem}
+
+      /* Services */
+      .services-grid{grid-template-columns:1fr;gap:1.5rem}
+      .service-card{padding:2rem}
+
+      /* CTA */
+      .cta-card{padding:2.5rem 1.5rem}
+      .cta-title{font-size:clamp(1.2rem,4vw,1.8rem)}
+
+      /* Gallery */
+      .gallery-title{font-size:clamp(1.4rem,4vw,2rem)}
+      .gallery-subtitle{font-size:0.75rem;margin-bottom:2rem}
+
+      /* Footer */
+      .footer-content{grid-template-columns:1fr;gap:2rem}
+      .footer-section{text-align:center}
+
+      /* Brush strokes reduced */
+      .brush-gold-1,.brush-gold-2,.brush-gold-3,.brush-gold-4,.brush-gold-5,.brush-gold-6,
+      .brush-dry-1,.brush-dry-2,.svg-brush-lg,.svg-brush-md,.svg-brush-vert,.svg-brush-xl{opacity:0.15}
+      .brush-gold-1{width:300px;height:60px}
+      .brush-gold-2{width:220px;height:30px}
+      .brush-gold-3{width:180px;height:90px}
+      .brush-gold-4{width:140px;height:25px}
+      .brush-gold-5{width:350px;height:100px}
+      .brush-gold-6{width:40px;height:250px}
+      .brush-dry-1{width:250px;height:18px}
+      .brush-dry-2{width:190px;height:12px}
+    }
+
+    @media(max-width:480px){
+      /* Hero */
+      .hero{padding:1rem; justify-content:flex-start; padding-top:22vh; min-height:auto; padding-bottom:12vh;}
+      .hero-subtitle{font-size:0.55rem;letter-spacing:0.2em;margin-bottom:1rem}
+      .hero-title{letter-spacing:0.02em}
+      .hero-title span{font-size:0.28em;letter-spacing:0.25em;padding:8px 18px;margin-top:1rem}
+      .hero-title span::before{right:-10px;left:-10px;transform:skewX(-2deg) rotate(-1deg);border-radius:10px;-webkit-mask-image:linear-gradient(90deg, transparent 0%, black 10%, black 90%, transparent 100%);mask-image:linear-gradient(90deg, transparent 0%, black 10%, black 90%, transparent 100%);}
+      .hero-description{font-size:0.85rem;line-height:1.7}
+      .btn-primary,.btn-secondary{padding:0.9rem 1.5rem;font-size:0.8rem;letter-spacing:0.1em;width:100%;max-width:280px;text-align:center}
+
+      /* Stats */
+      .stats{padding:3rem 1rem}
+      .stats-grid{grid-template-columns:1fr 1fr;gap:0.8rem}
+      .stat-card{padding:1.5rem 0.8rem}
+      .stat-number{font-size:2rem}
+      .stat-label{font-size:0.65rem;letter-spacing:0.1em}
+
+      /* Services */
+      .services{padding:3rem 1rem}
+      .service-card{padding:1.5rem}
+      .service-icon{font-size:2rem;margin-bottom:1rem}
+      .service-title{font-size:1.1rem}
+      .service-description{font-size:0.85rem}
+
+      /* CTA */
+      .cta-section{padding:3rem 1rem}
+      .cta-card{padding:2rem 1rem}
+      .cta-description{font-size:0.9rem;line-height:1.7}
+
+      /* Gallery */
+      .gallery-section{padding:3rem 0.5rem}
+      .gallery-title{margin-bottom:0.5rem}
+      .gallery-subtitle{margin-bottom:1.5rem}
+
+      /* Footer */
+      footer{padding:2rem 1rem 1rem}
+      .footer-bottom{font-size:0.75rem}
+
+      /* Hide large decorative elements */
+      .svg-brush-xl,.svg-brush-lg,.svg-brush-md,.svg-brush-vert{display:none}
+    }
+  </style>
+</head>
+<body>
+  <!-- Filtros SVG para brochazos -->
+  <svg width="0" height="0" style="position: absolute; z-index: -100;">
+    <defs>
+      <!-- Filtro original del texto -->
+      <filter id="brush-heavy-text" x="-50%" y="-50%" width="200%" height="200%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.015 0.5" numOctaves="3" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="30" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <!-- Filtro para brochazos de fondo - distorsión fuerte -->
+      <filter id="brush-bg-heavy" x="-15%" y="-15%" width="130%" height="130%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.008 0.08" numOctaves="4" result="noise" seed="1"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="60" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <!-- Filtro para brochazos medianos -->
+      <filter id="brush-bg-med" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.12" numOctaves="3" result="noise" seed="5"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="45" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <!-- Filtro para brochazos finos/secos -->
+      <filter id="brush-bg-fine" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.02 0.25" numOctaves="3" result="noise" seed="8"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="25" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="noise"></div>
+
+  <!-- ========== HERO ========== -->
+  <section class="hero">
+    <!-- ===== BROCHAZOS SVG CON FILTRO + PARALLAX (reducidos) ===== -->
+    <div class="svg-brush svg-brush-xl parallax-slow" data-speed="0.15" style="top:30%;transform:rotate(-8deg)"></div>
+    <div class="svg-brush svg-brush-lg parallax-fast" data-speed="0.25" style="top:10%;right:-15%;transform:rotate(-25deg)"></div>
+    <div class="svg-brush svg-brush-md parallax-fast" data-speed="0.3" style="top:55%;left:5%;transform:rotate(-15deg)"></div>
+    <div class="svg-brush svg-brush-vert parallax-fast" data-speed="0.28" style="top:5%;right:25%;transform:rotate(12deg)"></div>
+    <div class="svg-brush svg-brush-dry" style="top:40%;left:0%;transform:rotate(-10deg)"></div>
+
+    <!-- ===== BROCHAZOS CSS con parallax (reducidos) ===== -->
+    <div class="brush-stroke-heavy brush-gold-1 parallax-fast" data-speed="0.3" style="top:22%;right:-5%"></div>
+    <div class="brush-stroke-heavy brush-gold-2 parallax-slow" data-speed="0.14" style="top:60%;left:-8%"></div>
+    <div class="brush-stroke-heavy brush-dry-1 parallax-fast" data-speed="0.32" style="top:45%;right:0%;transform:rotate(-35deg)"></div>
+
+    <!-- SALPICADURAS (reducidas) -->
+    <div class="splat splat-1" style="top:18%;left:15%"></div>
+    <div class="splat splat-2" style="top:55%;right:20%"></div>
+    <div class="splat splat-3" style="top:75%;left:30%"></div>
+    <div class="splat-line" style="top:35%;left:8%;width:30px;transform:rotate(80deg)"></div>
+
+    <!-- LOGO REAL -->
+    <div class="logo-img" id="logo-container">
+      <img src="/static/frontend/logo.jpeg" alt="AyC Logistica">
     </div>
-    <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6" style="color:#5d4224;">
-      Conectamos talento<br>con <span style="color:#cf9b62;">eventos increíbles</span>
-    </h1>
-    <p class="text-lg md:text-xl max-w-2xl mb-10" style="color:#785631;">
-      Somos la empresa líder en suministro de personal logístico, de seguridad, PMT, montaje, aseo y protocolo para eventos masivos en Colombia.
-    </p>
-    <div class="flex flex-col sm:flex-row gap-4">
-      <a href="/enrolamiento" class="px-8 py-4 rounded-xl font-bold text-lg transition shadow-lg" style="background:#cf9b62; color:#1a1a1a;">
-        Trabaja con nosotros
-      </a>
-      <a href="/enrolamiento/login" class="border px-8 py-4 rounded-xl font-semibold text-lg transition" style="border-color:#cf9b62; color:#5d4224;">
-        Iniciar Sesión
-      </a>
-      <a href="#servicios" class="border px-8 py-4 rounded-xl font-semibold text-lg transition" style="border-color:#976e41; color:#785631;">
-        Nuestros servicios
-      </a>
+    <script>
+      document.querySelector('#logo-container img').onerror=function(){
+        var c=this.parentElement;
+        c.style.background='radial-gradient(circle,#cf9b62,#5d4224)';
+        c.innerHTML='<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-family:Playfair Display,serif;font-weight:900;font-size:1.3rem;color:#050505;">A&C</span>';
+      };
+    </script>
+
+    <div class="hero-content">
+      <p class="hero-subtitle">Gestión de Personal Eventual</p>
+      <h1 class="hero-title">
+        Conectamos talento<br>
+        <span>con eventos increíbles</span>
+      </h1>
+      <p class="hero-description">
+        Somos la empresa líder en suministro de personal logístico, de seguridad, PMT, montaje, aseo y protocolo para eventos masivos en Colombia.
+      </p>
+      <div class="cta-buttons">
+        <a href="/enrolamiento" class="btn-primary">Trabaja con nosotros</a>
+        <a href="/enrolamiento/login" class="btn-secondary">Iniciar Sesión</a>
+      </div>
     </div>
   </section>
 
-  <!-- Stats -->
-  <section class="max-w-6xl mx-auto px-6 pb-20">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
-        <div class="text-3xl font-extrabold" style="color:#cf9b62;">500+</div>
-        <div class="text-sm mt-1 text-gray-600">Eventos gestionados</div>
+  <!-- ========== GALLERY CAROUSEL ========== -->
+  <section class="gallery-section" id="galeria">
+    <div class="gallery-brush-1" style="top:10%;left:5%"></div>
+    <div class="brush-stroke-heavy brush-dry-2" style="bottom:8%;right:3%;transform:rotate(-8deg);opacity:0.2"></div>
+
+    <h2 class="gallery-title reveal">Nuestros Eventos</h2>
+    <p class="gallery-subtitle reveal">Momentos que conectan talento con experiencia</p>
+
+    <div class="carousel-wrapper">
+      <button class="carousel-nav carousel-nav-prev" id="carouselPrev" aria-label="Anterior">&#8249;</button>
+      <button class="carousel-nav carousel-nav-next" id="carouselNext" aria-label="Siguiente">&#8250;</button>
+      <div class="carousel-scene">
+        <div class="carousel-ring" id="carouselRing">
+          <div class="carousel-item" data-index="0">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_1.jpg" alt="Evento 1" loading="lazy"></div>
+          </div>
+          <div class="carousel-item" data-index="1">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_2.jpg" alt="Evento 2" loading="lazy"></div>
+          </div>
+          <div class="carousel-item" data-index="2">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Evento 3" loading="lazy"></div>
+          </div>
+          <div class="carousel-item" data-index="3">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_4.jpg" alt="Evento 4" loading="lazy"></div>
+          </div>
+          <div class="carousel-item" data-index="4">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_5.jpg" alt="Evento 5" loading="lazy"></div>
+          </div>
+          <div class="carousel-item" data-index="5">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_6.jpg" alt="Evento 6" loading="lazy"></div>
+          </div>
+          <div class="carousel-item" data-index="6">
+            <div class="carousel-item-img"><img src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Evento 7" loading="lazy"></div>
+          </div>
+        </div>
       </div>
-      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
-        <div class="text-3xl font-extrabold" style="color:#cf9b62;">1,200+</div>
-        <div class="text-sm mt-1 text-gray-600">Operadores activos</div>
-      </div>
-      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
-        <div class="text-3xl font-extrabold" style="color:#cf9b62;">15+</div>
-        <div class="text-sm mt-1 text-gray-600">Ciudades cubiertas</div>
-      </div>
-      <div class="rounded-xl p-6 text-center bg-gray-50 border border-gray-200">
-        <div class="text-3xl font-extrabold" style="color:#cf9b62;">98%</div>
-        <div class="text-sm mt-1 text-gray-600">Satisfacción del cliente</div>
-      </div>
+    </div>
+    <div class="carousel-dots" id="carouselDots"></div>
+  </section>
+
+  <!-- ========== STATS ========== -->
+  <section class="stats">
+    <!-- Brochazos decorativos entre secciones -->
+    <div class="brush-stroke-heavy brush-dry-1" style="top:0;left:10%;transform:rotate(-5deg);opacity:0.3"></div>
+    <div class="brush-stroke-heavy brush-gold-2" style="bottom:0;right:5%;transform:rotate(8deg);opacity:0.25"></div>
+
+    <div class="stats-grid">
+      <div class="stat-card reveal"><div class="stat-number">500+</div><div class="stat-label">Eventos gestionados</div></div>
+      <div class="stat-card reveal"><div class="stat-number">1,200+</div><div class="stat-label">Operadores activos</div></div>
+      <div class="stat-card reveal"><div class="stat-number">15+</div><div class="stat-label">Ciudades cubiertas</div></div>
+      <div class="stat-card reveal"><div class="stat-number">98%</div><div class="stat-label">Satisfacción del cliente</div></div>
     </div>
   </section>
 
-  <!-- Servicios -->
-  <section id="servicios" class="max-w-6xl mx-auto px-6 pb-20">
-    <h2 class="text-3xl font-bold text-center mb-12" style="color:#5d4224;">Nuestros Servicios</h2>
-    <div class="grid md:grid-cols-3 gap-6">
-      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200 hover:border-opacity-60" style="--tw-border-opacity:1; border-color:rgba(207,155,98,0.4);">
-        <div class="text-3xl mb-3">📦</div>
-        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Logística y Montaje</h3>
-        <p class="text-sm text-gray-600">Coordinación general, montaje y desmontaje de infraestructura para eventos de cualquier escala.</p>
-      </div>
-      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
-        <div class="text-3xl mb-3">🛡️</div>
-        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Seguridad y Control</h3>
-        <p class="text-sm text-gray-600">Líderes y operadores de seguridad (Bouncer), control de acceso y acompañamiento VIP.</p>
-      </div>
-      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
-        <div class="text-3xl mb-3">🚦</div>
-        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">PMT - Tráfico</h3>
-        <p class="text-sm text-gray-600">Plan de Manejo de Tráfico vehicular y peatonal con personal certificado.</p>
-      </div>
-      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
-        <div class="text-3xl mb-3">🧹</div>
-        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Aseo y Mantenimiento</h3>
-        <p class="text-sm text-gray-600">Operadores de aseo especializados para mantener impecables tus eventos.</p>
-      </div>
-      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
-        <div class="text-3xl mb-3">🚨</div>
-        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Brigadas de Emergencia</h3>
-        <p class="text-sm text-gray-600">Brigadistas y coordinadores de emergencias capacitados para respuesta inmediata.</p>
-      </div>
-      <div class="rounded-xl p-6 transition bg-gray-50 border border-gray-200">
-        <div class="text-3xl mb-3">🎯</div>
-        <h3 class="font-semibold text-lg mb-2" style="color:#5d4224;">Protocolo y Acomodación</h3>
-        <p class="text-sm text-gray-600">Personal de protocolo, acomodadores y azafatas para atención institucional.</p>
-      </div>
+  <!-- ========== SERVICES ========== -->
+  <section class="services" id="services">
+    <div class="brush-stroke-heavy brush-gold-4" style="top:5%;left:0%;opacity:0.25"></div>
+
+    <h2 class="section-title reveal">Nuestros Servicios</h2>
+    <div class="services-grid">
+      <div class="service-card reveal"><div class="service-icon">📦</div><h3 class="service-title">Logística y Montaje</h3><p class="service-description">Coordinación general, montaje y desmontaje de infraestructura para eventos de cualquier escala.</p></div>
+      <div class="service-card reveal"><div class="service-icon">🛡️</div><h3 class="service-title">Seguridad y Control</h3><p class="service-description">Líderes y operadores de seguridad (Bouncer), control de acceso y acompañamiento VIP.</p></div>
+      <div class="service-card reveal"><div class="service-icon">🚦</div><h3 class="service-title">PMT - Tráfico</h3><p class="service-description">Plan de Manejo de Tráfico vehicular y peatonal con personal certificado.</p></div>
+      <div class="service-card reveal"><div class="service-icon">🧹</div><h3 class="service-title">Aseo y Mantenimiento</h3><p class="service-description">Operadores de aseo especializados para mantener impecables tus eventos.</p></div>
+      <div class="service-card reveal"><div class="service-icon">🚨</div><h3 class="service-title">Brigadas de Emergencia</h3><p class="service-description">Brigadistas y coordinadores de emergencias capacitados para respuesta inmediata.</p></div>
+      <div class="service-card reveal"><div class="service-icon">🎯</div><h3 class="service-title">Protocolo y Acomodación</h3><p class="service-description">Personal de protocolo, acomodadores y azafatas para atención institucional.</p></div>
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="max-w-4xl mx-auto px-6 pb-20 text-center">
-    <div class="rounded-2xl p-10 shadow-2xl" style="background: linear-gradient(135deg, #cf9b62, #b48450);">
-      <h2 class="text-3xl font-bold mb-4" style="color:#1a1a1a;">¿Quieres ser parte de nuestro equipo?</h2>
-      <p class="mb-8 text-lg" style="color:#5d4224;">Regístrate y comienza a recibir invitaciones para eventos en tu ciudad. Maneja tu disponibilidad por WhatsApp.</p>
-      <a href="/enrolamiento" class="inline-block font-bold px-8 py-4 rounded-xl transition shadow-lg" style="background:#5d4224; color:#fff2e4;">
-        👉 Regístrate aquí
-      </a>
+  <!-- ========== CTA ========== -->
+  <section class="cta-section">
+    <div class="brush-stroke-heavy brush-gold-1" style="top:20%;right:-10%;opacity:0.2"></div>
+    <div class="brush-stroke-heavy brush-dry-2" style="bottom:15%;left:5%;opacity:0.2"></div>
+
+    <div class="cta-card reveal-scale">
+      <h2 class="cta-title">¿Quieres ser parte de nuestro equipo?</h2>
+      <p class="cta-description">Regístrate y comienza a recibir invitaciones para eventos en tu ciudad. Maneja tu disponibilidad por WhatsApp.</p>
+      <a href="/enrolamiento" class="btn-primary">👉 Regístrate aquí</a>
     </div>
   </section>
 
-</div>
-{% endblock %}
+  <!-- ========== FOOTER ========== -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>AyC Eventos</h3>
+        <p>A y C LOGISTICA y PRODUCCION DE EVENTOS LTDA</p>
+        <p style="margin-top:0.5rem">Gestión de personal eventual para eventos masivos en Colombia.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Contacto</h3>
+        <p>📍 Cr 59D # 131-72, Bogotá - Suba</p>
+        <p>📱 +57 312 395 5552</p>
+        <p>📧 casas.logisticayeventos@gmail.com</p>
+      </div>
+      <div class="footer-section">
+        <h3>Enlaces</h3>
+        <a href="/enrolamiento">Trabaja con nosotros</a>
+        <a href="/enrolamiento/login">Iniciar Sesión</a>
+        <a href="#services">Servicios</a>
+      </div>
+    </div>
+  <div class="footer-bottom">© 2026 AyC Eventos — A y C Logística y Producción de Eventos LTDA. Todos los derechos reservados.</div>
+  </footer>
 
-{% block footer %}
-<footer class="border-t" style="background:#5d4224; border-color:#785631;">
-  <div class="max-w-6xl mx-auto px-6 py-12">
-    <div class="grid md:grid-cols-3 gap-8 text-white">
-      <div>
-        <h3 class="font-bold text-lg mb-3" style="color:#cf9b62;">AyC Eventos</h3>
-        <p class="text-sm opacity-90">A y C LOGISTICA y PRODUCCION DE EVENTOS LTDA</p>
-        <p class="text-sm opacity-80 mt-2">Gestión de personal eventual para eventos masivos en Colombia.</p>
-      </div>
-      <div>
-        <h3 class="font-bold text-lg mb-3" style="color:#cf9b62;">Contacto</h3>
-        <p class="text-sm opacity-90">📍 Cr 59D # 131-72, Bogotá - Suba</p>
-        <p class="text-sm opacity-90 mt-1">📱 +57 312 395 5552</p>
-        <p class="text-sm opacity-90 mt-1">📧 casas.logisticayeventos@gmail.com</p>
-      </div>
-      <div>
-        <h3 class="font-bold text-lg mb-3" style="color:#cf9b62;">Enlaces</h3>
-        <a href="/enrolamiento" class="block text-sm opacity-90 hover:opacity-100 mb-1">Trabaja con nosotros</a>
-        <a href="/enrolamiento/login" class="block text-sm opacity-90 hover:opacity-100 mb-1">Iniciar Sesión</a>
-        <a href="#servicios" class="block text-sm opacity-90 hover:opacity-100">Servicios</a>
-      </div>
-    </div>
-    <div class="border-t mt-8 pt-6 text-center text-sm opacity-70" style="border-color:#785631;">
-      © 2025 AyC Eventos — A y C Logística y Producción de Eventos LTDA. Todos los derechos reservados.
-    </div>
-  </div>
-</footer>
-{% endblock %}
+  <script>
+  (function(){
+    // ===== PARALLAX ON SCROLL =====
+    const parallaxEls = document.querySelectorAll('[data-speed]');
+    let ticking = false;
+
+    function updateParallax(){
+      const scrollY = window.pageYOffset;
+      parallaxEls.forEach(function(el){
+        const speed = parseFloat(el.getAttribute('data-speed'));
+        const rect = el.parentElement.getBoundingClientRect();
+        const offset = (scrollY - el.parentElement.offsetTop) * speed;
+        el.style.transform = el.style.transform.replace(/translateY\([^)]*\)/, '') + ' translateY(' + offset + 'px)';
+      });
+      ticking = false;
+    }
+
+    window.addEventListener('scroll', function(){
+      if(!ticking){
+        requestAnimationFrame(updateParallax);
+        ticking = true;
+      }
+    }, {passive: true});
+
+    // ===== HERO PARALLAX (brochazos se mueven al scroll) =====
+    const hero = document.querySelector('.hero');
+    const heroBrushes = hero.querySelectorAll('[data-speed]');
+    
+    function heroParallax(){
+      const scrollY = window.pageYOffset;
+      const heroH = hero.offsetHeight;
+      if(scrollY < heroH){
+        heroBrushes.forEach(function(el){
+          const speed = parseFloat(el.getAttribute('data-speed'));
+          const y = scrollY * speed;
+          // Append translateY preserving existing transforms
+          const base = el.style.transform.replace(/translateY\([^)]*\)/g,'').trim();
+          el.style.transform = base + ' translateY(' + y + 'px)';
+        });
+        // Hero content moves slower
+        const content = document.querySelector('.hero-content');
+        if(content){
+          content.style.transform = 'translateY(' + (scrollY * 0.4) + 'px)';
+          content.style.opacity = 1 - (scrollY / (heroH * 0.8));
+        }
+      }
+      ticking = false;
+    }
+
+    window.addEventListener('scroll', function(){
+      if(!ticking){
+        requestAnimationFrame(heroParallax);
+        ticking = true;
+      }
+    }, {passive: true});
+
+    // ===== SCROLL REVEAL (Intersection Observer) =====
+    const reveals = document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-scale');
+    
+    const observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(entry.isIntersecting){
+          entry.target.classList.add('visible');
+        }
+      });
+    }, {
+      threshold: 0.15,
+      rootMargin: '0px 0px -50px 0px'
+    });
+
+    reveals.forEach(function(el){ observer.observe(el); });
+
+    // ===== STAT COUNTER ANIMATION =====
+    const statNumbers = document.querySelectorAll('.stat-number');
+    let statsCounted = false;
+
+    const statObserver = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(entry.isIntersecting && !statsCounted){
+          statsCounted = true;
+          statNumbers.forEach(function(num){
+            const text = num.textContent;
+            const match = text.match(/(\d[\d,]*)/);
+            if(match){
+              const target = parseInt(match[1].replace(/,/g,''));
+              const suffix = text.replace(match[1],'');
+              const prefix = text.substring(0, text.indexOf(match[1]));
+              let current = 0;
+              const step = Math.ceil(target / 60);
+              const interval = setInterval(function(){
+                current += step;
+                if(current >= target){
+                  current = target;
+                  clearInterval(interval);
+                }
+                num.textContent = prefix + current.toLocaleString() + suffix;
+              }, 25);
+            }
+          });
+        }
+      });
+    }, {threshold: 0.3});
+
+    const statsSection = document.querySelector('.stats');
+    if(statsSection) statObserver.observe(statsSection);
+
+    // ===== 3D CIRCULAR CAROUSEL =====
+    (function(){
+      var ring = document.getElementById('carouselRing');
+      var dotsContainer = document.getElementById('carouselDots');
+      var prevBtn = document.getElementById('carouselPrev');
+      var nextBtn = document.getElementById('carouselNext');
+      if(!ring || !dotsContainer) return;
+
+      var items = ring.querySelectorAll('.carousel-item');
+      var total = items.length;
+      var current = 0;
+      var autoInterval = null;
+      var angleStep = 360 / total;
+      // Calculate translateZ based on item width
+      var isMobile = window.innerWidth <= 480;
+      var isTablet = window.innerWidth <= 768;
+      var tz = isMobile ? 180 : (isTablet ? 240 : 320);
+
+      // Position items in a circle
+      function positionItems(){
+        for(var i = 0; i < total; i++){
+          var angle = angleStep * i;
+          items[i].style.transform = 'rotateY(' + angle + 'deg) translateZ(' + tz + 'px)';
+        }
+      }
+
+      // Create dots
+      function createDots(){
+        dotsContainer.innerHTML = '';
+        for(var i = 0; i < total; i++){
+          var dot = document.createElement('div');
+          dot.className = 'carousel-dot' + (i === current ? ' active' : '');
+          dot.setAttribute('data-index', i);
+          dot.addEventListener('click', function(){
+            goTo(parseInt(this.getAttribute('data-index')));
+          });
+          dotsContainer.appendChild(dot);
+        }
+      }
+
+      // Update active state
+      function updateActive(){
+        for(var i = 0; i < total; i++){
+          items[i].classList.toggle('active', i === current);
+        }
+        var dots = dotsContainer.querySelectorAll('.carousel-dot');
+        for(var i = 0; i < dots.length; i++){
+          dots[i].classList.toggle('active', i === current);
+        }
+      }
+
+      // Go to specific slide
+      function goTo(index){
+        current = ((index % total) + total) % total;
+        var rotateY = -current * angleStep;
+        ring.style.transform = 'rotateY(' + rotateY + 'deg)';
+        updateActive();
+        resetAuto();
+      }
+
+      // Navigation
+      function next(){ goTo(current + 1); }
+      function prev(){ goTo(current - 1); }
+
+      if(prevBtn) prevBtn.addEventListener('click', prev);
+      if(nextBtn) nextBtn.addEventListener('click', next);
+
+      // Auto-rotation
+      function startAuto(){
+        autoInterval = setInterval(next, 4000);
+      }
+      function stopAuto(){
+        if(autoInterval) clearInterval(autoInterval);
+      }
+      function resetAuto(){
+        stopAuto();
+        startAuto();
+      }
+
+      // Pause on hover
+      var wrapper = document.querySelector('.carousel-wrapper');
+      if(wrapper){
+        wrapper.addEventListener('mouseenter', stopAuto);
+        wrapper.addEventListener('mouseleave', startAuto);
+      }
+
+      // Touch/swipe support
+      var touchStartX = 0;
+      var touchEndX = 0;
+      if(wrapper){
+        wrapper.addEventListener('touchstart', function(e){
+          touchStartX = e.changedTouches[0].screenX;
+          stopAuto();
+        }, {passive: true});
+        wrapper.addEventListener('touchend', function(e){
+          touchEndX = e.changedTouches[0].screenX;
+          var diff = touchStartX - touchEndX;
+          if(Math.abs(diff) > 50){
+            if(diff > 0) next(); else prev();
+          }
+          startAuto();
+        }, {passive: true});
+      }
+
+      // Keyboard navigation
+      document.addEventListener('keydown', function(e){
+        if(e.key === 'ArrowLeft') prev();
+        if(e.key === 'ArrowRight') next();
+      });
+
+      // Init
+      positionItems();
+      createDots();
+      goTo(0);
+      startAuto();
+
+      // Handle resize
+      var resizeTimer;
+      window.addEventListener('resize', function(){
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function(){
+          isMobile = window.innerWidth <= 480;
+          isTablet = window.innerWidth <= 768;
+          tz = isMobile ? 180 : (isTablet ? 240 : 320);
+          positionItems();
+          goTo(current);
+        }, 250);
+      });
+    })();
+
+  })();
+  </script>
+</body>
+</html>

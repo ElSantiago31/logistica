@@ -1,13 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Mi Perfil - Operador{% endblock %}
+{% block head %}
+<style>
+  body{background:#050505!important;display:flex!important;flex-direction:column!important;min-height:100vh!important}
+  main{flex:1!important;position:relative}
+  main::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;
+    background:radial-gradient(ellipse at 50% 0%,rgba(207,155,98,0.06) 0%,transparent 60%)}
+  .noise-overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.03;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .profile-container{position:relative;z-index:1;max-width:42rem;margin:0 auto;padding:2rem 1rem}
+  .profile-card{background:rgba(10,10,10,0.92);border:1px solid rgba(207,155,98,0.25);border-radius:12px;padding:1.5rem;
+    box-shadow:0 0 40px rgba(207,155,98,0.08);margin-bottom:1.5rem}
+  .profile-card h2{color:#cf9b62!important;border-color:rgba(207,155,98,0.2)!important}
+  .profile-card p,.profile-card label{color:#d4b896!important}
+  .profile-card .text-gray-500{color:#785631!important}
+  .profile-card .text-gray-400{color:rgba(207,155,98,0.5)!important}
+  .profile-card .text-gray-700{color:#d4b896!important}
+  .profile-card input,.profile-card select{background:rgba(15,15,15,0.9)!important;border:1px solid rgba(207,155,98,0.3)!important;color:#f5f5f5!important;border-radius:8px}
+  .profile-card input:focus,.profile-card select:focus{border-color:#cf9b62!important;box-shadow:0 0 12px rgba(207,155,98,0.25)!important;outline:none}
+  .profile-card input::placeholder{color:rgba(207,155,98,0.4)!important}
+  .profile-card select option{background:#1a1a1a;color:#f5f5f5}
+  .profile-card input[readonly]{opacity:0.6;cursor:default}
+  .profile-card .bg-gray-50{background:rgba(15,15,15,0.6)!important}
+  .profile-card .bg-gray-100{background:rgba(20,20,20,0.8)!important;border:1px solid rgba(207,155,98,0.15)!important;color:#d4b896!important}
+  .profile-card .bg-gray-200{background:rgba(207,155,98,0.15)!important}
+  .profile-card .border-gray-200{border-color:rgba(207,155,98,0.2)!important}
+  .profile-card .border-gray-300{border-color:rgba(207,155,98,0.25)!important}
+  .profile-card .hover\:bg-gray-50:hover{background:rgba(207,155,98,0.08)!important}
+  .profile-card .hover\:bg-gray-100:hover{background:rgba(207,155,98,0.12)!important}
+  .profile-card button.btn-logout{background:rgba(207,155,98,0.1)!important;border:1px solid rgba(207,155,98,0.3)!important;color:#cf9b62!important;font-weight:600}
+  .profile-card button.btn-logout:hover{background:rgba(207,155,98,0.2)!important}
+  .profile-card .text-red-600{color:#e87c6f!important}
+  .profile-card .text-green-600{color:#4ade80!important}
+  .profile-card .bg-green-50{background:rgba(74,222,128,0.1)!important}
+  .profile-card .bg-red-50{background:rgba(232,124,111,0.1)!important}
+  #not-logged{color:#785631!important}
+  #not-logged p{color:#d4b896!important}
+  #msg.bg-green-50{background:rgba(74,222,128,0.1)!important;color:#4ade80!important}
+  #msg.bg-red-50{background:rgba(232,124,111,0.1)!important;color:#e87c6f!important}
+  #nav-enroll-d,#nav-enroll-m,#hamburger-btn,#mobile-menu{display:none!important}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-2xl mx-auto px-4 py-8">
+<div class="noise-overlay"></div>
+<div class="profile-container">
   <div class="flex justify-between items-center mb-6">
     <div>
-      <h1 class="text-2xl font-bold" style="color:#5d4224;">Mi Perfil</h1>
-      <p class="text-gray-500 text-sm" id="user-email"></p>
+      <h1 class="text-2xl font-bold" style="color:#cf9b62">Mi Perfil</h1>
+      <p class="text-sm" style="color:#785631" id="user-email"></p>
     </div>
-    <button onclick="logout()" class="text-sm px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition">Cerrar Sesión</button>
+    <button onclick="logout()" class="text-sm px-4 py-2 rounded-lg transition font-semibold" style="background:rgba(207,155,98,0.15);border:1px solid rgba(207,155,98,0.4);color:#cf9b62;">Cerrar Sesión</button>
   </div>
 
   <div id="not-logged" class="hidden text-center py-12">
@@ -15,13 +58,13 @@
     <a href="/enrolamiento/login" class="inline-block px-6 py-2 rounded-lg font-semibold" style="background:#cf9b62; color:#1a1a1a;">Iniciar Sesión</a>
   </div>
 
-  <div id="photo-card" class="hidden bg-white rounded-xl shadow p-6 mb-6">
+  <div id="photo-card" class="hidden profile-card">
     <h2 class="font-semibold text-gray-700 border-b pb-2 mb-4">📸 Mi Foto</h2>
     <div class="flex items-center gap-6">
       <div id="photo-avatar" class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0"></div>
       <div class="flex-1">
         <input type="file" id="photo-file" accept="image/jpeg,image/png,image/webp" class="hidden">
-        <button type="button" onclick="document.getElementById('photo-file').click()" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-50 transition">📷 Cambiar Foto</button>
+        <button type="button" onclick="document.getElementById('photo-file').click()" class="px-4 py-2 rounded-lg text-sm font-medium border transition" style="border-color:rgba(207,155,98,0.4);color:#cf9b62;background:rgba(207,155,98,0.08)">📷 Cambiar Foto</button>
         <p class="text-xs text-gray-400 mt-2">JPG, PNG o WEBP. Máximo 5MB.</p>
         <p id="photo-status" class="text-xs mt-1 hidden"></p>
       </div>
@@ -29,7 +72,7 @@
   </div>
 
   <form id="profile-form" class="hidden space-y-6">
-    <div class="bg-white rounded-xl shadow p-6 space-y-4">
+    <div class="profile-card space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">📋 Datos Personales</h2>
       <div class="grid grid-cols-2 gap-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">Nombres</label><input type="text" id="first_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50" readonly></div>
@@ -42,7 +85,7 @@
       <div><label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label><input type="tel" id="phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"></div>
     </div>
 
-    <div class="bg-white rounded-xl shadow p-6 space-y-4">
+    <div class="profile-card space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">👷 Datos Laborales</h2>
       <div class="grid grid-cols-2 gap-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">EPS</label><select id="eps_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="">— Seleccionar —</option></select></div>
@@ -136,7 +179,7 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow p-6 space-y-4">
+    <div class="profile-card space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">🎯 Experiencia</h2>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Experiencia en eventos?</label>
@@ -151,7 +194,7 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow p-6 space-y-4">
+    <div class="profile-card space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">👕 Tallas</h2>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">Zapatos</label><input type="text" id="shoe_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></div>

@@ -1,38 +1,82 @@
 {% extends "base.html" %}
 {% block title %}Registro Exitoso - Logística{% endblock %}
-{% block content %}
-<div class="max-w-lg mx-auto px-4 py-8">
-    <div class="bg-white rounded-xl shadow-lg p-8 text-center">
-        <div class="text-6xl mb-4">🎉</div>
-        <h1 class="text-2xl font-bold text-green-600 mb-2">¡Registro Exitoso!</h1>
-        <p class="text-gray-600 mb-6">Tu registro ha sido procesado correctamente.</p>
+{% block head %}
+<style>
+  body{background:#050505!important;display:flex!important;flex-direction:column!important;min-height:100vh!important}
+  main{flex:1!important;position:relative}
+  main::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;
+    background:radial-gradient(ellipse at 50% 0%,rgba(207,155,98,0.06) 0%,transparent 60%)}
+  .noise-overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.03;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .success-container{position:relative;z-index:1;max-width:32rem;margin:0 auto;padding:2rem 1rem}
+  .success-card{background:rgba(10,10,10,0.92);border:1px solid rgba(207,155,98,0.25);border-radius:12px;padding:2rem;
+    box-shadow:0 0 40px rgba(207,155,98,0.08);text-align:center}
+  .success-card h1{color:#4ade80!important}
+  .success-card h3{color:#cf9b62!important}
+  .success-card p{color:#d4b896!important}
+  .success-card .text-gray-600{color:#d4b896!important}
+  .success-card .text-gray-500{color:#976e41!important}
+  .success-card .text-gray-400{color:rgba(207,155,98,0.5)!important}
+  .success-card .text-gray-700{color:#d4b896!important}
+  .success-card .bg-blue-50{background:rgba(207,155,98,0.08)!important;border-color:rgba(207,155,98,0.3)!important}
+  .success-card .text-blue-800{color:#cf9b62!important}
+  .success-card .text-blue-600{color:#d4b896!important}
+  .success-card #drop-zone{border-color:rgba(207,155,98,0.3)!important;background:rgba(15,15,15,0.6)!important}
+  .success-card #drop-zone:hover{border-color:#cf9b62!important}
+  .success-card a.text-primary-600{color:#cf9b62!important}
+  #nav-enroll-d,#nav-enroll-m,#hamburger-btn,#mobile-menu{display:none!important}
+</style>
+{% endblock %}
 
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p class="text-blue-800 font-medium">✅ Tu cuenta ha sido creada exitosamente</p>
-            <p class="text-blue-600 text-sm mt-1">Ya puedes iniciar sesión con tu número de documento y contraseña para completar tu perfil y subir tu foto.</p>
+{% block content %}
+<div class="noise-overlay"></div>
+<div class="success-container">
+    <div class="success-card">
+        <div class="text-6xl mb-4">🎉</div>
+        <h1 class="text-2xl font-bold mb-2">¡Registro Exitoso!</h1>
+        <p class="mb-6">Tu registro ha sido procesado correctamente.</p>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+            <p class="font-semibold mb-2" style="color:#cf9b62">📋 ¿Qué sigue? Sigue estos pasos:</p>
+            <div class="space-y-2 text-sm" style="color:#d4b896">
+                <div class="flex items-start gap-2">
+                    <span class="font-bold" style="color:#cf9b62">Paso 1.</span>
+                    <span>📸 Sube tu foto (procura no tener el rostro cubierto ni gafas oscuras, la foto es opcional)</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="font-bold" style="color:#cf9b62">Paso 2.</span>
+                    <span>🔑 Inicia sesión con tu <strong>número de cédula</strong> y la contraseña que creaste</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="font-bold" style="color:#cf9b62">Paso 3.</span>
+                    <span>✏️ Completa tu perfil si quedaron datos pendientes</span>
+                </div>
+            </div>
         </div>
 
-        <a href="/enrolamiento/login" class="inline-block mb-6 bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-8 rounded-lg transition">
+        <a id="login-link" href="/enrolamiento/login" class="inline-block mb-6 bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-8 rounded-lg transition" style="font-size:1.05rem">
             🔑 Iniciar Sesión
         </a>
 
         <div id="photo-section" class="mb-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-3">📸 Sube tu foto (opcional)</h3>
-            <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-primary-500 transition">
-                <input type="file" id="photo-input" accept="image/*" class="hidden">
-                <p class="text-gray-500">Arrastra una foto aquí o haz clic para seleccionar</p>
-                <p class="text-xs text-gray-400 mt-1">JPG, PNG. Máximo 5MB</p>
-            </div>
+            <h3 class="text-lg font-semibold mb-3">📸 Paso 1: Sube tu foto (opcional)</h3>
+            <button type="button" id="photo-select-btn" onclick="document.getElementById('photo-input').click()"
+                class="w-full py-4 rounded-lg font-semibold transition text-center cursor-pointer"
+                style="background:rgba(207,155,98,0.1);border:2px dashed rgba(207,155,98,0.3);color:#cf9b62">
+                📷 Toma una foto o selecciona una imagen<br>
+                <span class="text-xs" style="color:rgba(207,155,98,0.5)">Toca aquí · JPG, PNG · Máximo 5MB</span>
+            </button>
+            <input type="file" id="photo-input" accept="image/*" class="hidden">
             <div id="photo-preview" class="hidden mt-3">
-                <img id="preview-img" class="w-32 h-32 object-cover rounded-lg mx-auto">
+                <img id="preview-img" class="w-32 h-32 object-cover rounded-lg mx-auto" style="border:2px solid rgba(207,155,98,0.3)">
             </div>
-            <button id="upload-btn" onclick="uploadPhoto()" class="hidden mt-3 bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 px-6 rounded-lg transition">
-                Subir Foto
+            <button id="upload-btn" onclick="uploadPhoto()" class="hidden mt-3 w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 px-6 rounded-lg transition">
+                ✅ Subir Foto
             </button>
             <p id="upload-status" class="text-sm mt-2 hidden"></p>
         </div>
 
-        <a href="/" class="text-primary-600 hover:text-primary-800 font-medium">
+        <a href="/" class="font-medium" style="color:#cf9b62">
             ← Volver al Inicio
         </a>
     </div>
@@ -43,21 +87,20 @@
 <script>
 const params = new URLSearchParams(window.location.search);
 const userId = params.get('id');
+const docNumber = params.get('doc');
 
-const dropZone = document.getElementById('drop-zone');
+// Pass doc number to login page for pre-fill
+if (docNumber) {
+    const loginLink = document.getElementById('login-link');
+    if (loginLink) loginLink.href = '/enrolamiento/login?doc=' + encodeURIComponent(docNumber);
+}
+
 const photoInput = document.getElementById('photo-input');
 const preview = document.getElementById('photo-preview');
 const previewImg = document.getElementById('preview-img');
 const uploadBtn = document.getElementById('upload-btn');
+const photoSelectBtn = document.getElementById('photo-select-btn');
 
-dropZone.addEventListener('click', () => photoInput.click());
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-primary-500'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-primary-500'));
-dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('border-primary-500');
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-});
 photoInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
 
 function handleFile(file) {

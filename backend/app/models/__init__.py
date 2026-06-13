@@ -26,6 +26,7 @@ from app.models.payroll import Evaluation, Payroll, Signature
 
 # Security / Audit
 from app.models.audit import AuditLog, RevokedToken
+from app.models.blocked_document import BlockedDocument
 
 __all__ = [
     "BaseModel",
@@ -36,4 +37,5 @@ __all__ = [
     "SyncSession", "AttendanceLog",
     "Evaluation", "Payroll", "Signature",
     "AuditLog", "RevokedToken",
+    "BlockedDocument",
 ]

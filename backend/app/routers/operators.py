@@ -10,7 +10,10 @@ from app.database import get_db
 from app.models.users import User
 from app.models.operators import Operator
 from app.schemas.operators import OperatorResponse, OperatorListResponse, OperatorAdminUpdateRequest
-from app.services.operators import get_operators, get_operator, update_operator, delete_operator, upload_operator_photo
+from app.services.operators import (
+    get_operators, get_operator, update_operator, delete_operator, 
+    upload_operator_photo, block_operator, unblock_operator, search_blocked_documents
+)
 from app.dependencies.auth import get_current_active_user, require_admin_or_coordinator, require_superadmin
 
 router = APIRouter(prefix="/api/operators", tags=["Operators"])
@@ -229,6 +232,17 @@ def _save_operator_photo(operator: Operator, user_id: uuid.UUID, file_contents: 
 
 # --- Admin endpoints ---
 
+@router.get("/blocked/search")
+async def search_blocked(
+    search: Optional[str] = Query(None, min_length=1),
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Search blocked documents."""
+    results = await search_blocked_documents(db, search=search)
+    return {"items": results, "total": len(results)}
+
+
 @router.get("/", response_model=OperatorListResponse)
 async def list_operators(
     skip: int = Query(0, ge=0),
@@ -252,6 +266,39 @@ async def list_operators(
     )
     return OperatorListResponse(items=operators, total=total)
 
+@router.get("/{user_id}/block-info")
+async def get_block_info(
+    user_id: uuid.UUID,
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get block information for a specific operator."""
+    from app.models.blocked_document import BlockedDocument
+    blocks = await db.execute(
+        select(BlockedDocument).where(
+            BlockedDocument.operator_user_id == user_id,
+            BlockedDocument.is_active == True,
+        ).order_by(BlockedDocument.created_at.desc())
+    )
+    active_blocks = blocks.scalars().all()
+    if not active_blocks:
+        return {"blocked": False, "blocks": []}
+    return {
+        "blocked": True,
+        "blocks": [
+            {
+                "id": str(b.id),
+                "document_type": b.document_type,
+                "document_number": b.document_number,
+                "reason": b.reason,
+                "blocked_by": str(b.blocked_by) if b.blocked_by else None,
+                "created_at": str(b.created_at),
+            }
+            for b in active_blocks
+        ],
+    }
+
+
 @router.get("/{user_id}", response_model=OperatorResponse)
 async def get_operator_details(
     user_id: uuid.UUID,
@@ -259,10 +306,12 @@ async def get_operator_details(
     db: AsyncSession = Depends(get_db)
 ):
     """Get details of a specific operator."""
-    if current_user.user_type not in ["superadmin", "coordinator"] and current_user.id != user_id:
+    is_admin = current_user.user_type in ["superadmin", "coordinator"]
+    if not is_admin and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
         
-    operator = await get_operator(db, user_id)
+    # Admins can see inactive (blocked) operators
+    operator = await get_operator(db, user_id, include_inactive=is_admin)
     if not operator:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found")
         
@@ -276,14 +325,15 @@ async def update_operator_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """Update operator profile. Admins can update more fields than the operator themselves."""
-    if current_user.user_type not in ["superadmin", "coordinator"] and current_user.id != user_id:
+    is_admin = current_user.user_type in ["superadmin", "coordinator"]
+    if not is_admin and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
-    operator = await get_operator(db, user_id)
+    # Admins can update inactive (blocked) operators
+    operator = await get_operator(db, user_id, include_inactive=is_admin)
     if not operator:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found")
 
-    is_admin = current_user.user_type in ["superadmin", "coordinator"]
     updated_operator = await update_operator(db, user_id, update_data, is_admin=is_admin)
     return updated_operator
 
@@ -338,6 +388,34 @@ async def upload_photo(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando imagen: {str(e)}")
+
+
+@router.post("/{user_id}/block")
+async def block_operator_endpoint(
+    user_id: uuid.UUID,
+    request: dict,
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Block an operator — adds their document to the blocked list and deactivates them."""
+    reason = request.get("reason", "Bloqueado por administrador")
+    success = await block_operator(db, user_id, current_user.id, reason=reason)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador no encontrado")
+    return {"message": "Operador bloqueado exitosamente"}
+
+
+@router.post("/{user_id}/unblock")
+async def unblock_operator_endpoint(
+    user_id: uuid.UUID,
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unblock a previously blocked operator — reactivates their account."""
+    success = await unblock_operator(db, user_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador no encontrado")
+    return {"message": "Operador desbloqueado exitosamente"}
 
 
 @router.post("/{user_id}/enrollment-photo")

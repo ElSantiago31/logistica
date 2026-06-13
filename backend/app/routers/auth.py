@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.users import User
 from app.models.operators import Operator
 from app.models.audit import AuditLog
+from app.models.blocked_document import BlockedDocument
 from app.schemas.auth import (
     LoginRequest, LoginResponse, UserBrief,
     RegisterRequest, RegisterResponse,
@@ -104,6 +105,20 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
             detail="El número de documento ya está registrado",
         )
 
+    # Check if document number is blocked
+    blocked = await db.execute(
+        select(BlockedDocument).where(
+            BlockedDocument.document_number == body.document_number,
+            BlockedDocument.document_type == body.document_type,
+            BlockedDocument.is_active == True,
+        )
+    )
+    if blocked.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Este documento ha sido bloqueado. Contacte al administrador.",
+        )
+
     # Create user (auto-approved on registration)
     user = User(
         email=body.email,
@@ -135,9 +150,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         has_protocol_experience=body.has_protocol_experience,
         event_size_experience=body.event_size_experience,
         education_level=body.education_level,
-        shoe_size=body.shoe_size,
         shirt_size=body.shirt_size,
-        pants_size=body.pants_size,
         jacket_size=body.jacket_size,
         experience_roles=json.dumps([str(r) for r in body.experience_roles]) if body.experience_roles else None,
     )

@@ -97,7 +97,7 @@ function addStaffRow(){
     row.innerHTML=`
         <select class="staff-role border rounded-lg px-3 py-2 text-sm col-span-2 sm:col-span-1"><option value="">Seleccionar rol</option>${opts}</select>
         <input type="number" class="staff-qty border rounded-lg px-3 py-2 text-sm" min="1" value="1" placeholder="Cant.">
-        <input type="number" class="staff-rate border rounded-lg px-3 py-2 text-sm" step="1" placeholder="Costo/turno $">
+        <input type="number" class="staff-rate border rounded-lg px-3 py-2 text-sm" step="1" placeholder="Pago/turno operador $">
         <select class="staff-edu border rounded-lg px-2 py-2 text-xs">${eduOpts}</select>
         <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
     div.appendChild(row);

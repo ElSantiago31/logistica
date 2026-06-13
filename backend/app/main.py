@@ -111,6 +111,12 @@ async def enrollment_page(request: Request):
     return templates.TemplateResponse("landing/index.html", {"request": request})
 
 
+@app.get("/politica-tratamiento-datos", response_class=HTMLResponse)
+async def data_treatment_policy(request: Request):
+    """Pública: Política de tratamiento de datos personales (Ley 1581 de 2012)."""
+    return templates.TemplateResponse("landing/politica_datos.html", {"request": request})
+
+
 @app.get("/enrolamiento/success", response_class=HTMLResponse)
 async def enrollment_success(request: Request):
     return templates.TemplateResponse("landing/success.html", {"request": request})

@@ -23,40 +23,65 @@
     <style>
         .toast { animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        body { background: linear-gradient(135deg, #5d4224 0%, #976e41 50%, #cf9b62 100%); }
+        body { background:#050505; position:relative; }
+        body::before { content:''; position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0;
+            background:radial-gradient(ellipse at 50% 0%,rgba(207,155,98,0.06) 0%,transparent 60%); }
+        .noise-overlay { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; opacity:0.03;
+            background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+        .login-container { position:relative; z-index:1; max-width:40rem; width:100%; margin:0 auto; padding:2rem 1rem; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+        .login-card { background:rgba(10,10,10,0.92); border:1px solid rgba(207,155,98,0.25); border-radius:16px; padding:2rem;
+            box-shadow:0 0 40px rgba(207,155,98,0.08); width:100%; }
+        .login-card h1 { color:#cf9b62!important; }
+        .login-card p { color:#785631!important; }
+        .login-card label { color:#d4b896!important; }
+        .login-card input { background:rgba(15,15,15,0.9)!important; border:1px solid rgba(207,155,98,0.3)!important; color:#f5f5f5!important; border-radius:8px }
+        .login-card input:focus { border-color:#cf9b62!important; box-shadow:0 0 12px rgba(207,155,98,0.25)!important; outline:none }
+        .login-card input::placeholder { color:rgba(207,155,98,0.4)!important; }
+        .login-card .text-gray-500 { color:#785631!important; }
+        .login-card .text-gray-700 { color:#d4b896!important; }
+        .login-card .border-gray-200 { border-color:rgba(207,155,98,0.2)!important; }
+        .login-card a { color:#cf9b62!important; }
+        .login-card a:hover { color:#e3be95!important; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center">
+    <div class="noise-overlay"></div>
     <!-- Toast container -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
-    <div class="max-w-md w-full mx-4">
-        <div class="bg-white rounded-2xl shadow-2xl p-8 border border-primary-100">
+    <div class="login-container">
+        <div class="login-card">
             <!-- Logo -->
             <div class="text-center mb-8">
                 <img src="/static/frontend/logo.jpeg" alt="A&C Logística" class="w-24 h-24 rounded-full object-cover mx-auto mb-3 shadow-lg border-4" style="border-color:#cf9b62;">
-                <h1 class="text-2xl font-bold" style="color:#785631;">A&amp;C Logística</h1>
-                <p class="text-gray-500 mt-1 text-sm">Panel de Administración</p>
+                <h1 class="text-2xl font-bold">A&C Logística</h1>
+                <p class="mt-1 text-sm">Panel de Administración</p>
             </div>
 
             <!-- Login Form -->
             <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Número de Documento</label>
+                    <label class="block text-sm font-medium mb-1">Número de Documento</label>
                     <input type="text" id="document_number" required
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                        class="w-full px-4 py-3"
                         placeholder="Ej: 1234567890">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-                    <input type="password" id="password" required
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
-                        placeholder="••••••••">
+                    <label class="block text-sm font-medium mb-1">Contraseña</label>
+                    <div class="relative">
+                        <input type="password" id="password" required
+                            class="w-full px-4 py-3 pr-12"
+                            placeholder="••••••••">
+                        <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 p-1" style="color:#cf9b62;">
+                            <svg id="eyeIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            <svg id="eyeOffIcon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                        </button>
+                    </div>
                 </div>
                 <button type="submit" id="submitBtn"
-                    class="w-full text-white py-3 rounded-lg font-semibold transition duration-200 flex items-center justify-center hover:opacity-90" style="background: linear-gradient(135deg, #785631, #cf9b62);">
+                    class="w-full py-3 rounded-lg font-semibold transition duration-200 flex items-center justify-center hover:opacity-90" style="background:#cf9b62; color:#1a1a1a;">
                     <span id="btnText">Iniciar Sesión</span>
-                    <svg id="btnSpinner" class="hidden animate-spin h-5 w-5 ml-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg id="btnSpinner" class="hidden animate-spin h-5 w-5 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -64,14 +89,14 @@
             </form>
 
             <!-- Links -->
-            <div class="text-center mt-6 pt-6 border-t border-gray-200 space-y-3">
-                <a href="/" class="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 font-medium">
+            <div class="text-center mt-6 pt-6 border-t space-y-3" style="border-color:rgba(207,155,98,0.2)">
+                <a href="/" class="inline-flex items-center gap-2 text-sm font-medium">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                     Ir al inicio
                 </a>
-                <a href="/enrolamiento/forgot-password" class="text-sm text-primary-600 hover:text-primary-800 font-medium">¿Olvidaste tu contraseña?</a>
-                <p class="text-sm text-gray-500">¿Eres operador?</p>
-                <a href="/enrolamiento" class="text-sm text-primary-600 hover:text-primary-800 font-medium">Regístrate aquí</a>
+                <a href="/enrolamiento/forgot-password" class="text-sm font-medium">¿Olvidaste tu contraseña?</a>
+                <p class="text-sm" style="color:#785631">¿Eres operador?</p>
+                <a href="/enrolamiento" class="text-sm font-medium">Regístrate aquí</a>
             </div>
         </div>
     </div>
@@ -85,6 +110,21 @@
                 window.location.href = '/admin';
             }
         })();
+
+        function togglePassword() {
+            const pw = document.getElementById('password');
+            const eye = document.getElementById('eyeIcon');
+            const eyeOff = document.getElementById('eyeOffIcon');
+            if (pw.type === 'password') {
+                pw.type = 'text';
+                eye.classList.add('hidden');
+                eyeOff.classList.remove('hidden');
+            } else {
+                pw.type = 'password';
+                eye.classList.remove('hidden');
+                eyeOff.classList.add('hidden');
+            }
+        }
 
         function showToast(message, type = 'error') {
             const container = document.getElementById('toast-container');

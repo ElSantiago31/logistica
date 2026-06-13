@@ -1,4 +1,67 @@
 <!-- Admin responsive navbar — include with {% set active_page='dashboard' %} before including -->
+<style>
+  /* Dark theme overrides for admin */
+  [data-theme="dark"] body { background:#0a0a0a!important; color:#e5e5e5!important; }
+  [data-theme="dark"] .bg-white,
+  [data-theme="dark"] [class*="bg-white"] { background:rgba(18,18,18,0.95)!important; color:#e5e5e5!important; border-color:rgba(207,155,98,0.15)!important; }
+  [data-theme="dark"] .bg-gray-50 { background:#0a0a0a!important; }
+  [data-theme="dark"] .bg-gray-100 { background:#141414!important; }
+  [data-theme="dark"] .bg-gray-200 { background:#1f1f1f!important; }
+  [data-theme="dark"] .text-gray-800 { color:#f5f5f5!important; }
+  [data-theme="dark"] .text-gray-700 { color:#d4d4d4!important; }
+  [data-theme="dark"] .text-gray-600 { color:#a3a3a3!important; }
+  [data-theme="dark"] .text-gray-500 { color:#737373!important; }
+  [data-theme="dark"] .text-gray-400 { color:#525252!important; }
+  [data-theme="dark"] .text-gray-300 { color:#404040!important; }
+  [data-theme="dark"] .border-gray-100 { border-color:rgba(207,155,98,0.1)!important; }
+  [data-theme="dark"] .border-gray-200 { border-color:rgba(207,155,98,0.15)!important; }
+  [data-theme="dark"] .border-gray-300 { border-color:rgba(207,155,98,0.2)!important; }
+  [data-theme="dark"] .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color:rgba(207,155,98,0.1)!important; }
+  [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+    background:rgba(18,18,18,0.95)!important; color:#f5f5f5!important; border-color:rgba(207,155,98,0.25)!important; }
+  [data-theme="dark"] input:focus, [data-theme="dark"] select:focus { border-color:#cf9b62!important; box-shadow:0 0 12px rgba(207,155,98,0.2)!important; }
+  [data-theme="dark"] table thead { background:rgba(18,18,18,0.95)!important; }
+  [data-theme="dark"] table tbody tr { border-color:rgba(207,155,98,0.1)!important; }
+  [data-theme="dark"] table th { color:#cf9b62!important; }
+  [data-theme="dark"] table td { color:#d4d4d4!important; }
+  [data-theme="dark"] .shadow-lg { box-shadow:0 0 30px rgba(0,0,0,0.5)!important; }
+  [data-theme="dark"] .shadow { box-shadow:0 0 20px rgba(0,0,0,0.4)!important; }
+  [data-theme="dark"] .bg-primary-50 { background:rgba(207,155,98,0.08)!important; }
+  [data-theme="dark"] .bg-green-50 { background:rgba(74,222,128,0.08)!important; }
+  [data-theme="dark"] .bg-amber-50 { background:rgba(245,158,11,0.08)!important; }
+  [data-theme="dark"] .bg-blue-50 { background:rgba(59,130,246,0.08)!important; }
+  [data-theme="dark"] .bg-red-50 { background:rgba(239,68,68,0.08)!important; }
+  [data-theme="dark"] .bg-yellow-50 { background:rgba(234,179,8,0.08)!important; }
+  [data-theme="dark"] .bg-purple-50 { background:rgba(168,85,247,0.08)!important; }
+  [data-theme="dark"] .bg-pink-50 { background:rgba(236,72,153,0.08)!important; }
+  [data-theme="dark"] .bg-teal-50 { background:rgba(20,184,166,0.08)!important; }
+  [data-theme="dark"] .bg-orange-50 { background:rgba(249,115,22,0.08)!important; }
+  [data-theme="dark"] .bg-indigo-50 { background:rgba(99,102,241,0.08)!important; }
+  [data-theme="dark"] .bg-cyan-50 { background:rgba(6,182,212,0.08)!important; }
+  [data-theme="dark"] .bg-amber-100 { background:rgba(245,158,11,0.12)!important; }
+  [data-theme="dark"] .bg-yellow-100 { background:rgba(234,179,8,0.12)!important; }
+  [data-theme="dark"] .hover\:bg-gray-50:hover { background:rgba(207,155,98,0.05)!important; }
+  [data-theme="dark"] .hover\:bg-gray-100:hover { background:rgba(207,155,98,0.08)!important; }
+  [data-theme="dark"] a { color:#cf9b62; }
+  [data-theme="dark"] .text-primary-600 { color:#cf9b62!important; }
+  [data-theme="dark"] .text-blue-700 { color:#60a5fa!important; }
+  [data-theme="dark"] .text-green-700 { color:#4ade80!important; }
+  [data-theme="dark"] .text-purple-700 { color:#a78bfa!important; }
+  [data-theme="dark"] .text-orange-700 { color:#fb923c!important; }
+  [data-theme="dark"] .text-pink-700 { color:#f472b6!important; }
+  [data-theme="dark"] .text-teal-700 { color:#2dd4bf!important; }
+  [data-theme="dark"] .text-yellow-700 { color:#facc15!important; }
+  [data-theme="dark"] .text-indigo-700 { color:#818cf8!important; }
+  [data-theme="dark"] .text-red-700 { color:#f87171!important; }
+  [data-theme="dark"] .text-cyan-700 { color:#22d3ee!important; }
+  [data-theme="dark"] .text-amber-700 { color:#fbbf24!important; }
+  [data-theme="dark"] .text-amber-800 { color:#f59e0b!important; }
+  [data-theme="dark"] .text-yellow-800 { color:#eab308!important; }
+  [data-theme="dark"] .text-green-600 { color:#4ade80!important; }
+  /* Theme toggle button */
+  .theme-toggle { cursor:pointer; padding:6px; border-radius:8px; transition:background 0.2s; border:none; background:transparent; }
+  .theme-toggle:hover { background:rgba(255,255,255,0.15); }
+</style>
 <nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div class="flex justify-between h-14 sm:h-16">
@@ -17,6 +80,10 @@
             <div class="flex items-center space-x-2 sm:space-x-4">
                 <a id="superadminLink" href="/admin/superadmin" class="hidden px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold hover:opacity-90" style="background:#785631;color:#fff2e4;"><span class="hidden sm:inline">⚙️ Superadmin</span><span class="sm:hidden">⚙️</span></a>
                 <span id="userName" class="text-xs sm:text-sm hidden sm:inline" style="color:#e3be95;"></span>
+                <button onclick="toggleAdminTheme()" class="theme-toggle" id="theme-toggle-btn" title="Cambiar tema claro/oscuro">
+                  <svg id="theme-icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                  <svg id="theme-icon-sun" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                </button>
                 <button onclick="adminLogout()" class="px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium hover:opacity-80" style="background:#cf9b62;color:#1a1a1a">Salir</button>
                 <!-- Mobile hamburger -->
                 <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="sm:hidden p-2 rounded-lg hover:bg-white/10">
@@ -64,4 +131,25 @@
     });
 })();
 function adminLogout(){localStorage.clear();location.href='/admin/login'}
+
+// --- Dark/Light theme toggle ---
+(function(){
+  var saved=localStorage.getItem('admin-theme');
+  if(saved==='dark') document.documentElement.setAttribute('data-theme','dark');
+  else document.documentElement.removeAttribute('data-theme');
+  updateThemeIcon();
+})();
+function toggleAdminTheme(){
+  var isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  if(isDark){ document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme','light'); }
+  else { document.documentElement.setAttribute('data-theme','dark'); localStorage.setItem('admin-theme','dark'); }
+  updateThemeIcon();
+}
+function updateThemeIcon(){
+  var isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  var moon=document.getElementById('theme-icon-moon');
+  var sun=document.getElementById('theme-icon-sun');
+  if(moon) moon.classList.toggle('hidden',!isDark);
+  if(sun) sun.classList.toggle('hidden',isDark);
+}
 </script>

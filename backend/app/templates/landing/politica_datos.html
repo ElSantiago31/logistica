@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Política de Tratamiento de Datos Personales{% endblock %}
+{% block head %}
+<style>
+  body{background:#050505!important;color:#d4b896!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{position:relative}
+  main::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;
+    background:radial-gradient(ellipse at 50% 0%,rgba(207,155,98,0.06) 0%,transparent 60%)}
+  .policy-container{position:relative;z-index:1;max-width:800px;margin:0 auto;padding:2rem 1rem 4rem}
+  .policy-card{background:rgba(10,10,10,0.92);border:1px solid rgba(207,155,98,0.25);border-radius:12px;padding:2.5rem;
+    box-shadow:0 0 40px rgba(207,155,98,0.08)}
+  .policy-card h1{color:#cf9b62!important;font-size:1.75rem;font-weight:700;margin-bottom:0.5rem}
+  .policy-card h2{color:#cf9b62!important;font-size:1.25rem;font-weight:600;margin-top:2rem;margin-bottom:0.75rem}
+  .policy-card h3{color:#b48450!important;font-size:1.05rem;font-weight:600;margin-top:1.5rem;margin-bottom:0.5rem}
+  .policy-card p{color:#d4b896!important;line-height:1.7;margin-bottom:0.75rem;font-size:0.95rem}
+  .policy-card ul,.policy-card ol{color:#d4b896!important;line-height:1.7;margin-bottom:0.75rem;padding-left:1.5rem}
+  .policy-card li{margin-bottom:0.4rem;font-size:0.95rem}
+  .policy-card strong{color:#cf9b62}
+  .policy-card .meta{text-align:center;color:#976e41!important;font-size:0.85rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid rgba(207,155,98,0.2)}
+  .back-link{display:inline-block;margin-bottom:1.5rem;color:#cf9b62;text-decoration:none;font-size:0.9rem}
+  .back-link:hover{text-decoration:underline}
+  .noise-overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.03;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  @media print{.policy-card{background:#fff!important;border:none!important;box-shadow:none!important}.policy-card,.policy-card *{color:#222!important}.noise-overlay,.back-link{display:none!important}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="noise-overlay"></div>
+<div class="policy-container">
+    <a href="/enrolamiento" class="back-link">← Volver al registro</a>
+    <div class="policy-card">
+        <h1>🔐 Política de Tratamiento de Datos Personales</h1>
+        <div class="meta">
+            Vigencia desde: Junio de 2026<br>
+            Fundamento legal: Ley 1581 de 2012 y Decreto 1377 de 2013
+        </div>
+
+        <h2>1. Identificación del Responsable del Tratamiento</h2>
+        <p>La presente Política de Tratamiento de Datos Personales es aplicable a <strong>A&C Logística y Producción de Eventos</strong>, empresa responsable del manejo de personal logístico y operadores para eventos, quien actúa como responsable del tratamiento de datos personales de conformidad con la Ley 1581 de 2012 y el Decreto 1377 de 2013.</p>
+
+        <h2>2. Ámbito de Aplicación</h2>
+        <p>Esta política se aplica a todos los datos personales recolectados a través de la plataforma digital de enrolamiento y gestión de operadores, incluyendo:</p>
+        <ul>
+            <li>Formulario de registro de operadores (enrolamiento)</li>
+            <li>Gestión de asignaciones a eventos</li>
+            <li>Procesos de check-in y nómina</li>
+            <li>Comunicaciones vía WhatsApp y otros canales</li>
+        </ul>
+
+        <h2>3. Finalidades del Tratamiento</h2>
+        <p>Los datos personales recolectados serán utilizados exclusivamente para las siguientes finalidades:</p>
+        <ol>
+            <li><strong>Vinculación laboral:</strong> Evaluación, selección y contratación de operadores para eventos logísticos.</li>
+            <li><strong>Gestión de eventos:</strong> Asignación, coordinación y supervisión del personal en eventos.</li>
+            <li><strong>Cumplimiento legal:</strong> Aportes a seguridad social (EPS, ARL), nómina y obligaciones laborales.</li>
+            <li><strong>Verificación documental:</strong> Validación de identidad, antecedentes y referencias.</li>
+            <li><strong>Comunicación operativa:</strong> Envío de invitaciones, recordatorios y notificaciones sobre asignaciones.</li>
+            <li><strong>Seguridad y control:</strong> Registro de check-in/check-out y control de asistencia.</li>
+        </ol>
+
+        <h2>4. Datos Recolectados</h2>
+        <h3>4.1 Datos de identificación</h3>
+        <ul>
+            <li>Tipo y número de documento de identidad</li>
+            <li>Nombres y apellidos</li>
+            <li>Fotografía</li>
+        </ul>
+        <h3>4.2 Datos de contacto</h3>
+        <ul>
+            <li>Correo electrónico</li>
+            <li>Número de teléfono</li>
+            <li>Número de WhatsApp</li>
+            <li>Dirección de residencia</li>
+        </ul>
+        <h3>4.3 Datos laborales</h3>
+        <ul>
+            <li>EPS y ARL</li>
+            <li>Experiencia en eventos y cargos</li>
+            <li>Nivel educativo</li>
+            <li>Tallas de uniforme</li>
+        </ul>
+        <h3>4.4 Datos sensibles</h3>
+        <p>Se recolectan datos considerados sensibles bajo la Ley 1581 de 2012, los cuales son <strong>opcionales</strong> pero necesarios para fines de seguridad y salud ocupacional:</p>
+        <ul>
+            <li>Tipo de sangre</li>
+            <li>Contacto de emergencia</li>
+        </ul>
+
+        <h2>5. Autorización del Titular</h2>
+        <p>De conformidad con el artículo 9 de la Ley 1581 de 2012, <strong>A&C Logística y Producción de Eventos</strong> ha obtenido la autorización del titular para el tratamiento de sus datos personales de manera libre, previa, expresa e informada, mediante la aceptación del <strong>checkbox de autorización</strong> en el formulario de registro.</p>
+        <p>Para el tratamiento de datos sensibles, <strong>A&C Logística y Producción de Eventos</strong> cuenta con la autorización expresa del titular, quien podrá retractarse en cualquier momento sin consecuencias negativas.</p>
+
+        <h2>6. Derechos de los Titulares</h2>
+        <p>Como titular de datos personales, usted tiene derecho a:</p>
+        <ol>
+            <li><strong>Acceder:</strong> Conocer qué datos personales tenemos sobre usted.</li>
+            <li><strong>Actualizar:</strong> Corregir datos desactualizados o incorrectos.</li>
+            <li><strong>Rectificar:</strong> Modificar información inexacta.</li>
+            <li><strong>Suprimir:</strong> Solicitar la eliminación de sus datos (cuando no haya obligación legal de conservarlos).</li>
+            <li><strong>Revocar autorización:</strong> Retirar el consentimiento para el tratamiento de sus datos.</li>
+        </ol>
+        <p>Para ejercer estos derechos, puede enviar una solicitud a través del canal de atención al operador.</p>
+
+        <h2>7. Medidas de Seguridad</h2>
+        <p><strong>A&C Logística y Producción de Eventos</strong> ha implementado medidas técnicas, administrativas y físicas para proteger sus datos personales contra acceso no autorizado, alteración, divulgación o destrucción, incluyendo:</p>
+        <ul>
+            <li>Cifrado de contraseñas y datos sensibles</li>
+            <li>Control de acceso basado en roles (RBAC)</li>
+            <li>Registro de auditoría de cambios</li>
+            <li>Backups seguros y cifrados</li>
+        </ul>
+
+        <h2>8. Conservación de los Datos</h2>
+        <p>Los datos personales serán conservados durante el tiempo necesario para cumplir con las finalidades descritas y durante los plazos legales aplicables. Los datos vinculados a obligaciones laborales y de seguridad social se conservarán conforme a la normativa vigente.</p>
+
+        <h2>9. Transferencia y Transmisión de Datos</h2>
+        <p><strong>A&C Logística y Producción de Eventos</strong> no venderá ni comercializará sus datos personales. Sus datos podrán ser compartidos únicamente con:</p>
+        <ul>
+            <li>Entidades gubernamentales cuando sea legalmente requerido</li>
+            <li>Proveedores de servicios (WhatsApp, hosting) bajo acuerdos de confidencialidad</li>
+            <li>Clientes de eventos (únicamente nombre y rol del operador asignado)</li>
+        </ul>
+
+        <h2>10. Modificaciones a esta Política</h2>
+        <p><strong>A&C Logística y Producción de Eventos</strong> se reserva el derecho de modificar la presente política en cualquier momento. Las modificaciones serán efectivas desde su publicación en esta página.</p>
+
+        <h2>11. Contacto</h2>
+        <p>Para consultas, reclamaciones o solicitudes relacionadas con el tratamiento de sus datos personales, comuníquese a través de los canales oficiales de atención al operador.</p>
+
+        <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid rgba(207,155,98,0.2);text-align:center">
+            <p style="color:#976e41!important;font-size:0.85rem">Documento generado conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013 de la República de Colombia.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

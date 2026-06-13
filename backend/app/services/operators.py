@@ -9,6 +9,7 @@ from PIL import Image
 
 from app.models.users import User
 from app.models.operators import Operator
+from app.models.blocked_document import BlockedDocument
 from app.schemas.operators import OperatorUpdateRequest, OperatorAdminUpdateRequest
 from app.config import settings
 
@@ -75,7 +76,9 @@ async def get_operators(
     # Exclude already assigned to event
     if exclude_event_id:
         from app.models.events import EventAssignment
-        assigned_sq = select(EventAssignment.operator_user_id).where(
+        assigned_sq = select(Operator.user_id).join(
+            EventAssignment, EventAssignment.operator_id == Operator.id
+        ).where(
             EventAssignment.event_id == exclude_event_id
         )
         query = query.where(User.id.notin_(assigned_sq))
@@ -160,7 +163,7 @@ async def update_operator(
     is_admin: bool = False
 ) -> Optional[User]:
     """Update operator profile data."""
-    user = await get_operator(db, user_id)
+    user = await get_operator(db, user_id, include_inactive=is_admin)
     if not user:
         return None
 
@@ -169,14 +172,31 @@ async def update_operator(
     # Fields belonging to User model
     user_fields = ["first_name", "last_name", "phone"]
     # Admin only fields for User
-    admin_user_fields = ["is_verified", "is_approved", "role_id", "is_active"]
+    admin_user_fields = ["is_verified", "is_approved", "role_id", "is_active", "document_number", "document_type", "email"]
     
     if is_admin:
         user_fields.extend(admin_user_fields)
         
     for field in user_fields:
         if field in update_dict:
-            setattr(user, field, update_dict[field])
+            val = update_dict[field]
+            # Validate document_number uniqueness if changing
+            if field == "document_number" and val and val != user.document_number:
+                existing = await db.execute(
+                    select(User).where(User.document_number == val, User.id != user.id, User.is_active == True)
+                )
+                if existing.scalar_one_or_none():
+                    raise HTTPException(status_code=409, detail="El número de documento ya está en uso por otro usuario")
+                # Check blocked documents
+                blocked = await db.execute(
+                    select(BlockedDocument).where(
+                        BlockedDocument.document_number == val,
+                        BlockedDocument.is_active == True,
+                    )
+                )
+                if blocked.scalar_one_or_none():
+                    raise HTTPException(status_code=403, detail="Este documento está bloqueado")
+            setattr(user, field, val)
             
     # Fields belonging to Operator model
     if hasattr(user, "operator_profile") and user.operator_profile:
@@ -184,9 +204,9 @@ async def update_operator(
             "city", "address", "locality", "blood_type", "emergency_contact_name", 
             "emergency_contact_phone", "eps_id", "arl_id", "birth_date",
             "whatsapp", "has_protocol_experience", "event_size_experience",
-            "shoe_size", "shirt_size", "pants_size", "jacket_size"
+            "shirt_size", "jacket_size"
         ]
-        admin_operator_fields = ["background_check_status", "notes"]
+        admin_operator_fields = ["background_check_status", "notes", "education_level"]
         
         if is_admin:
             operator_fields.extend(admin_operator_fields)
@@ -212,6 +232,93 @@ async def delete_operator(db: AsyncSession, user_id: uuid.UUID) -> bool:
         user.email = f"{user.email}{suffix}"
     await db.commit()
     return True
+
+async def block_operator(
+    db: AsyncSession, 
+    user_id: uuid.UUID, 
+    blocked_by: uuid.UUID,
+    reason: Optional[str] = None,
+) -> bool:
+    """Block an operator: add document to blocked list and deactivate."""
+    user = await get_operator(db, user_id, include_inactive=True)
+    if not user:
+        return False
+
+    # Create blocked document entry
+    if user.document_number:
+        blocked_doc = BlockedDocument(
+            document_type=user.document_type,
+            document_number=user.document_number,
+            reason=reason,
+            blocked_by=blocked_by,
+            operator_user_id=user.id,
+            operator_name=f"{user.first_name} {user.last_name}",
+        )
+        db.add(blocked_doc)
+
+    # Soft-delete the user
+    user.is_active = False
+    user.document_number = None
+    suffix = f"_blocked_{user_id.hex[:8]}"
+    if user.email:
+        user.email = f"{user.email}{suffix}"
+    await db.commit()
+    return True
+
+
+async def unblock_operator(db: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Unblock an operator: reactivate user (document number was freed on block)."""
+    user = await get_operator(db, user_id, include_inactive=True)
+    if not user:
+        return False
+
+    # Remove active blocks for this operator's original documents
+    blocks = await db.execute(
+        select(BlockedDocument).where(
+            BlockedDocument.operator_user_id == user_id,
+            BlockedDocument.is_active == True,
+        )
+    )
+    for block in blocks.scalars().all():
+        block.is_active = False
+
+    # Reactivate user
+    user.is_active = True
+    # Restore email by removing the _blocked_ suffix
+    if user.email and "_blocked_" in user.email:
+        user.email = user.email.split("_blocked_")[0]
+    await db.commit()
+    return True
+
+
+async def search_blocked_documents(
+    db: AsyncSession, 
+    search: Optional[str] = None,
+) -> list:
+    """Search blocked documents."""
+    query = select(BlockedDocument).where(BlockedDocument.is_active == True)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            BlockedDocument.document_number.ilike(pattern) |
+            BlockedDocument.operator_name.ilike(pattern)
+        )
+    query = query.order_by(BlockedDocument.created_at.desc())
+    result = await db.execute(query)
+    blocks = result.scalars().all()
+    return [
+        {
+            "id": str(b.id),
+            "document_type": b.document_type,
+            "document_number": b.document_number,
+            "reason": b.reason,
+            "operator_name": b.operator_name,
+            "operator_user_id": str(b.operator_user_id) if b.operator_user_id else None,
+            "created_at": str(b.created_at),
+        }
+        for b in blocks
+    ]
+
 
 async def upload_operator_photo(db: AsyncSession, user_id: uuid.UUID, file: UploadFile) -> Optional[User]:
     """Upload and process operator photo."""

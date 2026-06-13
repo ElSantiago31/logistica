@@ -74,7 +74,7 @@ class ChangePasswordRequest(BaseModel):
 # --- Operator Registration (public landing) ---
 class OperatorRegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
     first_name: str = Field(..., min_length=2, max_length=100)
     last_name: str = Field(..., min_length=2, max_length=100)
     phone: str = Field(..., min_length=7, max_length=20)
@@ -93,8 +93,6 @@ class OperatorRegisterRequest(BaseModel):
     has_protocol_experience: Optional[bool] = None
     event_size_experience: Optional[str] = None
     education_level: Optional[str] = None
-    shoe_size: Optional[str] = None
     shirt_size: Optional[str] = None
-    pants_size: Optional[str] = None
     jacket_size: Optional[str] = None
     experience_roles: Optional[list[str]] = None  # list of role IDs

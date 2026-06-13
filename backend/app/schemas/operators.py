@@ -20,9 +20,7 @@ class OperatorBase(BaseModel):
     has_protocol_experience: Optional[bool] = None
     event_size_experience: Optional[str] = Field(None, max_length=50)
     education_level: Optional[str] = Field(None, max_length=50)
-    shoe_size: Optional[str] = Field(None, max_length=10)
     shirt_size: Optional[str] = Field(None, max_length=10)
-    pants_size: Optional[str] = Field(None, max_length=10)
     jacket_size: Optional[str] = Field(None, max_length=10)
 
 # For updating by the operator or admin
@@ -33,12 +31,16 @@ class OperatorUpdateRequest(OperatorBase):
 
 # For admin updating sensitive fields
 class OperatorAdminUpdateRequest(OperatorUpdateRequest):
+    document_number: Optional[str] = Field(None, min_length=5, max_length=20)
+    document_type: Optional[str] = Field(None, max_length=10)
+    email: Optional[EmailStr] = None
     is_verified: Optional[bool] = None
     is_approved: Optional[bool] = None
     background_check_status: Optional[str] = Field(None, max_length=20)
     role_id: Optional[uuid.UUID] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    education_level: Optional[str] = Field(None, max_length=50)
 
 # Detailed response
 class OperatorResponse(BaseModel):
@@ -75,9 +77,7 @@ class OperatorResponse(BaseModel):
     has_protocol_experience: Optional[bool]
     event_size_experience: Optional[str]
     education_level: Optional[str]
-    shoe_size: Optional[str]
     shirt_size: Optional[str]
-    pants_size: Optional[str]
     jacket_size: Optional[str]
     background_check_status: str
     background_check_date: Optional[date]
@@ -129,9 +129,7 @@ class OperatorResponse(BaseModel):
                     'has_protocol_experience': profile.has_protocol_experience,
                     'event_size_experience': profile.event_size_experience,
                     'education_level': profile.education_level,
-                    'shoe_size': profile.shoe_size,
                     'shirt_size': profile.shirt_size,
-                    'pants_size': profile.pants_size,
                     'jacket_size': profile.jacket_size,
                     'background_check_status': profile.background_check_status or 'pending',
                     'background_check_date': profile.background_check_date,
@@ -148,7 +146,7 @@ class OperatorResponse(BaseModel):
                     'locality': None, 'whatsapp': None,
                     'has_protocol_experience': None, 'event_size_experience': None,
                     'education_level': None,
-                    'shoe_size': None, 'shirt_size': None, 'pants_size': None, 'jacket_size': None,
+                    'shirt_size': None, 'jacket_size': None,
                     'background_check_status': 'pending',
                     'background_check_date': None, 'experience_roles': None,
                     'rating_avg': None, 'total_events': 0,

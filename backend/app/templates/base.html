@@ -83,29 +83,38 @@
             <div class="flex justify-between h-14 sm:h-16">
                 <div class="flex items-center space-x-2 sm:space-x-3">
                     <img src="/static/frontend/logo.jpeg" alt="A&C Logística"
-                        class="h-9 w-9 sm:h-11 sm:w-11 rounded-full object-cover border-2 flex-shrink-0" style="border-color:#cf9b62;">
+                        class="h-9 w-9 sm:h-11 sm:w-11 rounded-full object-cover border-2 flex-shrink-0"
+                        style="border-color:#cf9b62;">
                     <div class="leading-tight">
-                        <a href="/" class="text-sm sm:text-base font-bold tracking-wide block" style="color: #fff2e4;">A&C
+                        <a href="/" class="text-sm sm:text-base font-bold tracking-wide block"
+                            style="color: #fff2e4;">A&C
                             Logística</a>
-                        <span class="text-xs opacity-70 hidden sm:inline" style="color: #ffebd6;">Producción de Eventos</span>
+                        <span class="text-xs opacity-70 hidden sm:inline" style="color: #ffebd6;">Producción de
+                            Eventos</span>
                     </div>
                 </div>
                 <!-- Desktop nav links -->
                 <div class="hidden sm:flex items-center space-x-4" id="nav-links-desktop">
                     <!-- Guest: shown when NOT logged in -->
-                    <a href="/enrolamiento" id="nav-enroll-d" class="px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 text-sm"
+                    <a href="/enrolamiento" id="nav-enroll-d"
+                        class="px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 text-sm"
                         style="background:#cf9b62; color:#1a1a1a;">Trabaja con nosotros</a>
                     <!-- Logged in -->
-                    <a href="/enrolamiento/perfil" id="nav-profile-d" class="hidden hover:text-primary-300 transition text-sm" style="color: #f8d9b6;">Mi Perfil</a>
-                    <a href="/admin" id="nav-panel-d" class="hidden hover:text-primary-300 transition text-sm" style="color: #f8d9b6;">Panel</a>
-                    <button onclick="navLogout()" id="nav-logout-d" class="hidden px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 cursor-pointer text-sm"
+                    <a href="/enrolamiento/perfil" id="nav-profile-d"
+                        class="hidden hover:text-primary-300 transition text-sm" style="color: #f8d9b6;">Mi Perfil</a>
+                    <a href="/admin" id="nav-panel-d" class="hidden hover:text-primary-300 transition text-sm"
+                        style="color: #f8d9b6;">Panel</a>
+                    <button onclick="navLogout()" id="nav-logout-d"
+                        class="hidden px-3 py-1 rounded-lg font-semibold transition hover:opacity-90 cursor-pointer text-sm"
                         style="background:#cf9b62; color:#1a1a1a;">Cerrar Sesión</button>
                 </div>
                 <!-- Mobile hamburger -->
                 <div class="flex items-center sm:hidden">
-                    <button onclick="toggleMobileMenu()" id="hamburger-btn" class="p-2 rounded-lg hover:bg-white/10 transition">
+                    <button onclick="toggleMobileMenu()" id="hamburger-btn"
+                        class="p-2 rounded-lg hover:bg-white/10 transition">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>
                 </div>
@@ -118,9 +127,14 @@
                 <a href="/enrolamiento" id="nav-enroll-m" class="block px-3 py-2 rounded-lg font-semibold text-sm"
                     style="background:#cf9b62; color:#1a1a1a;">Trabaja con nosotros</a>
                 <!-- Logged in -->
-                <a href="/enrolamiento/perfil" id="nav-profile-m" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10 transition" style="color: #f8d9b6;">Mi Perfil</a>
-                <a href="/admin" id="nav-panel-m" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10 transition" style="color: #f8d9b6;">Panel</a>
-                <button onclick="navLogout()" id="nav-logout-m" class="hidden w-full text-left px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer"
+                <a href="/enrolamiento/perfil" id="nav-profile-m"
+                    class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10 transition"
+                    style="color: #f8d9b6;">Mi Perfil</a>
+                <a href="/admin" id="nav-panel-m"
+                    class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10 transition"
+                    style="color: #f8d9b6;">Panel</a>
+                <button onclick="navLogout()" id="nav-logout-m"
+                    class="hidden w-full text-left px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer"
                     style="background:#cf9b62; color:#1a1a1a;">Cerrar Sesión</button>
             </div>
         </div>
@@ -137,50 +151,51 @@
     <!-- Footer -->
     {% block footer %}
     <footer class="text-center py-3 mt-8" style="background:#5d4224; color:#f8d9b6;">
-        <p class="text-sm">&copy; 2025 AyC Eventos — A y C Logística y Producción de Eventos LTDA | 📞 +57 312 395 5552</p>
+        <p class="text-sm">&copy; 2026 AyC Eventos — A y C Logística y Producción de Eventos LTDA | 📞 +57 312 395 5552
+        </p>
     </footer>
     {% endblock %}
 
     {% block scripts %}{% endblock %}
     <script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/frontend/sw.js').catch(()=>{});
-    }
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/frontend/sw.js').catch(() => { });
+        }
 
-    // --- Navbar: toggle logged-in state for desktop + mobile ---
-    (function() {
-        const token = localStorage.getItem('access_token');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        // --- Navbar: toggle logged-in state for desktop + mobile ---
+        (function () {
+            const token = localStorage.getItem('access_token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-        ['d','m'].forEach(suffix => {
-            const enroll = document.getElementById('nav-enroll-' + suffix);
-            const profile = document.getElementById('nav-profile-' + suffix);
-            const panel = document.getElementById('nav-panel-' + suffix);
-            const logout = document.getElementById('nav-logout-' + suffix);
+            ['d', 'm'].forEach(suffix => {
+                const enroll = document.getElementById('nav-enroll-' + suffix);
+                const profile = document.getElementById('nav-profile-' + suffix);
+                const panel = document.getElementById('nav-panel-' + suffix);
+                const logout = document.getElementById('nav-logout-' + suffix);
 
-            if (token && user && user.user_type) {
-                if (enroll) enroll.classList.add('hidden');
-                if (user.user_type === 'operator') {
-                    if (profile) profile.classList.remove('hidden');
-                } else {
-                    if (panel) panel.classList.remove('hidden');
+                if (token && user && user.user_type) {
+                    if (enroll) enroll.classList.add('hidden');
+                    if (user.user_type === 'operator') {
+                        if (profile) profile.classList.remove('hidden');
+                    } else {
+                        if (panel) panel.classList.remove('hidden');
+                    }
+                    if (logout) logout.classList.remove('hidden');
                 }
-                if (logout) logout.classList.remove('hidden');
-            }
-        });
-    })();
+            });
+        })();
 
-    function toggleMobileMenu() {
-        const menu = document.getElementById('mobile-menu');
-        menu.classList.toggle('hidden');
-    }
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
 
-    function navLogout() {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
-        window.location.href = '/';
-    }
+        function navLogout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
     </script>
 </body>
 
