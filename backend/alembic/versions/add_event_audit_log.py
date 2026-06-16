@@ -19,9 +19,9 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         'event_audit_logs',
-        sa.Column('id', sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4())),
-        sa.Column('event_id', sa.String(36), sa.ForeignKey('events.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
+        sa.Column('event_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('events.id', ondelete='CASCADE'), nullable=False, index=True),
+        sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
         sa.Column('action', sa.String(50), nullable=False),
         sa.Column('changes', sa.Text, nullable=True),
         sa.Column('user_name', sa.String(300), nullable=True),

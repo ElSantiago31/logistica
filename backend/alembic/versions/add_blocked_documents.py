@@ -6,6 +6,8 @@ Create Date: 2026-06-12
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+import uuid
 
 revision = 'add_blocked_documents'
 down_revision = 'add_edu_staff'
@@ -15,12 +17,12 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         'blocked_documents',
-        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column('document_type', sa.String(10), nullable=False, index=True),
         sa.Column('document_number', sa.String(20), nullable=False, index=True),
         sa.Column('reason', sa.Text(), nullable=True),
-        sa.Column('blocked_by', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
-        sa.Column('operator_user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('blocked_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('operator_user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
         sa.Column('operator_name', sa.String(201), nullable=True),
         sa.Column('is_active', sa.Boolean(), default=True, nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
