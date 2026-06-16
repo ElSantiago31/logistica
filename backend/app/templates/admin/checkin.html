@@ -19,7 +19,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <div class="flex items-center gap-3 mb-1">
-                <a href="/admin" class="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-100 transition" style="color:#5d4224;">← Volver</a>
+                <a href="/admin/events/{{ event_id }}" class="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-100 transition" style="color:#5d4224;">← Volver</a>
                 <h1 class="text-2xl font-bold" style="color:#5d4224;">Check-in de Operadores</h1>
             </div>
             <p id="event-name" class="text-gray-500 text-sm ml-1">Cargando evento...</p>
@@ -44,9 +44,9 @@
             <div id="stat-pending" class="text-2xl font-bold text-yellow-600">0</div>
             <div class="text-xs text-gray-500">Pendientes</div>
         </div>
-        <div class="bg-white rounded-lg p-3 text-center border">
+        <div class="bg-white rounded-lg p-3 text-center border cursor-pointer hover:bg-blue-50" onclick="syncPendingRecords()" title="Clic para sincronizar">
             <div id="stat-sync" class="text-2xl font-bold text-blue-600">0</div>
-            <div class="text-xs text-gray-500">Pend. Sync</div>
+            <div class="text-xs text-gray-500">Pend. Sync 🔄</div>
         </div>
     </div>
 
@@ -99,6 +99,31 @@
                     <span id="op-status-text" class="font-medium"></span>
                 </div>
 
+                <!-- Uniform section -->
+                <div id="uniform-section" class="hidden mb-4">
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-2">Indumentaria</h4>
+                    <div class="grid grid-cols-3 gap-2 mb-2">
+                        <div>
+                            <label class="text-xs text-gray-500">Camisa</label>
+                            <input type="text" id="uniform-shirt" placeholder="#"
+                                class="w-full px-2 py-2 rounded-lg border border-gray-300 text-center text-sm focus:ring-2 focus:ring-amber-400">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500">Chaqueta</label>
+                            <input type="text" id="uniform-jacket" placeholder="#"
+                                class="w-full px-2 py-2 rounded-lg border border-gray-300 text-center text-sm focus:ring-2 focus:ring-amber-400">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500">Gorra</label>
+                            <input type="text" id="uniform-cap" placeholder="#"
+                                class="w-full px-2 py-2 rounded-lg border border-gray-300 text-center text-sm focus:ring-2 focus:ring-amber-400">
+                        </div>
+                    </div>
+                    <button id="btn-save-uniform" onclick="saveUniform()" class="hidden w-full py-2 rounded-lg text-sm font-medium bg-amber-500 text-white">
+                        💾 Guardar Indumentaria
+                    </button>
+                </div>
+
                 <div id="checkin-actions" class="space-y-2">
                     <button id="btn-checkin" onclick="doCheckIn()"
                         class="w-full py-3 rounded-xl font-bold text-white transition"
@@ -112,11 +137,17 @@
                 </div>
             </div>
 
-            <!-- Recent check-ins -->
-            <div class="mt-4">
-                <h4 class="text-sm font-semibold text-gray-500 mb-2">Últimos ingresos</h4>
-                <div id="recent-checkins" class="space-y-1 max-h-40 overflow-y-auto"></div>
-            </div>
+        </div>
+    </div>
+
+    <!-- Log de ingresos (sección propia, siempre visible) -->
+    <div class="mt-6 bg-white rounded-xl border p-4">
+        <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-semibold" style="color:#5d4224;">🕒 Últimos ingresos</h4>
+            <span class="text-xs text-gray-400" id="checkin-log-count">0 registros</span>
+        </div>
+        <div id="recent-checkins" class="space-y-1 max-h-48 overflow-y-auto">
+            <p class="text-xs text-gray-400 text-center py-4" id="checkin-log-empty">Aún no hay ingresos registrados</p>
         </div>
     </div>
 </div>
@@ -147,26 +178,81 @@ function authHeaders() {
     }
 })();
 
+// --- Estado de conexión (doble verificación: internet real + servidor) ---
+let _isOnline = navigator.onLine;
+
+// Probe de internet real: carga una imagen diminuta para detectar si hay
+// conectividad a internet (no solo red local). navigator.onLine en PC con
+// Docker/VM se queda en true aunque el WiFi esté apagado.
+async function checkInternetAvailable() {
+    return new Promise((resolve) => {
+        const img = new Image();
+        let resolved = false;
+        const timeout = setTimeout(() => {
+            if (!resolved) { resolved = true; resolve(false); }
+        }, 3000);
+        img.onload = () => {
+            if (!resolved) { resolved = true; clearTimeout(timeout); resolve(true); }
+        };
+        img.onerror = () => {
+            if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
+        };
+        // Favicon de Google (muy confiable, ~300 bytes, cache-bust)
+        img.src = 'https://www.google.com/favicon.ico?_=' + Date.now();
+    });
+}
+
+async function checkServerReachable() {
+    try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 3000);
+        const resp = await fetch('/api/sync/status', {
+            method: 'GET',
+            headers: authHeaders(),
+            cache: 'no-store',
+            signal: controller.signal
+        });
+        clearTimeout(t);
+        return resp.status < 500;
+    } catch(e) {
+        return false;
+    }
+}
+
+async function refreshConnectionStatus() {
+    const wasOnline = _isOnline;
+    // Doble check: 1) hay internet real (WiFi/router activo), 2) servidor responde
+    const hasInternet = await checkInternetAvailable();
+    const serverUp = hasInternet && await checkServerReachable();
+    _isOnline = serverUp;
+
+    document.getElementById('online-badge').classList.toggle('hidden', !_isOnline);
+    document.getElementById('offline-badge').classList.toggle('hidden', _isOnline);
+
+    if (_isOnline && !wasOnline) {
+        syncPendingRecords();
+    }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+    _getCacheDB();
     loadEventData();
-    _getCacheDB(); // Initialize inline IndexedDB
+    loadCheckinLog();  // Carga el historial de ingresos persistente
 
-    // Update online/offline badges
-    updateConnectionStatus();
-    window.addEventListener('online', () => { updateConnectionStatus(); syncPendingRecords(); });
-    window.addEventListener('offline', updateConnectionStatus);
+    window.addEventListener('online', () => { _isOnline = true; refreshConnectionStatus(); });
+    window.addEventListener('offline', () => { _isOnline = false; refreshConnectionStatus(); });
+
+    refreshConnectionStatus();
+    updateSyncCount();
+    setInterval(async () => {
+        await refreshConnectionStatus();
+        if (_isOnline) syncPendingRecords();
+    }, 15000);
 });
-
-function updateConnectionStatus() {
-    const online = navigator.onLine;
-    document.getElementById('online-badge').classList.toggle('hidden', !online);
-    document.getElementById('offline-badge').classList.toggle('hidden', online);
-}
 
 async function loadEventData() {
     if (navigator.onLine) {
-        // Try online first
         try {
             const resp = await fetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
                 headers: authHeaders()
@@ -175,10 +261,11 @@ async function loadEventData() {
                 const data = await resp.json();
                 document.getElementById('event-name').textContent = data.name;
                 eventAssignments = data.assignments || [];
+                const total = countRelevantForCheckin(eventAssignments);
                 const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
-                updateStats(eventAssignments.length, checked);
-                // Auto-cache for offline use
+                updateStats(total, checked);
                 try { await _cacheEventData(EVENT_ID, data); } catch(e) {}
+                await updateSyncCount();
                 return;
             } else if (resp.status === 401) {
                 location.href = '/admin/login';
@@ -187,7 +274,7 @@ async function loadEventData() {
         } catch (e) {}
     }
 
-    // Offline fallback: load from IndexedDB (inline)
+    // Offline fallback
     try {
         const db = _getCacheDB();
         if (db) {
@@ -195,9 +282,11 @@ async function loadEventData() {
             if (ev) {
                 document.getElementById('event-name').textContent = ev.name + ' (offline)';
                 eventAssignments = await _getCachedOperators(EVENT_ID);
+                const total = countRelevantForCheckin(eventAssignments);
                 const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
-                updateStats(eventAssignments.length, checked);
+                updateStats(total, checked);
                 document.getElementById('last-download').textContent = 'Datos offline cargados';
+                await updateSyncCount();
             } else {
                 document.getElementById('event-name').textContent = 'Sin datos offline — conéctate primero';
             }
@@ -215,12 +304,24 @@ function updateStats(total, checked) {
     document.getElementById('stat-pending').textContent = total - checked;
 }
 
+// Cuenta solo operadores relevantes para check-in: confirmados + ya ingresados
+function countRelevantForCheckin(assignments) {
+    return assignments.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+}
+
 async function updateSyncCount() {
     try {
         const db = _getCacheDB();
         if (db) {
-            const pending = await db.attendance.where('sync_status').equals('pending').count();
-            document.getElementById('stat-sync').textContent = pending;
+            // Filtrar por evento actual para que el contador no acumule entre eventos
+            const attAll = await db.attendance.where('sync_status').equals('pending').toArray();
+            const att = attAll.filter(r => r.event_id === EVENT_ID).length;
+            let uni = 0;
+            try {
+                const uniAll = await db.uniform_pending.where('sync_status').equals('pending').toArray();
+                uni = uniAll.filter(r => r.event_id === EVENT_ID).length;
+            } catch(_) {}
+            document.getElementById('stat-sync').textContent = att + uni;
         }
     } catch(e) {}
 }
@@ -240,7 +341,6 @@ function toggleScanner() {
             } else if (parsed.type === 'document_number') {
                 await searchOperator(parsed.value);
             }
-            // Auto-stop after scan
             toggleScanner();
         });
         scannerActive = true;
@@ -254,7 +354,6 @@ async function searchOperator(query) {
         return;
     }
 
-    // Search from loaded assignments
     const q = query.toLowerCase();
     const results = eventAssignments.filter(a =>
         ['confirmed', 'checked_in', 'standby'].includes(a.status) &&
@@ -282,11 +381,9 @@ async function searchOperator(query) {
 }
 
 async function showOperator(assignmentId) {
-    // Find from loaded assignments first
     let operator = eventAssignments.find(o => o.id === assignmentId);
 
     if (!operator) {
-        // Try offline DB
         try {
             const ops = await _getCachedOperators(EVENT_ID);
             operator = ops.find(o => o.id === assignmentId);
@@ -305,27 +402,74 @@ async function showOperator(assignmentId) {
     document.getElementById('op-role').textContent = operator.role_name || 'Operador';
     document.getElementById('operator-panel').classList.remove('hidden');
 
-    // Show current status
     const statusBox = document.getElementById('op-status-box');
     const statusText = document.getElementById('op-status-text');
     const actions = document.getElementById('checkin-actions');
+    const uniformSection = document.getElementById('uniform-section');
+    const btnSaveUniform = document.getElementById('btn-save-uniform');
 
     if (operator.status === 'checked_in') {
         statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-green-50 text-green-700';
         statusText.textContent = '✅ Ya registrado';
         actions.classList.add('hidden');
+        uniformSection.classList.remove('hidden');
+        document.getElementById('uniform-shirt').value = operator.shirt_number || '';
+        document.getElementById('uniform-jacket').value = operator.jacket_number || '';
+        document.getElementById('uniform-cap').value = operator.cap_number || '';
+        btnSaveUniform.classList.remove('hidden');
     } else {
         statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-gray-50 text-gray-600';
         statusText.textContent = `Estado: ${operator.status}`;
         actions.classList.remove('hidden');
+        uniformSection.classList.remove('hidden');
+        document.getElementById('uniform-shirt').value = operator.shirt_number || '';
+        document.getElementById('uniform-jacket').value = operator.jacket_number || '';
+        document.getElementById('uniform-cap').value = operator.cap_number || '';
+        btnSaveUniform.classList.add('hidden');
     }
+}
+
+function checkUniformConflict(shirt, jacket, cap) {
+    if (!currentOperator) return null;
+    const myId = currentOperator.id;
+    for (const a of eventAssignments) {
+        if (a.id === myId) continue;
+        if (shirt && a.shirt_number && String(a.shirt_number).trim() === String(shirt).trim()) {
+            return `⚠️ La camisa #${shirt} ya está asignada a ${a.full_name}`;
+        }
+        if (jacket && a.jacket_number && String(a.jacket_number).trim() === String(jacket).trim()) {
+            return `⚠️ La chaqueta #${jacket} ya está asignada a ${a.full_name}`;
+        }
+        if (cap && a.cap_number && String(a.cap_number).trim() === String(cap).trim()) {
+            return `⚠️ La gorra #${cap} ya está asignada a ${a.full_name}`;
+        }
+    }
+    return null;
 }
 
 async function doCheckIn() {
     if (!currentOperator) return;
 
-    if (navigator.onLine) {
-        // Online check-in
+    const shirt = document.getElementById('uniform-shirt').value.trim();
+    const jacket = document.getElementById('uniform-jacket').value.trim();
+    const cap = document.getElementById('uniform-cap').value.trim();
+    const btn = document.getElementById('btn-checkin');
+    btn.disabled = true;
+    btn.textContent = '⏳ Guardando...';
+
+    // Validación local de duplicados (instantánea, funciona offline)
+    const localConflict = checkUniformConflict(shirt, jacket, cap);
+    if (localConflict) {
+        // Mostrar el conflicto SIN ocultar los botones para poder corregir
+        const box = document.getElementById('op-status-box');
+        box.className = 'rounded-lg p-3 mb-4 text-center bg-red-50 text-red-700';
+        document.getElementById('op-status-text').textContent = localConflict;
+        btn.disabled = false;
+        btn.textContent = '✅ Registrar Ingreso';
+        return;
+    }
+
+    if (_isOnline) {
         try {
             const resp = await fetch(`/api/sync/events/${EVENT_ID}/check-in`, {
                 method: 'POST',
@@ -333,47 +477,193 @@ async function doCheckIn() {
                 body: JSON.stringify({
                     operator_id: currentOperator.operator_id || currentOperator.id,
                     assignment_id: currentOperator.id,
-                    method: scannerActive ? 'qr' : 'manual'
+                    method: scannerActive ? 'qr' : 'manual',
+                    shirt_number: shirt || null,
+                    jacket_number: jacket || null,
+                    cap_number: cap || null
                 })
             });
 
             if (resp.ok) {
                 showCheckInResult('✅ Check-in registrado', true);
-                // Update local status
                 currentOperator.status = 'checked_in';
+                currentOperator.shirt_number = shirt || null;
+                currentOperator.jacket_number = jacket || null;
+                currentOperator.cap_number = cap || null;
                 const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
-                updateStats(eventAssignments.length, checked);
+                updateStats(countRelevantForCheckin(eventAssignments), checked);
+                document.getElementById('btn-save-uniform').classList.remove('hidden');
             } else if (resp.status === 409) {
-                showCheckInResult('⚠️ Ya registrado anteriormente', false);
+                const errData = await resp.json().catch(() => ({}));
+                const errMsg = errData.detail || errData.message || '';
+                if (errMsg.includes('ya está asignada')) {
+                    // Conflicto de uniform: mostrar aviso SIN ocultar botones
+                    const box = document.getElementById('op-status-box');
+                    box.className = 'rounded-lg p-3 mb-4 text-center bg-red-50 text-red-700';
+                    document.getElementById('op-status-text').textContent = errMsg;
+                } else {
+                    showCheckInResult('✅ Ya estaba registrado', true);
+                    currentOperator.status = 'checked_in';
+                    currentOperator.shirt_number = shirt || null;
+                    currentOperator.jacket_number = jacket || null;
+                    currentOperator.cap_number = cap || null;
+                    const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+                    updateStats(countRelevantForCheckin(eventAssignments), checked);
+                    document.getElementById('btn-save-uniform').classList.remove('hidden');
+                }
             } else {
-                // Fall back to offline
-                await offlineCheckIn();
+                const errBody = await resp.text().catch(() => '');
+                console.error('Check-in error', resp.status, errBody);
+                showCheckInResult(`❌ Error ${resp.status}: ${errBody.slice(0,100)}`, false);
             }
         } catch (e) {
+            console.error('Network error en check-in:', e);
             await offlineCheckIn();
         }
     } else {
         await offlineCheckIn();
     }
+    btn.disabled = false;
+    btn.textContent = '✅ Registrar Ingreso';
 }
 
 async function offlineCheckIn() {
     try {
         const db = _getCacheDB();
         if (!db) throw new Error('Sin BD local');
+        const shirt = document.getElementById('uniform-shirt').value.trim();
+        const jacket = document.getElementById('uniform-jacket').value.trim();
+        const cap = document.getElementById('uniform-cap').value.trim();
         await db.attendance.add({
             event_id: EVENT_ID,
             operator_id: currentOperator.operator_id || currentOperator.id,
             assignment_id: currentOperator.id,
             check_in_time: new Date().toISOString(),
             check_in_method: scannerActive ? 'qr' : 'manual',
-            sync_status: 'pending'
+            sync_status: 'pending',
+            shirt_number: shirt || null,
+            jacket_number: jacket || null,
+            cap_number: cap || null
         });
         showCheckInResult('📴 Guardado offline — se sincronizará después', true);
         currentOperator.status = 'checked_in';
-        updateSyncCount();
+        const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+        updateStats(countRelevantForCheckin(eventAssignments), checked);
+        await updateSyncCount();
+        document.getElementById('btn-save-uniform').classList.remove('hidden');
     } catch(e) {
+        console.error('offlineCheckIn error:', e);
         showCheckInResult('❌ Error al guardar: ' + e.message, false);
+    }
+}
+
+async function saveUniform() {
+    if (!currentOperator) return;
+    const shirt = document.getElementById('uniform-shirt').value.trim();
+    const jacket = document.getElementById('uniform-jacket').value.trim();
+    const cap = document.getElementById('uniform-cap').value.trim();
+    const btn = document.getElementById('btn-save-uniform');
+    btn.disabled = true;
+    btn.textContent = '⏳ Guardando...';
+
+    // Validación local de duplicados (instantánea, funciona offline)
+    const localConflict = checkUniformConflict(shirt, jacket, cap);
+    if (localConflict) {
+        alert(localConflict);
+        btn.disabled = false;
+        btn.textContent = '💾 Guardar Indumentaria';
+        return;
+    }
+
+    // Sin internet: guardar en cola uniform_pending
+    if (!_isOnline) {
+        try {
+            const db = _getCacheDB();
+            if (!db) throw new Error('Sin BD local');
+            await db.uniform_pending.add({
+                assignment_id: currentOperator.id,
+                event_id: EVENT_ID,
+                shirt_number: shirt || null,
+                jacket_number: jacket || null,
+                cap_number: cap || null,
+                created_at: new Date().toISOString(),
+                sync_status: 'pending'
+            });
+            currentOperator.shirt_number = shirt || null;
+            currentOperator.jacket_number = jacket || null;
+            currentOperator.cap_number = cap || null;
+            await updateSyncCount();
+            btn.textContent = '📴 Guardado offline';
+            setTimeout(() => { btn.disabled = false; btn.textContent = '💾 Guardar Indumentaria'; }, 2500);
+        } catch(e) {
+            console.error('saveUniform offline error:', e);
+            alert('❌ Error al guardar offline: ' + e.message);
+            btn.disabled = false;
+            btn.textContent = '💾 Guardar Indumentaria';
+        }
+        return;
+    }
+
+    // Con internet: enviar directo
+    try {
+        const resp = await fetch(`/api/sync/assignments/${currentOperator.id}/uniform`, {
+            method: 'PATCH',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                shirt_number: shirt || null,
+                jacket_number: jacket || null,
+                cap_number: cap || null
+            })
+        });
+        if (resp.ok) {
+            currentOperator.shirt_number = shirt || null;
+            currentOperator.jacket_number = jacket || null;
+            currentOperator.cap_number = cap || null;
+            btn.textContent = '✅ Guardado';
+            setTimeout(() => { btn.disabled = false; btn.textContent = '💾 Guardar Indumentaria'; }, 2000);
+        } else if (resp.status === 409) {
+            const errData = await resp.json().catch(() => ({}));
+            const errMsg = errData.detail || errData.message || 'Conflicto de indumentaria';
+            alert(errMsg);
+            btn.disabled = false;
+            btn.textContent = '💾 Guardar Indumentaria';
+        } else {
+            const errText = await resp.text().catch(() => '');
+            console.error('saveUniform error', resp.status, errText);
+            alert(`❌ Error al guardar indumentaria (${resp.status})`);
+            btn.disabled = false;
+            btn.textContent = '💾 Guardar Indumentaria';
+        }
+    } catch(e) {
+        console.error('saveUniform network error:', e);
+        try {
+            const db = _getCacheDB();
+            if (db) {
+                await db.uniform_pending.add({
+                    assignment_id: currentOperator.id,
+                    event_id: EVENT_ID,
+                    shirt_number: shirt || null,
+                    jacket_number: jacket || null,
+                    cap_number: cap || null,
+                    created_at: new Date().toISOString(),
+                    sync_status: 'pending'
+                });
+                currentOperator.shirt_number = shirt || null;
+                currentOperator.jacket_number = jacket || null;
+                currentOperator.cap_number = cap || null;
+                await updateSyncCount();
+                btn.textContent = '📴 Guardado offline';
+                setTimeout(() => { btn.disabled = false; btn.textContent = '💾 Guardar Indumentaria'; }, 2500);
+            } else {
+                alert('❌ Sin conexión: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '💾 Guardar Indumentaria';
+            }
+        } catch(e2) {
+            alert('❌ Error: ' + e2.message);
+            btn.disabled = false;
+            btn.textContent = '💾 Guardar Indumentaria';
+        }
     }
 }
 
@@ -383,26 +673,126 @@ function showCheckInResult(msg, success) {
     document.getElementById('op-status-text').textContent = msg;
     document.getElementById('checkin-actions').classList.add('hidden');
 
-    // Add to recent list
-    const list = document.getElementById('recent-checkins');
-    const item = document.createElement('div');
-    item.className = 'text-xs bg-gray-50 rounded p-2 flex justify-between';
-    item.innerHTML = `<span>${currentOperator.full_name}</span><span class="text-gray-400">${new Date().toLocaleTimeString()}</span>`;
-    list.prepend(item);
+    // Persistir en Dexie (IndexedDB) para que sobreviva recargas
+    if (currentOperator) {
+        _addCheckinLog(currentOperator.full_name, currentOperator.id, success).catch(() => {});
+    }
 }
 
-// --- Inline IndexedDB (no depende de db.js) ---
+// --- Log de ingresos persistente (sobrevive recarga + offline) ---
+// Obtiene el nombre de la persona logueada (quien hace el check-in)
+function _getCurrentUserName() {
+    try {
+        const u = JSON.parse(localStorage.getItem('user') || '{}');
+        return u.full_name || u.name || u.email || 'Desconocido';
+    } catch(_) {
+        return 'Desconocido';
+    }
+}
+
+async function _addCheckinLog(name, assignmentId, success) {
+    try {
+        const db = _getCacheDB();
+        if (!db) return;
+        const entry = {
+            event_id: EVENT_ID,
+            assignment_id: assignmentId,
+            full_name: name,
+            registered_by: _getCurrentUserName(),
+            created_at: new Date().toISOString(),
+            success: success
+        };
+        await db.checkin_log.add(entry);
+        // Renderizar el nuevo item visualmente
+        _renderCheckinLogItem(entry);
+    } catch(e) {
+        console.error('checkin_log error:', e);
+    }
+}
+
+function _renderCheckinLogItem(entry) {
+    const empty = document.getElementById('checkin-log-empty');
+    if (empty) empty.remove();
+
+    const list = document.getElementById('recent-checkins');
+    const item = document.createElement('div');
+    item.className = 'text-xs bg-gray-50 rounded p-2';
+    const time = new Date(entry.created_at).toLocaleTimeString();
+    const icon = entry.success ? '✅' : '❌';
+    const by = entry.registered_by ? `<span class="text-gray-500"> · 👤 ${entry.registered_by}</span>` : '';
+    item.innerHTML = `
+        <div class="flex justify-between">
+            <span><strong>${icon}</strong> ${entry.full_name}</span>
+            <span class="text-gray-400">${time}</span>
+        </div>
+        <div class="text-gray-400 mt-0.5 text-[11px]">Ingresado por:${by}</div>
+    `;
+    list.prepend(item);
+
+    _updateCheckinLogCount();
+}
+
+function _updateCheckinLogCount() {
+    const list = document.getElementById('recent-checkins');
+    const count = list ? list.querySelectorAll(':scope > div').length : 0;
+    const countEl = document.getElementById('checkin-log-count');
+    if (countEl) countEl.textContent = `${count} ${count === 1 ? 'registro' : 'registros'}`;
+}
+
+// Carga los últimos N ingresos desde Dexie al iniciar/recargar
+async function loadCheckinLog(limit = 20) {
+    try {
+        const db = _getCacheDB();
+        if (!db) return;
+        const logs = await db.checkin_log
+            .where('event_id').equals(EVENT_ID)
+            .reverse()
+            .limit(limit)
+            .toArray();
+        const list = document.getElementById('recent-checkins');
+        list.innerHTML = '';
+
+        if (!logs.length) {
+            const empty = document.createElement('p');
+            empty.id = 'checkin-log-empty';
+            empty.className = 'text-xs text-gray-400 text-center py-4';
+            empty.textContent = 'Aún no hay ingresos registrados';
+            list.appendChild(empty);
+            _updateCheckinLogCount();
+            return;
+        }
+
+        // logs ya viene en orden reverso (más nuevo primero por la query)
+        for (const entry of logs) {
+            _renderCheckinLogItem(entry);
+        }
+    } catch(e) {
+        console.error('loadCheckinLog error:', e);
+    }
+}
+
+// --- Inline IndexedDB (Dexie) ---
 let _cacheDB = null;
 function _getCacheDB() {
     if (_cacheDB) return _cacheDB;
     if (typeof Dexie === 'undefined') return null;
-    _cacheDB = new Dexie('ayc_events');
-    _cacheDB.version(1).stores({
+    const database = new Dexie('ayc_events');
+    // Versión 1 original (sin uniform_pending)
+    database.version(1).stores({
         events: 'id, name, status, start_date, location',
         operators: 'id, event_id, full_name, document_number, role_name, status',
         attendance: '++local_id, event_id, operator_id, sync_status',
         sync_meta: 'key'
     });
+    // Versión 2: agrega uniform_pending
+    database.version(2).stores({
+        uniform_pending: '++local_id, assignment_id, event_id, sync_status'
+    });
+    // Versión 3: agrega checkin_log (log visual persistente de ingresos)
+    database.version(3).stores({
+        checkin_log: '++local_id, event_id, assignment_id, created_at'
+    });
+    _cacheDB = database;
     return _cacheDB;
 }
 
@@ -420,8 +810,10 @@ async function _cacheEventData(eventId, data) {
         for (const a of data.assignments) {
             await db.operators.put({
                 id: a.id, event_id: eventId,
+                operator_id: a.operator_id,  // FIX crítico: faltaba guardar operator_id
                 full_name: a.full_name, document_number: a.document_number,
-                role_name: a.role_name, status: a.status, photo_url: a.photo_url
+                role_name: a.role_name, status: a.status, photo_url: a.photo_url,
+                shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number
             });
         }
     }
@@ -440,7 +832,6 @@ async function downloadForOffline() {
     const logEl = document.getElementById('last-download');
 
     try {
-        // Step 1: Fetch from API
         logEl.textContent = 'Conectando al servidor...';
         const resp = await fetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
             headers: authHeaders()
@@ -454,13 +845,11 @@ async function downloadForOffline() {
         const eventData = await resp.json();
         logEl.textContent = `Recibidos ${eventData.assignments?.length || 0} operadores. Guardando...`;
 
-        // Step 2: Cache in IndexedDB (inline, no depende de db.js)
         await _cacheEventData(EVENT_ID, eventData);
 
-        // Update local assignments
         eventAssignments = eventData.assignments || [];
         const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
-        updateStats(eventAssignments.length, checked);
+        updateStats(countRelevantForCheckin(eventAssignments), checked);
 
         btn.textContent = `✅ ${eventAssignments.length} operadores guardados`;
         logEl.textContent = `✅ Descarga exitosa: ${new Date().toLocaleTimeString()}`;
@@ -473,32 +862,106 @@ async function downloadForOffline() {
     setTimeout(() => { btn.textContent = '📥 Descargar datos offline'; }, 5000);
 }
 
+// Sincronización robusta: solo recarga datos si el sync fue exitoso
 async function syncPendingRecords() {
     const db = _getCacheDB();
-    if (!db || !navigator.onLine) return;
+    if (!db || !_isOnline) {
+        console.log('Sync saltado: sin BD o sin conexión');
+        return;
+    }
+
+    let attendanceSynced = 0;
+    let uniformSynced = 0;
+    let hadErrors = false;
+    const syncEl = document.getElementById('stat-sync');
+
+    // --- 1) Sincronizar attendance ---
     try {
         const pending = await db.attendance.where('sync_status').equals('pending').toArray();
-        if (!pending.length) return;
-        const records = pending.map(r => ({
-            event_id: r.event_id,
-            operator_id: r.operator_id,
-            assignment_id: r.assignment_id,
-            check_in_time: r.check_in_time,
-            check_in_method: r.check_in_method,
-        }));
-        const resp = await fetch('/api/sync/attendance', {
-            method: 'POST',
-            headers: authHeaders(),
-            body: JSON.stringify({ records })
-        });
-        if (resp.ok) {
-            const ids = pending.map(r => r.local_id);
-            await db.attendance.bulkDelete(ids);
-            updateSyncCount();
-            // Refresh stats from server
-            await loadEventData();
+        if (pending.length) {
+            syncEl.textContent = '⏳';
+
+            const records = pending.map(r => ({
+                event_id: r.event_id,
+                operator_id: r.operator_id,
+                assignment_id: r.assignment_id,
+                check_in_time: r.check_in_time,
+                check_in_method: r.check_in_method,
+                shirt_number: r.shirt_number,
+                jacket_number: r.jacket_number,
+                cap_number: r.cap_number,
+            }));
+            const resp = await fetch('/api/sync/attendance', {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ records })
+            });
+            if (resp.ok) {
+                const result = await resp.json();
+                const ids = pending.map(r => r.local_id);
+                await db.attendance.bulkDelete(ids);
+                attendanceSynced = result.synced || pending.length;
+                console.log(`✅ Attendance sincronizado: ${attendanceSynced}`);
+            } else {
+                const errText = await resp.text().catch(() => 'sin detalle');
+                console.error('❌ Sync attendance falló:', resp.status, errText);
+                hadErrors = true;
+            }
         }
-    } catch(e) { console.error('Sync error:', e); }
+    } catch(e) {
+        console.error('Sync attendance error:', e);
+        hadErrors = true;
+    }
+
+    // --- 2) Sincronizar uniform_pending ---
+    try {
+        const uniPending = await db.uniform_pending.where('sync_status').equals('pending').toArray();
+        if (uniPending.length) {
+            syncEl.textContent = '⏳';
+
+            for (const u of uniPending) {
+                try {
+                    const resp = await fetch(`/api/sync/assignments/${u.assignment_id}/uniform`, {
+                        method: 'PATCH',
+                        headers: authHeaders(),
+                        body: JSON.stringify({
+                            shirt_number: u.shirt_number || null,
+                            jacket_number: u.jacket_number || null,
+                            cap_number: u.cap_number || null
+                        })
+                    });
+                    if (resp.ok) {
+                        await db.uniform_pending.delete(u.local_id);
+                        uniformSynced++;
+                    } else {
+                        console.error('❌ Sync uniform falló:', resp.status);
+                        hadErrors = true;
+                    }
+                } catch(err) {
+                    console.error('Sync uniform error:', err);
+                    hadErrors = true;
+                }
+            }
+        }
+    } catch(e) {
+        console.error('Sync uniform error:', e);
+        hadErrors = true;
+    }
+
+    // --- 3) Refrescar UI SOLO si hubo sync exitoso ---
+    if (attendanceSynced > 0 || uniformSynced > 0) {
+        console.log(`✅ Sincronización exitosa: ${attendanceSynced} attendance + ${uniformSynced} uniforms`);
+        await loadEventData();
+        await updateSyncCount();
+        syncEl.textContent = '✅';
+        setTimeout(() => updateSyncCount(), 2000);
+    } else if (hadErrors) {
+        console.error('❌ Sync falló — preservando datos locales');
+        syncEl.textContent = '❌';
+        await updateSyncCount();
+    } else {
+        await updateSyncCount();
+    }
 }
 
 async function markNoShow() {
@@ -507,7 +970,6 @@ async function markNoShow() {
     if (!confirm(`¿Marcar "${currentOperator.full_name}" como No Asistió?`)) return;
 
     try {
-        // Update via assignments API
         const resp = await fetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=no_show`, {
             method: 'PATCH',
             headers: authHeaders()

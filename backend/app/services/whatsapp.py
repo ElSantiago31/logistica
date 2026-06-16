@@ -416,10 +416,23 @@ async def get_queue(
 async def update_assignment_status(
     db: AsyncSession, assignment_id: uuid.UUID, new_status: str
 ) -> Optional[EventAssignment]:
-    """Update assignment status (confirmed/rejected)."""
+    """Update assignment status (confirmed/rejected/no_show/etc).
+
+    Mantiene quantity_confirmed del EventStaffNeed coherente:
+    - Solo cuenta como 'confirmado' si el nuevo estado es 'confirmed'.
+    - Si el operador PASÓ de confirmed a otro estado (rejected, no_show...),
+      se decrementa el contador.
+    - Evita doble conteo si se confirma varias veces.
+    """
     assignment = await db.get(EventAssignment, assignment_id)
     if not assignment:
         return None
+
+    old_status = assignment.status
+
+    # Evitar trabajo innecesario si el estado no cambia
+    if old_status == new_status:
+        return assignment
 
     assignment.status = new_status
     now = datetime.utcnow()
@@ -428,8 +441,8 @@ async def update_assignment_status(
     elif new_status == "rejected":
         assignment.rejected_at = now
 
-    # Update confirmed count on staff needs
-    if new_status == "confirmed" and assignment.role_id:
+    # Ajustar quantity_confirmed del EventStaffNeed según la transición
+    if assignment.role_id:
         sn_result = await db.execute(
             select(EventStaffNeed).where(
                 EventStaffNeed.event_id == assignment.event_id,
@@ -438,7 +451,15 @@ async def update_assignment_status(
         )
         sn = sn_result.scalar_one_or_none()
         if sn:
-            sn.quantity_confirmed += 1
+            was_confirmed = old_status == "confirmed"
+            is_confirmed = new_status == "confirmed"
+
+            if is_confirmed and not was_confirmed:
+                # Ganó un confirmado
+                sn.quantity_confirmed = max(sn.quantity_confirmed + 1, 0)
+            elif was_confirmed and not is_confirmed:
+                # Perdió un confirmado (se retractó / no_show / rechazó)
+                sn.quantity_confirmed = max(sn.quantity_confirmed - 1, 0)
 
     await db.commit()
     return assignment

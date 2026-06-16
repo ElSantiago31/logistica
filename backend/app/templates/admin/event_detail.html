@@ -71,19 +71,6 @@
             <div id="smartChips" class="flex flex-wrap gap-2 mb-3"></div>
             <div class="space-y-2 mb-4">
                 <input type="text" id="searchOps" placeholder="🔍 Buscar por nombre, email, documento..." class="w-full border rounded-lg px-4 py-2.5 text-sm" oninput="debounceSearch()">
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <select id="filterExpRole" class="border rounded-lg px-3 py-2 text-sm col-span-2" onchange="searchOperators(true)"><option value="">Todos los cargos</option></select>
-                    <select id="filterCity" class="border rounded-lg px-3 py-2 text-sm" onchange="searchOperators(true)"><option value="">Todas las ciudades</option></select>
-                    <select id="filterEdu" class="border rounded-lg px-2 py-2 text-xs" onchange="searchOperators(true)">
-                        <option value="">Nivel Edu.</option>
-                        <option value="primaria">Primaria</option>
-                        <option value="secundaria">Secundaria</option>
-                        <option value="tecnico">Tecnico</option>
-                        <option value="tecnologo">Tecnologo</option>
-                        <option value="universitario">Universitario</option>
-                        <option value="postgrado">Postgrado</option>
-                    </select>
-                </div>
                 <select id="assignRole" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
             </div>
             <div id="opsResults" class="space-y-2 max-h-60 overflow-y-auto"></div>
@@ -218,15 +205,14 @@ async function changeEventStatus(ns){const cfg=STATUS_CONFIRM[ns];if(cfg&&!confi
 async function loadRoles(){
     const token=getToken();const res=await fetch('/api/catalogs/roles',{headers:{'Authorization':'Bearer '+token}});const data=await res.json();roles=data.items||data;
     const sel=document.getElementById('assignRole');sel.innerHTML='<option value="">Sin rol específico</option>'+roles.map(r=>{const need=currentStaffNeeds.find(n=>n.role_id===r.id);const rs=need&&need.rate_per_shift?` ($${need.rate_per_shift.toLocaleString('es-CO')})`:'';return`<option value="${r.id}">${r.name}${rs}</option>`}).join('');
-    const fs=document.getElementById('filterExpRole');fs.innerHTML='<option value="">Todos los cargos</option>'+roles.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
 }
+
+let _smartFilter = { role: '', edu: '' };  // Filtro inteligente (chips) en memoria
 
 function showAssignModal(){
     selectedOps.clear();opsPage=0;opsTotal=0;
     document.getElementById('searchOps').value='';
-    document.getElementById('filterCity').value='';
-    document.getElementById('filterEdu').value='';
-    document.getElementById('filterExpRole').value='';
+    _smartFilter = { role: '', edu: '' };
     const chips=document.getElementById('smartChips');
     if(currentStaffNeeds.length){
         chips.innerHTML=currentStaffNeeds.map(n=>{
@@ -241,9 +227,9 @@ function showAssignModal(){
     searchOperators(true);
 }
 function applySmartFilter(roleId,edu){
-    document.getElementById('filterExpRole').value=roleId;
-    document.getElementById('filterEdu').value=edu;
-    document.getElementById('assignRole').value=roleId;
+    _smartFilter.role = roleId;
+    _smartFilter.edu = edu;
+    document.getElementById('assignRole').value = roleId;
     searchOperators(true);
 }
 function closeAssignModal(){document.getElementById('assignModal').classList.add('hidden')}
@@ -255,9 +241,9 @@ async function searchOperators(resetPage=false){
     if(resetPage)opsPage=0;
     opsLoading=true;
     const token=getToken();const q=document.getElementById('searchOps').value;
-    const roleId=document.getElementById('filterExpRole').value;
-    const city=document.getElementById('filterCity').value||currentEventCity;
-    const edu=document.getElementById('filterEdu').value;
+    const roleId=_smartFilter.role;
+    const city=currentEventCity;
+    const edu=_smartFilter.edu;
     const skip=opsPage*opsPageSize;
     let url=`/api/operators/?skip=${skip}&limit=${opsPageSize}&is_approved=true&exclude_event_id=${encodeURIComponent(EVENT_ID)}`;
     if(q.length>=2)url+=`&search=${encodeURIComponent(q)}`;
@@ -404,13 +390,7 @@ async function loadAuditLogs(){
     }catch(e){document.getElementById('auditLogContent').innerHTML='<p class="text-red-400 text-sm">Error cargando historial</p>'}
 }
 
-async function loadCitiesFilter(){
-    try{const res=await fetch('/api/catalogs/cities');const data=await res.json();
-    const sel=document.getElementById('filterCity');
-    sel.innerHTML='<option value="">Todas las ciudades</option>'+data.map(d=>`<optgroup label="${d.departamento}">${d.ciudades.map(c=>`<option value="${c}">${c}</option>`).join('')}</optgroup>`).join('');
-    }catch(e){console.error('Error cargando ciudades',e)}
-}
-loadEvent();loadAuditLogs();loadCitiesFilter();
+loadEvent();loadAuditLogs();
 </script>
 </body>
 </html>

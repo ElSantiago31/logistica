@@ -8,6 +8,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/static/frontend/manifest.json">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
     <title>{% block title %}AyC Eventos{% endblock %}</title>
 
     <!-- Tailwind CSS CDN -->
@@ -74,7 +76,7 @@
     {% block head %}{% endblock %}
 </head>
 
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
     <!-- Navigation bar -->
     <nav class="text-white shadow-lg" id="main-nav"
@@ -144,7 +146,7 @@
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <!-- Main content -->
-    <main>
+    <main class="flex-1">
         {% block content %}{% endblock %}
     </main>
 

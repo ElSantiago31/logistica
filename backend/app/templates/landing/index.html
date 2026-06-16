@@ -384,11 +384,10 @@
                     <select id="event_size_experience" name="event_size_experience"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                         <option value="">— Seleccionar —</option>
-                        <option value="100">Hasta 100 personas</option>
-                        <option value="500">100 - 500 personas</option>
-                        <option value="1000">500 - 1000 personas</option>
-                        <option value="2000">1000 - 2000 personas</option>
-                        <option value="2000+">Más de 2000 personas</option>
+                        <option value="500">Hasta 500 asistentes</option>
+                        <option value="5000">Hasta 5.000 asistentes</option>
+                        <option value="20000">Hasta 20.000 asistentes</option>
+                        <option value="40000+">Hasta 40.000 o más asistentes</option>
                     </select>
                 </div>
             </div>
@@ -441,6 +440,26 @@
         <!-- Step 3: Confirmación -->
         <div id="step3" class="space-y-4 hidden">
             <h2 class="text-lg font-semibold text-gray-700 mb-3">✅ Confirmación</h2>
+
+            <!-- Foto obligatoria -->
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">📸 Tu Foto (Obligatoria) *</label>
+                <p class="text-xs text-gray-500 mb-3">Toma una foto clara de tu rostro, sin gafas oscuras ni elementos que cubran la cara.</p>
+                <button type="button" id="photo-select-btn" onclick="document.getElementById('photo-input').click()"
+                    class="w-full py-4 rounded-lg font-semibold transition text-center cursor-pointer"
+                    style="background:rgba(207,155,98,0.1);border:2px dashed rgba(207,155,98,0.3);color:#cf9b62">
+                    📷 Toma una foto o selecciona una imagen<br>
+                    <span class="text-xs" style="color:rgba(207,155,98,0.5)">Toca aquí · JPG, PNG · Máximo 5MB</span>
+                </button>
+                <input type="file" id="photo-input" accept="image/*" capture="user" class="hidden">
+                <div id="photo-preview" class="hidden mt-3 text-center">
+                    <img id="preview-img" class="w-32 h-32 object-cover rounded-lg mx-auto" style="border:2px solid rgba(207,155,98,0.3)">
+                    <button type="button" onclick="document.getElementById('photo-input').click()" class="block mx-auto mt-2 text-xs" style="color:#cf9b62">
+                        ↻ Cambiar foto
+                    </button>
+                </div>
+                <p id="photo-error" class="text-red-500 text-xs mt-2 hidden">⚠️ La foto es obligatoria para registrarte</p>
+            </div>
 
             <div id="summary" class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm"></div>
 
@@ -686,11 +705,19 @@ async function submitForm() {
         education_level: document.getElementById('education_level').value || undefined,
         shirt_size: document.getElementById('shirt_size').value || undefined,
         jacket_size: document.getElementById('jacket_size').value || undefined,
+        photo_data: window._operatorPhotoData || undefined,
     };
 
     // Collect selected experience roles
     const selectedRoles = Array.from(document.querySelectorAll('input[name="experience_roles"]:checked')).map(cb => cb.value);
     if (selectedRoles.length > 0) data.experience_roles = selectedRoles;
+
+    // Validate photo is present
+    if (!data.photo_data) {
+        showToast('Debes subir tu foto para registrarte', 'error');
+        goToStep(3);
+        return;
+    }
 
     try {
         const resp = await fetch('/api/auth/register', {
@@ -824,5 +851,45 @@ restoreFormDraft();
 // Auto-save on input changes
 document.getElementById('register-form').addEventListener('input', saveFormDraft);
 document.getElementById('register-form').addEventListener('change', saveFormDraft);
+
+// ===== PHOTO UPLOAD (Step 3 - mandatory) =====
+window._operatorPhotoData = null;
+const _photoInput = document.getElementById('photo-input');
+const _photoPreview = document.getElementById('photo-preview');
+const _previewImg = document.getElementById('preview-img');
+const _photoError = document.getElementById('photo-error');
+
+_photoInput.addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0]) handlePhotoFile(e.target.files[0]);
+});
+
+function handlePhotoFile(file) {
+    if (!file.type.startsWith('image/')) { showToast('Solo se permiten imágenes', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { showToast('La imagen supera 5MB', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        // Compress & normalize via canvas -> JPEG data URL
+        const img = new Image();
+        img.onload = function() {
+            const maxDim = 1024;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                else { w = Math.round(w * maxDim / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            window._operatorPhotoData = dataUrl;
+            _previewImg.src = dataUrl;
+            _photoPreview.classList.remove('hidden');
+            _photoError.classList.add('hidden');
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+}
 </script>
 {% endblock %}

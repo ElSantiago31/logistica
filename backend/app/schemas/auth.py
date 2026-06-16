@@ -80,6 +80,8 @@ class OperatorRegisterRequest(BaseModel):
     phone: str = Field(..., min_length=7, max_length=20)
     document_type: str = Field(default="CC", max_length=10)
     document_number: str = Field(..., min_length=5, max_length=20)
+    # Foto obligatoria — Data URL (data:image/jpeg;base64,...) o base64 puro
+    photo_data: str = Field(..., min_length=100, description="Foto del operador en base64 (data URL)")
     eps_id: Optional[uuid.UUID] = None
     arl_id: Optional[uuid.UUID] = None
     birth_date: Optional[str] = None

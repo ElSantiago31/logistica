@@ -24,6 +24,7 @@ from app.services.auth import (
     create_access_token, create_refresh_token,
     decode_token, revoke_token,
 )
+from app.services.photos import save_operator_photo
 from app.dependencies.auth import get_current_user, get_current_active_user, require_superadmin
 from app.dependencies.rate_limit import limiter
 
@@ -135,6 +136,9 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
     db.add(user)
     await db.flush()
 
+    # Process and save the mandatory photo (validates + normalizes)
+    photo_name, thumb_name = save_operator_photo(body.photo_data, user.id)
+
     # Create operator profile
     operator = Operator(
         user_id=user.id,
@@ -153,6 +157,8 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         shirt_size=body.shirt_size,
         jacket_size=body.jacket_size,
         experience_roles=json.dumps([str(r) for r in body.experience_roles]) if body.experience_roles else None,
+        photo_path=photo_name,
+        photo_thumbnail_path=thumb_name,
     )
     db.add(operator)
 

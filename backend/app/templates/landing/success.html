@@ -40,15 +40,15 @@
             <p class="font-semibold mb-2" style="color:#cf9b62">📋 ¿Qué sigue? Sigue estos pasos:</p>
             <div class="space-y-2 text-sm" style="color:#d4b896">
                 <div class="flex items-start gap-2">
-                    <span class="font-bold" style="color:#cf9b62">Paso 1.</span>
-                    <span>📸 Sube tu foto (procura no tener el rostro cubierto ni gafas oscuras, la foto es opcional)</span>
+                    <span class="font-bold" style="color:#cf9b62">✅</span>
+                    <span>📸 Tu foto fue registrada correctamente</span>
                 </div>
                 <div class="flex items-start gap-2">
-                    <span class="font-bold" style="color:#cf9b62">Paso 2.</span>
+                    <span class="font-bold" style="color:#cf9b62">Paso 1.</span>
                     <span>🔑 Inicia sesión con tu <strong>número de cédula</strong> y la contraseña que creaste</span>
                 </div>
                 <div class="flex items-start gap-2">
-                    <span class="font-bold" style="color:#cf9b62">Paso 3.</span>
+                    <span class="font-bold" style="color:#cf9b62">Paso 2.</span>
                     <span>✏️ Completa tu perfil si quedaron datos pendientes</span>
                 </div>
             </div>
@@ -57,24 +57,6 @@
         <a id="login-link" href="/enrolamiento/login" class="inline-block mb-6 bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-8 rounded-lg transition" style="font-size:1.05rem">
             🔑 Iniciar Sesión
         </a>
-
-        <div id="photo-section" class="mb-6">
-            <h3 class="text-lg font-semibold mb-3">📸 Paso 1: Sube tu foto (opcional)</h3>
-            <button type="button" id="photo-select-btn" onclick="document.getElementById('photo-input').click()"
-                class="w-full py-4 rounded-lg font-semibold transition text-center cursor-pointer"
-                style="background:rgba(207,155,98,0.1);border:2px dashed rgba(207,155,98,0.3);color:#cf9b62">
-                📷 Toma una foto o selecciona una imagen<br>
-                <span class="text-xs" style="color:rgba(207,155,98,0.5)">Toca aquí · JPG, PNG · Máximo 5MB</span>
-            </button>
-            <input type="file" id="photo-input" accept="image/*" class="hidden">
-            <div id="photo-preview" class="hidden mt-3">
-                <img id="preview-img" class="w-32 h-32 object-cover rounded-lg mx-auto" style="border:2px solid rgba(207,155,98,0.3)">
-            </div>
-            <button id="upload-btn" onclick="uploadPhoto()" class="hidden mt-3 w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 px-6 rounded-lg transition">
-                ✅ Subir Foto
-            </button>
-            <p id="upload-status" class="text-sm mt-2 hidden"></p>
-        </div>
 
         <a href="/" class="font-medium" style="color:#cf9b62">
             ← Volver al Inicio
@@ -86,54 +68,12 @@
 {% block scripts %}
 <script>
 const params = new URLSearchParams(window.location.search);
-const userId = params.get('id');
 const docNumber = params.get('doc');
 
 // Pass doc number to login page for pre-fill
 if (docNumber) {
     const loginLink = document.getElementById('login-link');
     if (loginLink) loginLink.href = '/enrolamiento/login?doc=' + encodeURIComponent(docNumber);
-}
-
-const photoInput = document.getElementById('photo-input');
-const preview = document.getElementById('photo-preview');
-const previewImg = document.getElementById('preview-img');
-const uploadBtn = document.getElementById('upload-btn');
-const photoSelectBtn = document.getElementById('photo-select-btn');
-
-photoInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
-
-function handleFile(file) {
-    if (!file.type.startsWith('image/')) { alert('Solo se permiten imágenes'); return; }
-    const reader = new FileReader();
-    reader.onload = e => {
-        previewImg.src = e.target.result;
-        preview.classList.remove('hidden');
-        uploadBtn.classList.remove('hidden');
-    };
-    reader.readAsDataURL(file);
-}
-
-async function uploadPhoto() {
-    if (!userId || !photoInput.files[0]) return;
-    const formData = new FormData();
-    formData.append('photo', photoInput.files[0]);
-    const status = document.getElementById('upload-status');
-    status.textContent = 'Subiendo...';
-    status.classList.remove('hidden');
-    try {
-        const resp = await fetch(`/api/operators/${userId}/enrollment-photo`, { method: 'POST', body: formData });
-        if (resp.ok) {
-            status.textContent = '✅ Foto subida correctamente';
-            status.className = 'text-sm mt-2 text-green-600';
-        } else {
-            status.textContent = '⚠️ Error subiendo foto (puedes subirla después)';
-            status.className = 'text-sm mt-2 text-yellow-600';
-        }
-    } catch(e) {
-        status.textContent = '⚠️ Error de conexión';
-        status.className = 'text-sm mt-2 text-yellow-600';
-    }
 }
 </script>
 {% endblock %}
