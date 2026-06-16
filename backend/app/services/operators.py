@@ -12,6 +12,7 @@ from app.models.operators import Operator
 from app.models.blocked_document import BlockedDocument
 from app.schemas.operators import OperatorUpdateRequest, OperatorAdminUpdateRequest
 from app.config import settings
+from app.services.photos import delete_operator_photos
 
 def _ensure_photo_dirs():
     """Ensure that the directories for photos exist."""
@@ -219,11 +220,107 @@ async def update_operator(
     await db.refresh(user)
     return user
 
-async def delete_operator(db: AsyncSession, user_id: uuid.UUID) -> bool:
-    """Soft delete an operator. Frees document_number and email for re-registration."""
-    user = await get_operator(db, user_id)
+async def delete_operator(db: AsyncSession, user_id: uuid.UUID, hard_delete: bool = True) -> bool:
+    """Delete an operator.
+
+    Hard delete (default): permanently removes ALL operator data to comply with
+    data protection laws (Ley de Tratamiento de Datos) and free disk space.
+    The operator will NOT appear in any list (active or inactive/blocked).
+
+    Soft delete (hard_delete=False): legacy behavior, just marks as inactive.
+
+    Order of deletion (child → parent) to respect FK constraints:
+    1. Photos (disk files)
+    2. Signatures (via Payroll or directly)
+    3. Payrolls
+    4. Evaluations
+    5. Event assignments
+    6. Blocked documents pointing to this user (clear operator_user_id)
+    7. Revoked tokens
+    8. Audit logs (user_id is not FK, set to NULL)
+    9. Operator profile
+    10. User
+    """
+    user = await get_operator(db, user_id, include_inactive=True)
     if not user:
         return False
+
+    if hard_delete:
+        from sqlalchemy import delete as sql_delete
+        # Find operator profile (needed for photo cleanup + cascade deletes)
+        op_result = await db.execute(
+            select(Operator).where(Operator.user_id == user_id)
+        )
+        operator = op_result.scalar_one_or_none()
+
+        # 1. Delete photo files from disk
+        if operator and operator.photo_path:
+            delete_operator_photos(
+                operator.photo_path,
+                operator.photo_thumbnail_path,
+            )
+
+        if operator:
+            # 2-5. Delete all child records that reference this operator
+            from app.models.payroll import Signature, Payroll, Evaluation
+            from app.models.events import EventAssignment
+
+            # Signatures (must go before payrolls)
+            await db.execute(
+                sql_delete(Signature).where(Signature.operator_id == operator.id)
+            )
+            # Payrolls
+            await db.execute(
+                sql_delete(Payroll).where(Payroll.operator_id == operator.id)
+            )
+            # Evaluations
+            await db.execute(
+                sql_delete(Evaluation).where(Evaluation.operator_id == operator.id)
+            )
+            # Event assignments
+            await db.execute(
+                sql_delete(EventAssignment).where(EventAssignment.operator_id == operator.id)
+            )
+
+        # 6. Clear blocked documents pointing to this user (SET NULL equivalent)
+        await db.execute(
+            sql_delete(BlockedDocument).where(BlockedDocument.operator_user_id == user_id)
+        )
+
+        # 7. Delete revoked tokens
+        from app.models.audit import RevokedToken
+        await db.execute(
+            sql_delete(RevokedToken).where(RevokedToken.user_id == user_id)
+        )
+
+        # 8. Nullify audit logs (user_id is not FK but should be cleared)
+        from app.models.audit import AuditLog
+        await db.execute(
+            sql_delete(AuditLog).where(AuditLog.user_id == user_id)
+        )
+
+        # 9. Delete operator profile
+        if operator:
+            await db.execute(
+                sql_delete(Operator).where(Operator.id == operator.id)
+            )
+
+        # 10. Finally, hard delete the user
+        await db.execute(
+            sql_delete(User).where(User.id == user_id)
+        )
+
+        await db.commit()
+        return True
+
+    # --- Legacy soft delete (kept for compatibility, not used by UI) ---
+    if user.operator_profile and user.operator_profile.photo_path:
+        delete_operator_photos(
+            user.operator_profile.photo_path,
+            user.operator_profile.photo_thumbnail_path,
+        )
+        user.operator_profile.photo_path = None
+        user.operator_profile.photo_thumbnail_path = None
 
     user.is_active = False
     user.document_number = None
@@ -255,6 +352,15 @@ async def block_operator(
             operator_name=f"{user.first_name} {user.last_name}",
         )
         db.add(blocked_doc)
+
+    # Delete photo files from disk + clear DB references
+    if user.operator_profile and user.operator_profile.photo_path:
+        delete_operator_photos(
+            user.operator_profile.photo_path,
+            user.operator_profile.photo_thumbnail_path,
+        )
+        user.operator_profile.photo_path = None
+        user.operator_profile.photo_thumbnail_path = None
 
     # Soft-delete the user
     user.is_active = False

@@ -210,6 +210,9 @@
             <div class="flex flex-wrap gap-3">
                 <button onclick="saveNotes()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">💾 Guardar Notas</button>
                 <button onclick="enterEditMode()" class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium">✏️ Editar Información</button>
+                ${o.photo_path?`
+                    <button onclick="deletePhoto()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">🗑️ Eliminar Foto</button>
+                `:''}
                 ${isActive?`
                     <button onclick="openBlockModal()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium">🔒 Bloquear</button>
                     <button onclick="deactivateOp()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">🗑️ Eliminar</button>
@@ -419,12 +422,40 @@
     }
 
     async function deactivateOp(){
-        if(!confirm('¿Eliminar este operador?\n\nEsta acción desactivará su cuenta pero NO bloqueará su documento.'))return;
+        const msg='⚠️ ELIMINACIÓN PERMANENTE\n\n'+
+                  'Se borrarán TODOS los datos de este operador:\n'+
+                  '• Información personal y laboral\n'+
+                  '• Foto de perfil (archivo físico)\n'+
+                  '• Asignaciones a eventos\n'+
+                  '• Nóminas y evaluaciones\n'+
+                  '• Registros de auditoría\n\n'+
+                  'Esta acción NO se puede deshacer.\n'+
+                  'El operador NO quedará en la lista de inactivos/bloqueados.\n\n'+
+                  'Si solo quieres impedir que re-registre, usa BLOQUEAR en su lugar.\n\n'+
+                  '¿Confirmas la eliminación permanente?';
+        if(!confirm(msg))return;
         try{
             const r=await fetch('/api/operators/'+opId,{method:'DELETE',headers:authH()});
-            if(r.ok||r.status===204){toast('Desactivado','success');setTimeout(()=>window.location.href='/admin/operators',1000)}
-            else toast('Error','error');
-        }catch(e){toast('Error','error')}
+            if(r.ok||r.status===204){toast('Operador eliminado permanentemente','success');setTimeout(()=>window.location.href='/admin/operators',1500)}
+            else{
+                const err=await r.json();
+                toast(err.detail||'Error al eliminar','error');
+            }
+        }catch(e){toast('Error de conexión','error')}
+    }
+
+    async function deletePhoto(){
+        if(!confirm('¿Eliminar la foto de este operador?\n\nEsta acción no se puede deshacer. El operador deberá subir una nueva foto desde su perfil.'))return;
+        try{
+            const r=await fetch('/api/operators/'+opId+'/photo',{method:'DELETE',headers:authH()});
+            if(r.ok){
+                toast('Foto eliminada','success');
+                load();
+            } else {
+                const err=await r.json();
+                toast(err.detail||'Error al eliminar foto','error');
+            }
+        }catch(e){toast('Error de conexión','error')}
     }
 
     load();

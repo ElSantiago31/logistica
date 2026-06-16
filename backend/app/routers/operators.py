@@ -14,6 +14,7 @@ from app.services.operators import (
     get_operators, get_operator, update_operator, delete_operator, 
     upload_operator_photo, block_operator, unblock_operator, search_blocked_documents
 )
+from app.services.photos import save_operator_photo_bytes, delete_operator_photos
 from app.dependencies.auth import get_current_active_user, require_admin_or_coordinator, require_superadmin
 
 router = APIRouter(prefix="/api/operators", tags=["Operators"])
@@ -190,46 +191,6 @@ async def update_my_profile(
     return {"message": "Perfil actualizado correctamente"}
 
 
-# --- Photo upload helper ---
-def _save_operator_photo(operator: Operator, user_id: uuid.UUID, file_contents: bytes, settings) -> str:
-    """Save operator photo with compression. Returns filename."""
-    import os
-    from PIL import Image as PILImage
-
-    os.makedirs(settings.PHOTOS_DIR, exist_ok=True)
-    os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
-
-    # Delete old photos if they exist
-    if operator.photo_path:
-        old_filename = operator.photo_path.split("/")[-1]
-        old_photo = os.path.join(settings.PHOTOS_DIR, old_filename)
-        old_thumb = os.path.join(settings.PHOTOS_THUMBNAIL_DIR, old_filename)
-        if os.path.exists(old_photo):
-            os.remove(old_photo)
-        if os.path.exists(old_thumb):
-            os.remove(old_thumb)
-
-    # Always save as compressed JPEG
-    filename = f"{user_id}_{uuid.uuid4().hex[:8]}.jpg"
-    photo_path = os.path.join(settings.PHOTOS_DIR, filename)
-    thumbnail_path = os.path.join(settings.PHOTOS_THUMBNAIL_DIR, filename)
-
-    with PILImage.open(io.BytesIO(file_contents)) as img:
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        # Compress original (max 800x800, quality 80)
-        img.thumbnail((800, 800))
-        img.save(photo_path, format="JPEG", quality=80, optimize=True)
-        # Generate thumbnail (300x300, quality 80)
-        thumb = img.copy()
-        thumb.thumbnail((300, 300))
-        thumb.save(thumbnail_path, format="JPEG", quality=80, optimize=True)
-
-    operator.photo_path = f"/static/photos/{filename}"
-    operator.photo_thumbnail_path = f"/static/photos/thumbnails/{filename}"
-    return filename
-
-
 # --- Admin endpoints ---
 
 @router.get("/blocked/search")
@@ -379,7 +340,12 @@ async def upload_photo(
 
     try:
         contents = await photo.read()
-        _save_operator_photo(operator, user_id, contents, settings)
+        # Delete old photo files first (if any)
+        delete_operator_photos(operator.photo_path, operator.photo_thumbnail_path)
+        # Use centralized service — compresses + generates thumbnail
+        photo_url, thumb_url = save_operator_photo_bytes(contents, user_id)
+        operator.photo_path = photo_url
+        operator.photo_thumbnail_path = thumb_url
         await db.commit()
         # Return fresh operator data
         operator = await get_operator(db, user_id)
@@ -388,6 +354,39 @@ async def upload_photo(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando imagen: {str(e)}")
+
+
+@router.delete("/{user_id}/photo", status_code=status.HTTP_200_OK)
+async def delete_operator_photo(
+    user_id: uuid.UUID,
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an operator's profile photo (admin/coordinator only).
+
+    Removes the photo + thumbnail files from disk and clears the DB fields.
+    Useful when an operator uploads an incorrect or inappropriate photo.
+    """
+    op_result = await db.execute(select(Operator).where(Operator.user_id == user_id))
+    operator = op_result.scalar_one_or_none()
+    if not operator:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador no encontrado")
+
+    if not operator.photo_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El operador no tiene foto asignada",
+        )
+
+    # Delete files from disk (safe if already missing)
+    delete_operator_photos(operator.photo_path, operator.photo_thumbnail_path)
+
+    # Clear DB fields
+    operator.photo_path = None
+    operator.photo_thumbnail_path = None
+    await db.commit()
+
+    return {"message": "Foto eliminada correctamente"}
 
 
 @router.post("/{user_id}/block")
@@ -458,7 +457,12 @@ async def upload_enrollment_photo(
 
     try:
         contents = await photo.read()
-        _save_operator_photo(operator, user_id, contents, settings)
+        # Delete old photo files first (if any)
+        delete_operator_photos(operator.photo_path, operator.photo_thumbnail_path)
+        # Use centralized service — compresses + generates thumbnail
+        photo_url, thumb_url = save_operator_photo_bytes(contents, user_id)
+        operator.photo_path = photo_url
+        operator.photo_thumbnail_path = thumb_url
         await db.commit()
         return {"message": "Foto subida correctamente", "photo_path": operator.photo_path}
     except HTTPException:
