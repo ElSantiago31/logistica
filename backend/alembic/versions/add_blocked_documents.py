@@ -1,14 +1,14 @@
 """add blocked_documents table
 
 Revision ID: add_blocked_documents
-Revises: add_education_level_to_staff_needs
+Revises: add_edu_staff
 Create Date: 2026-06-12
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = 'add_blocked_documents'
-down_revision = 'add_education_level_to_staff_needs'
+down_revision = 'add_edu_staff'
 branch_labels = None
 depends_on = None
 

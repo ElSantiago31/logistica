@@ -117,6 +117,10 @@ class EventAssignment(BaseModel):
     rejected_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(default=False, nullable=False)
     rate_applied: Mapped[float | None] = mapped_column(Float, nullable=True, comment="Tarifa aplicada al momento de asignación")
+    # Uniform assignment fields
+    shirt_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de camisa asignada")
+    jacket_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de chaqueta asignada")
+    cap_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de gorra asignada")
 
     # Relationships
     event = relationship("Event", back_populates="assignments")
