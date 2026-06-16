@@ -29,9 +29,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('is_active', sa.Boolean(), default=True, nullable=False),
     )
-    op.create_index('ix_event_audit_logs_event_id', 'event_audit_logs', ['event_id'])
 
 
 def downgrade() -> None:
-    op.drop_index('ix_event_audit_logs_event_id', table_name='event_audit_logs')
     op.drop_table('event_audit_logs')
