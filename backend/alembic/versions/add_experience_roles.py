@@ -7,7 +7,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = 'add_exp_roles'
-down_revision = '64953d96e4b9'
+down_revision = '4324281308a3'
 branch_labels = None
 depends_on = None
 

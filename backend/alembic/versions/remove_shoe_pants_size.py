@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'remove_shoe_pants_size'
-down_revision = ('4324281308a3', 'add_blocked_documents')
+down_revision = 'add_blocked_documents'
 branch_labels = None
 depends_on = None
 
