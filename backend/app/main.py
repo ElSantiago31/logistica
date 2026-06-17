@@ -194,11 +194,11 @@ async def admin_payroll(request: Request, event_id: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root — Página de próximamente (la landing principal se construirá después)."""
-    return templates.TemplateResponse("landing/coming_soon.html", {"request": request})
+    """Root — Landing principal de la empresa."""
+    return templates.TemplateResponse("landing/home.html", {"request": request})
 
 
 @app.get("/colaboradores", response_class=HTMLResponse)
 async def collaborators_landing(request: Request):
     """Sub-landing de colaboradores/operadores."""
-    return templates.TemplateResponse("landing/home.html", {"request": request})
+    return templates.TemplateResponse("landing/collaborators.html", {"request": request})
