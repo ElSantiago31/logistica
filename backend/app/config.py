@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:8000"
 
+    # Feature flags
+    FEATURE_PAYROLL_ENABLED: bool = True
+
     # Photos
     PHOTOS_DIR: str = "./data/photos"
     PHOTOS_THUMBNAIL_DIR: str = "./data/photos/thumbnails"

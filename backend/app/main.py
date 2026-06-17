@@ -189,7 +189,11 @@ async def admin_checkin(request: Request, event_id: str):
 
 @app.get("/admin/events/{event_id}/payroll", response_class=HTMLResponse)
 async def admin_payroll(request: Request, event_id: str):
-    return templates.TemplateResponse("admin/payroll.html", {"request": request, "event_id": event_id})
+    return templates.TemplateResponse("admin/payroll.html", {
+        "request": request,
+        "event_id": event_id,
+        "payroll_enabled": settings.FEATURE_PAYROLL_ENABLED,
+    })
 
 
 @app.get("/", response_class=HTMLResponse)
