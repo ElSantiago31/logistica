@@ -1,9 +1,10 @@
-"""Seed inicial unificado: roles, ARLs y superadmin.
+"""Seed inicial unificado: roles, ARLs, EPS y superadmin.
 
 Uso:
     python -m scripts.seed            # todo
     python -m scripts.seed roles      # solo roles
     python -m scripts.seed arls       # solo ARLs
+    python -m scripts.seed eps        # solo EPS
     python -m scripts.seed admin      # solo superadmin
 """
 import asyncio
@@ -49,6 +50,40 @@ ARLS = [
     ("Colsanitas Seguros", "COLSANITAS"),
 ]
 
+# Lista oficial EPS vigentes en el Sistema de Seguridad Social en Salud (Colombia)
+EPS_LIST = [
+    ("Nueva EPS", "EPS-001"),
+    ("EPS Sura", "EPS-002"),
+    ("Sanitas EPS", "EPS-003"),
+    ("Salud Total EPS", "EPS-004"),
+    ("EPS Coomeva", "EPS-005"),
+    ("Compensar EPS", "EPS-006"),
+    ("Sura EPS (Antes Colmena)", "EPS-007"),
+    ("Servicio Occidental de Salud - SOS EPS", "EPS-008"),
+    ("Mutual Ser EPS", "EPS-009"),
+    ("EPS Famisanar", "EPS-010"),
+    ("Cafesalud EPS", "EPS-011"),
+    ("Cruz Blanca EPS", "EPS-012"),
+    ("Colsanitas EPS", "EPS-013"),
+    ("Saludvida EPS", "EPS-014"),
+    ("Capresoca EPS", "EPS-015"),
+    ("Comfaoriente EPS", "EPS-016"),
+    ("Comfacundi EPS", "EPS-017"),
+    ("Comfamiliar Huila EPS", "EPS-018"),
+    ("EPM EPS", "EPS-019"),
+    ("Caprecom EPS", "EPS-020"),
+    ("Dusakawi EPS", "EPS-021"),
+    ("Anas Wayúu EPS", "EPS-022"),
+    ("Pijaos Salud EPS", "EPS-023"),
+    ("Ambuq EPS", "EPS-024"),
+    ("Capital Salud EPS", "EPS-025"),
+    ("Comfachocó EPS", "EPS-026"),
+    ("Comfa Sucre EPS", "EPS-027"),
+    ("EPS MALLAMAS", "EPS-028"),
+    ("Manexka EPS", "EPS-029"),
+    ("EPS Sura (Contributivo)", "EPS-030"),
+]
+
 
 def get_engine():
     url = settings.effective_database_url
@@ -76,6 +111,18 @@ async def seed_arls(db: AsyncSession):
     print(f'OK: {len(ARLS)} ARLs insertadas/actualizadas')
 
 
+async def seed_eps(db: AsyncSession):
+    """Siembra/actualiza la lista de EPS (Entidades Promotoras de Salud)."""
+    await db.execute(text("UPDATE eps SET is_active = false"))
+    for name, code in EPS_LIST:
+        await db.execute(text("""
+            INSERT INTO eps (id, name, code, is_active)
+            VALUES (gen_random_uuid(), :name, :code, true)
+            ON CONFLICT (code) DO UPDATE SET name = :name, is_active = true
+        """), {'name': name, 'code': code})
+    print(f'OK: {len(EPS_LIST)} EPS insertadas/actualizadas')
+
+
 async def seed_admin(db: AsyncSession):
     pw_hash = hash_password('Admin123!')
     result = await db.execute(text(
@@ -98,6 +145,8 @@ async def main():
             await seed_roles(db)
         if only in ("all", "arls"):
             await seed_arls(db)
+        if only in ("all", "eps"):
+            await seed_eps(db)
         if only in ("all", "admin"):
             await seed_admin(db)
         await db.commit()
