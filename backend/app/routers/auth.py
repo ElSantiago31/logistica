@@ -54,7 +54,7 @@ def _build_login_response(user: User) -> LoginResponse:
 
 
 @router.post("/login", response_model=LoginResponse)
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 async def login(request: Request, body: LoginRequest = None, db: AsyncSession = Depends(get_db)):
     """Authenticate user by document number and return JWT tokens."""
     user = await authenticate_user(db, body.document_number, body.password)

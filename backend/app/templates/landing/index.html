@@ -678,6 +678,13 @@ async function submitForm() {
         return;
     }
 
+    // Validate photo is present (before disabling button to avoid stuck loading state)
+    if (!window._operatorPhotoData) {
+        showToast('Debes subir tu foto para registrarte', 'error');
+        goToStep(3);
+        return;
+    }
+
     const btn = document.getElementById('submit-btn');
     const text = document.getElementById('submit-text');
     const spinner = document.getElementById('submit-spinner');
