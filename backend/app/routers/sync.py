@@ -1,5 +1,6 @@
 """Sync router — offline data download + attendance batch upload."""
 import logging
+import time
 import uuid
 from datetime import datetime
 
@@ -16,6 +17,12 @@ from app.models.users import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sync", tags=["Sync"])
+
+# --- Presence tracking (Fase 3) ---
+# {event_id_str: {device_id: last_seen_epoch}}
+# In-memory, single-process. Para producción multi-worker usar Redis/pub-sub.
+_checkin_presence: dict = {}
+PRESENCE_TTL_SECONDS = 15
 
 
 def _to_uuid(val):
@@ -56,8 +63,16 @@ async def get_offline_data(
     )
     rows = result.all()
 
+    # --- Mapa de coordinadores (Opción A: por área del rol) ---
+    area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
+
     assignments = []
     for assignment, operator, op_user, role in rows:
+        # Determinar coordinador del operador según su área
+        coord_name, coord_role = general_coord if general_coord else ("Sin asignar", "")
+        if role and role.area and role.area in area_to_coord:
+            coord_name, coord_role = area_to_coord[role.area]
+
         assignments.append({
             "id": str(assignment.id),
             "operator_id": str(operator.id),
@@ -69,6 +84,8 @@ async def get_offline_data(
             "shirt_number": assignment.shirt_number,
             "jacket_number": assignment.jacket_number,
             "cap_number": assignment.cap_number,
+            "coordinator_name": coord_name,
+            "coordinator_role_name": coord_role,
         })
 
     # Log sync session (non-critical)
@@ -457,4 +474,139 @@ async def update_uniform(
         "shirt_number": assignment.shirt_number,
         "jacket_number": assignment.jacket_number,
         "cap_number": assignment.cap_number,
+    }
+
+
+async def _build_coordinator_map(db: AsyncSession, event_id: uuid.UUID):
+    """Construye el mapeo de coordinadores para un evento (Opción A: por área).
+
+    Retorna:
+        area_to_coord: dict {area: (coordinator_full_name, role_name)}
+        general_coord: tuple (name, role_name) del Coordinador General (nivel 1) o None
+    """
+    from app.models.roles import Role
+
+    # Buscar asignaciones del evento cuyo rol sea coordinador (nivel <= 2)
+    result = await db.execute(
+        select(EventAssignment, Operator, User, Role)
+        .join(Operator, Operator.id == EventAssignment.operator_id)
+        .join(User, User.id == Operator.user_id)
+        .join(Role, Role.id == EventAssignment.role_id)
+        .where(
+            EventAssignment.event_id == event_id,
+            Role.hierarchy_level <= 2,
+        )
+    )
+
+    area_to_coord = {}
+    general_coord = None
+    for assignment, operator, op_user, role in result.all():
+        full_name = f"{op_user.first_name} {op_user.last_name}"
+        if role.hierarchy_level == 1:
+            # Coordinador General — fallback global
+            general_coord = (full_name, role.name)
+        elif role.area:
+            # Coordinador de área — mapea área -> coordinador
+            if role.area not in area_to_coord:
+                area_to_coord[role.area] = (full_name, role.name)
+
+    return area_to_coord, general_coord
+
+
+def _register_presence(event_id: str, device_id: str, user_name: str):
+    """Registra que un dispositivo está viendo el check-in del evento (Fase 3)."""
+    if not device_id:
+        device_id = "anon"
+    now = time.time()
+    if event_id not in _checkin_presence:
+        _checkin_presence[event_id] = {}
+    _checkin_presence[event_id][device_id] = (now, user_name)
+
+
+def _get_active_viewers(event_id: str):
+    """Cuenta y lista dispositivos activos en el check-in del evento (Fase 3).
+
+    Un dispositivo se considera activo si hizo polling en los últimos
+    PRESENCE_TTL_SECONDS segundos (default 15s).
+    """
+    now = time.time()
+    presence = _checkin_presence.get(event_id, {})
+    active = {
+        did: (ts, name)
+        for did, (ts, name) in presence.items()
+        if now - ts <= PRESENCE_TTL_SECONDS
+    }
+    _checkin_presence[event_id] = active
+    viewers = [
+        {"device_id": did, "user_name": name}
+        for did, (_, name) in active.items()
+    ]
+    return len(active), viewers
+
+
+@router.get("/events/{event_id}/checkin-status")
+async def get_checkin_status(
+    event_id: uuid.UUID,
+    device_id: str = Query(default=None, description="ID del dispositivo (Fase 3)"),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Endpoint ligero para polling en tiempo real del check-in (Fase 1 + Fase 3).
+
+    Fase 1: retorna solo status + uniform por asignación (payload pequeño).
+    Fase 3: registra presencia del dispositivo y retorna:
+      - active_viewers: cuántas personas están viendo el check-in ahora
+      - recent_activity: últimos ingresos registrados (en cualquier dispositivo)
+    """
+    if user.user_type not in ("admin", "superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+
+    # --- Fase 3: registrar presencia ---
+    viewer_name = f"{user.first_name} {user.last_name}" if getattr(user, "first_name", None) else (user.email or "Usuario")
+    _register_presence(str(event_id), device_id or "anon", viewer_name)
+    active_count, viewers = _get_active_viewers(str(event_id))
+
+    # --- Fase 1: status + uniform por asignación ---
+    result = await db.execute(
+        select(EventAssignment)
+        .where(EventAssignment.event_id == event_id)
+    )
+    assignments = result.scalars().all()
+
+    # --- Fase 3: log compartido de ingresos recientes (otros dispositivos) ---
+    recent_activity = []
+    try:
+        recent_result = await db.execute(
+            select(AttendanceLog, Operator)
+            .join(Operator, Operator.id == AttendanceLog.operator_id)
+            .where(AttendanceLog.event_id == event_id)
+            .order_by(AttendanceLog.check_in_time.desc())
+            .limit(15)
+        )
+        for log, op in recent_result.all():
+            recent_activity.append({
+                "operator_name": f"{op.user.first_name} {op.user.last_name}" if op.user else "—",
+                "check_in_time": log.check_in_time.isoformat() if log.check_in_time else None,
+                "method": log.check_in_method,
+            })
+    except Exception:
+        # No bloquear el polling si falla el log
+        pass
+
+    return {
+        "event_id": str(event_id),
+        "updated_at": datetime.utcnow().isoformat(),
+        "active_viewers": active_count,
+        "viewers": viewers,
+        "recent_activity": recent_activity,
+        "assignments": [
+            {
+                "id": str(a.id),
+                "status": a.status,
+                "shirt_number": a.shirt_number,
+                "jacket_number": a.jacket_number,
+                "cap_number": a.cap_number,
+            }
+            for a in assignments
+        ],
     }

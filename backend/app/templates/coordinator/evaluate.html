@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Evaluar Equipo{% endblock %}
+{% block head %}
+<style>
+  body{background:#050505!important}
+  .eval-container{max-width:56rem;margin:0 auto;padding:2rem 1rem}
+  .team-card{background:rgba(10,10,10,0.92);border:1px solid rgba(207,155,98,0.25);border-radius:12px;padding:1.25rem;
+    margin-bottom:1rem}
+  .team-card.evaluated{opacity:0.6;border-color:rgba(74,222,128,0.3)}
+  .stars{display:inline-flex;gap:.25rem}
+  .star{font-size:1.5rem;cursor:pointer;color:#444;transition:color .15s}
+  .star.active{color:#cf9b62}
+  .star:hover{color:#d5aa7b}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:1rem}
+  .modal-card{background:#1a1a1a;border:1px solid rgba(207,155,98,0.3);border-radius:16px;padding:1.5rem;max-width:28rem;width:100%}
+  .modal-card label{color:#d4b896;font-size:.8rem}
+  .modal-card input,.modal-card textarea,.modal-card select{background:rgba(15,15,15,0.9);border:1px solid rgba(207,155,98,0.3);color:#f5f5f5;border-radius:8px}
+  .modal-card input:focus,.modal-card textarea:focus{border-color:#cf9b62;outline:none;box-shadow:0 0 12px rgba(207,155,98,0.25)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="eval-container">
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <h1 class="text-2xl font-bold" style="color:#cf9b62">👥 Equipo a Evaluar</h1>
+      <p id="event-info" class="text-sm" style="color:#785631"></p>
+    </div>
+    <a href="/coordinador" class="text-sm" style="color:#785631">← Volver</a>
+  </div>
+
+  <div id="loading" class="text-center py-12" style="color:#785631">Cargando equipo...</div>
+  <div id="empty" class="hidden text-center py-12" style="color:#785631">
+    <p>No hay personal asignado para evaluar en este evento.</p>
+  </div>
+  <div id="team-list"></div>
+</div>
+
+<!-- Evaluation Modal -->
+<div id="eval-modal" class="modal-bg hidden">
+  <div class="modal-card">
+    <h2 class="text-lg font-bold mb-1" style="color:#cf9b62">Calificar Operador</h2>
+    <p id="modal-operator-name" class="text-sm mb-4" style="color:#785631"></p>
+    <input type="hidden" id="modal-operator-id">
+    <div class="space-y-3">
+      <div class="flex justify-between items-center">
+        <label>⏰ Puntualidad</label>
+        <div class="stars" data-field="punctuality"></div>
+      </div>
+      <div class="flex justify-between items-center">
+        <label>💪 Desempeño</label>
+        <div class="stars" data-field="performance"></div>
+      </div>
+      <div class="flex justify-between items-center">
+        <label>👔 Presentación</label>
+        <div class="stars" data-field="appearance"></div>
+      </div>
+      <div class="flex justify-between items-center">
+        <label>😊 Actitud</label>
+        <div class="stars" data-field="attitude"></div>
+      </div>
+      <div>
+        <label>Comentarios (opcional)</label>
+        <textarea id="modal-comments" rows="2" class="w-full px-3 py-2 text-sm mt-1" placeholder="Observaciones..."></textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="modal-rehire" class="rounded">
+        <label for="modal-rehire">¿Lo volverías a contratar?</label>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="submitEvaluation()" class="flex-1 py-2 rounded-lg font-semibold text-sm" style="background:#cf9b62;color:#1a1a1a">Guardar</button>
+      <button onclick="closeModal()" class="flex-1 py-2 rounded-lg font-semibold text-sm" style="background:rgba(207,155,98,0.15);color:#cf9b62;border:1px solid rgba(207,155,98,0.3)">Cancelar</button>
+    </div>
+    <p id="modal-error" class="hidden text-xs mt-2" style="color:#e87c6f"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EVENT_ID = '{{ event_id }}';
+const token = localStorage.getItem('access_token');
+let currentScores = {punctuality:0, performance:0, appearance:0, attitude:0};
+
+function authH(){return{Authorization:'Bearer '+token}}
+
+function buildStars(container){
+  container.innerHTML='';
+  for(let i=1;i<=5;i++){
+    const s=document.createElement('span');
+    s.className='star';s.textContent='★';s.dataset.value=i;
+    s.onclick=()=>{
+      const field=container.dataset.field;
+      currentScores[field]=i;
+      [...container.children].forEach((c,idx)=>c.classList.toggle('active',idx<i));
+    };
+    container.appendChild(s);
+  }
+}
+
+function resetStars(){
+  document.querySelectorAll('.stars').forEach(c=>{buildStars(c)});
+  currentScores={punctuality:0,performance:0,appearance:0,attitude:0};
+}
+
+function openModal(operatorId, operatorName){
+  resetStars();
+  document.getElementById('modal-operator-id').value=operatorId;
+  document.getElementById('modal-operator-name').textContent=operatorName;
+  document.getElementById('modal-comments').value='';
+  document.getElementById('modal-rehire').checked=true;
+  document.getElementById('modal-error').classList.add('hidden');
+  document.getElementById('eval-modal').classList.remove('hidden');
+}
+
+function closeModal(){document.getElementById('eval-modal').classList.add('hidden')}
+
+async function submitEvaluation(){
+  const operatorId=document.getElementById('modal-operator-id').value;
+  const scores=[currentScores.punctuality,currentScores.performance,currentScores.appearance,currentScores.attitude];
+  if(scores.some(s=>s===0)){
+    const err=document.getElementById('modal-error');
+    err.textContent='Debe calificar todos los criterios';err.classList.remove('hidden');
+    return;
+  }
+  const body={
+    event_id:EVENT_ID,
+    operator_id:operatorId,
+    punctuality_score:currentScores.punctuality,
+    performance_score:currentScores.performance,
+    appearance_score:currentScores.appearance,
+    attitude_score:currentScores.attitude,
+    comments:document.getElementById('modal-comments').value||undefined,
+    would_hire_again:document.getElementById('modal-rehire').checked,
+  };
+  try{
+    const r=await fetch('/api/coordinator/evaluations',{method:'POST',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){
+      closeModal();
+      loadTeam();
+    }else{
+      const e=await r.json();
+      const err=document.getElementById('modal-error');
+      err.textContent=e.detail||'Error';err.classList.remove('hidden');
+    }
+  }catch(e){
+    const err=document.getElementById('modal-error');
+    err.textContent='Error de conexión';err.classList.remove('hidden');
+  }
+}
+
+async function loadTeam(){
+  if(!token){window.location.href='/enrolamiento/login';return;}
+  try{
+    const r=await fetch(`/api/coordinator/events/${EVENT_ID}/team`,{headers:authH()});
+    if(r.status===401){window.location.href='/enrolamiento/login';return;}
+    if(!r.ok){
+      const e=await r.json();
+      document.getElementById('loading').innerHTML=`<p style="color:#e87c6f">${e.detail||'Error'}</p>`;
+      return;
+    }
+    const data=await r.json();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('event-info').textContent=`Tu rol: ${data.my_role}${data.my_area?' | Área: '+data.my_area:''}`;
+
+    if(!data.team||data.team.length===0){
+      document.getElementById('empty').classList.remove('hidden');
+      return;
+    }
+    const list=document.getElementById('team-list');
+    list.innerHTML=data.team.map(m=>{
+      const evaluatedClass=m.already_evaluated?'evaluated':'';
+      const scoreBadge=m.already_evaluated&&m.overall_score?`<span class="text-xs px-2 py-1 rounded-full" style="background:rgba(74,222,128,0.15);color:#4ade80">⭐ ${m.overall_score}/5</span>`:'';
+      const photo=m.photo?`<img src="${m.photo}" class="w-10 h-10 rounded-full object-cover">`:`<div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(207,155,98,0.15);color:#cf9b62;font-weight:bold">${m.name[0]}</div>`;
+      return `
+        <div class="team-card ${evaluatedClass}">
+          <div class="flex items-center gap-3">
+            ${photo}
+            <div class="flex-1">
+              <p class="font-semibold" style="color:#f5f5f5">${m.name}</p>
+              <p class="text-xs" style="color:#785631">${m.role}${m.area?' • '+m.area:''}</p>
+            </div>
+            ${scoreBadge}
+            ${m.already_evaluated
+              ?'<span class="text-xs" style="color:#4ade80">✓ Evaluado</span>'
+              :`<button onclick="openModal('${m.operator_id}','${m.name.replace(/'/g,"\\'")}')" class="px-3 py-1.5 rounded-lg font-semibold text-xs" style="background:#cf9b62;color:#1a1a1a">Calificar</button>`}
+          </div>
+        </div>`;
+    }).join('');
+  }catch(e){
+    document.getElementById('loading').textContent='Error de conexión';
+  }
+}
+
+// Inicializar estrellas del modal (se resetean en cada apertura)
+document.querySelectorAll('.stars').forEach(c=>buildStars(c));
+loadTeam();
+</script>
+{% endblock %}

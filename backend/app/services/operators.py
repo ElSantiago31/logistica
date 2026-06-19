@@ -1,3 +1,4 @@
+
 import os
 import uuid
 from typing import Optional, Tuple, List
@@ -109,17 +110,20 @@ async def get_operators(
             query = query.where(exp_filter)
             count_query = count_query.where(exp_filter)
 
-        # Filter by city (accent-insensitive partial match)
+        # Filter by city (accent-insensitive, case-insensitive match)
+        # PostgreSQL ILIKE is already case-insensitive for ASCII; we normalize
+        # accents on the DB side via a single unaccent-like expression, but we
+        # ALSO normalize on Python side. To keep it portable (no extension
+        # dependency) we use a simpler approach: remove the most common suffixes
+        # from the search term and do a case-insensitive contains match.
         if city:
-            normalized = _normalize_city(city)
-            # Use unaccented comparison via replace chain
-            city_expr = func.lower(
-                func.replace(func.replace(func.replace(func.replace(
-                    func.replace(func.replace(func.replace(func.replace(
-                        Operator.city, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'),
-                    'ú', 'u'), 'ñ', 'n'), 'ü', 'u'), ',', '')
-            )
-            city_filter = city_expr.ilike(f"%{normalized}%")
+            normalized = _normalize_city(city)  # sin acentos, sin ", D.C.", lower
+            # Build accent-insensitive pattern using regex (PostgreSQL ~* operator)
+            # This converts "bogota" into a pattern that matches "Bogotá" or "BOGOTÁ"
+            accent_map = {'a': '[aá]', 'e': '[eé]', 'i': '[ií]', 'o': '[oó]', 'u': '[uú]', 'n': '[nñ]'}
+            regex_pattern = ''.join(accent_map.get(ch, ch) for ch in normalized)
+            # Use PostgreSQL regex case-insensitive operator (~*)
+            city_filter = Operator.city.op('~*')(f"{regex_pattern}")
             query = query.where(city_filter)
             count_query = count_query.where(city_filter)
 

@@ -21,16 +21,18 @@ async def main():
     engine = create_async_engine(settings.effective_database_url)
     S = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with S() as db:
-        for name, slug, desc, rate in ROLES:
+        for name, slug, desc, rate, level, area in ROLES:
             await db.execute(text("""
-                INSERT INTO roles (id, name, slug, description, base_rate, is_active)
-                VALUES (gen_random_uuid(), :name, :slug, :desc, :rate, true)
-                ON CONFLICT (slug) DO UPDATE SET name = :name, description = :desc
-            """), {'name': name, 'slug': slug, 'desc': desc, 'rate': rate})
+                INSERT INTO roles (id, name, slug, description, base_rate, hierarchy_level, area, is_active)
+                VALUES (gen_random_uuid(), :name, :slug, :desc, :rate, :level, :area, true)
+                ON CONFLICT (slug) DO UPDATE SET
+                    name = :name, description = :desc,
+                    hierarchy_level = :level, area = :area
+            """), {'name': name, 'slug': slug, 'desc': desc, 'rate': rate, 'level': level, 'area': area})
         await db.commit()
-        print(f'OK: {len(ROLES)} roles insertados/actualizados')
+        print(f'OK: {len(ROLES)} roles insertados/actualizados (con jerarquía y área)')
         for r in ROLES:
-            print(f'   - {r[0]}')
+            print(f'   - {r[0]} (nivel {r[4]})')
     await engine.dispose()
 
 

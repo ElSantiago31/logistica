@@ -138,9 +138,7 @@ async def get_my_profile(
             "emergency_contact_phone": operator.emergency_contact_phone if operator else None,
             "has_protocol_experience": operator.has_protocol_experience if operator else None,
             "event_size_experience": operator.event_size_experience if operator else None,
-            "shoe_size": operator.shoe_size if operator else None,
             "shirt_size": operator.shirt_size if operator else None,
-            "pants_size": operator.pants_size if operator else None,
             "jacket_size": operator.jacket_size if operator else None,
             "experience_roles": operator.experience_roles if operator else None,
             "photo_path": operator.photo_path if operator else None,
@@ -172,7 +170,7 @@ async def update_my_profile(
         "eps_id", "arl_id", "city", "address", "locality", "whatsapp",
         "blood_type", "emergency_contact_name", "emergency_contact_phone",
         "has_protocol_experience", "event_size_experience",
-        "shoe_size", "shirt_size", "pants_size", "jacket_size",
+        "shirt_size", "jacket_size",
     ]
     for field in field_map:
         if field in update_data and update_data[field] is not None:

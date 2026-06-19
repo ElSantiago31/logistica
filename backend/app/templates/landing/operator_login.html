@@ -115,7 +115,7 @@ async function login() {
   const password = document.getElementById('password').value;
   if (!document_number || !password) { errEl.textContent='Completa todos los campos'; errEl.classList.remove('hidden'); return; }
 
-  btn.disabled=true; text.classList.add('hidden'); spinner.classList.remove('hidden');
+    btn.disabled=true; text.classList.add('hidden'); spinner.classList.remove('hidden');
   try {
     const resp = await fetch('/api/auth/login', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -126,13 +126,17 @@ async function login() {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
       window.location.href = '/enrolamiento/perfil';
+    } else if (resp.status === 429) {
+      errEl.textContent = 'Demasiados intentos. Espera 1 minuto e intenta de nuevo.';
+      errEl.classList.remove('hidden');
     } else {
-      const err = await resp.json();
-      errEl.textContent = err.detail || 'Error al iniciar sesión';
+      let detail = 'Error al iniciar sesión';
+      try { const err = await resp.json(); detail = err.detail || detail; } catch(_) {}
+      errEl.textContent = detail;
       errEl.classList.remove('hidden');
     }
   } catch(e) {
-    errEl.textContent = 'Error de conexión';
+    errEl.textContent = 'Error de conexión. Verifica tu internet.';
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled=false; text.classList.remove('hidden'); spinner.classList.add('hidden');

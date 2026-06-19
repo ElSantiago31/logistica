@@ -20,6 +20,7 @@ from app.routers import whatsapp as whatsapp_router
 from app.routers import sync as sync_router
 from app.routers import payroll as payroll_router
 from app.routers import reports as reports_router
+from app.routers import coordinator as coordinator_router
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.include_router(whatsapp_router.router)
 app.include_router(sync_router.router)
 app.include_router(payroll_router.router)
 app.include_router(reports_router.router)
+app.include_router(coordinator_router.router)
 
 # Templates Jinja2
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -193,6 +195,21 @@ async def admin_payroll(request: Request, event_id: str):
         "request": request,
         "event_id": event_id,
         "payroll_enabled": settings.FEATURE_PAYROLL_ENABLED,
+    })
+
+
+@app.get("/coordinador", response_class=HTMLResponse)
+async def coordinator_dashboard(request: Request):
+    """Panel del coordinador: lista de eventos donde es coordinador."""
+    return templates.TemplateResponse("coordinator/dashboard.html", {"request": request})
+
+
+@app.get("/coordinador/evento/{event_id}", response_class=HTMLResponse)
+async def coordinator_event(request: Request, event_id: str):
+    """Panel del coordinador: equipo a evaluar en un evento."""
+    return templates.TemplateResponse("coordinator/evaluate.html", {
+        "request": request,
+        "event_id": event_id,
     })
 
 

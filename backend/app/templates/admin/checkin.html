@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Check-in — AyC Eventos{% endblock %}
+{% block title %}Check-in — A&C Eventos{% endblock %}
 {% block head %}
 <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
 <script src="/static/js/scanner.js"></script>
@@ -12,7 +12,6 @@
     .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
 </style>
 {% endblock %}
-
 {% block content %}
 <div class="max-w-5xl mx-auto px-4 py-6">
     <!-- Header -->
@@ -24,7 +23,8 @@
             </div>
             <p id="event-name" class="text-gray-500 text-sm ml-1">Cargando evento...</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 items-center">
+            <span id="viewers-badge" class="status-badge bg-blue-50 text-blue-700 hidden" title="Personas viendo este check-in">👥 1</span>
             <span id="online-badge" class="status-badge bg-green-100 text-green-700">🟢 Online</span>
             <span id="offline-badge" class="status-badge bg-gray-100 text-gray-700 hidden">📴 Offline</span>
         </div>
@@ -92,6 +92,7 @@
                         <h3 id="op-name" class="text-lg font-bold" style="color:#5d4224;"></h3>
                         <p id="op-doc" class="text-sm text-gray-500"></p>
                         <p id="op-role" class="text-sm font-medium" style="color:#cf9b62;"></p>
+                        <p id="op-coordinator" class="text-xs text-gray-600 mt-1 hidden"></p>
                     </div>
                 </div>
 
@@ -249,6 +250,9 @@ document.addEventListener('DOMContentLoaded', () => {
         await refreshConnectionStatus();
         if (_isOnline) syncPendingRecords();
     }, 15000);
+
+    // --- Fase 1: Polling tiempo real cada 4s ---
+    startCheckinPolling();
 });
 
 async function loadEventData() {
@@ -376,6 +380,7 @@ async function searchOperator(query) {
                 <span class="status-badge ${op.status === 'checked_in' ? 'bg-green-100 text-green-700' : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}">${op.status}</span>
             </div>
             <div class="text-xs text-gray-500">${op.role_name || 'Operador'}</div>
+            ${op.coordinator_name && op.coordinator_name !== 'Sin asignar' ? `<div class="text-[11px] text-gray-400 mt-0.5">👔 ${op.coordinator_name}</div>` : ''}
         </div>
     `).join('');
 }
@@ -400,6 +405,15 @@ async function showOperator(assignmentId) {
     document.getElementById('op-name').textContent = operator.full_name;
     document.getElementById('op-doc').textContent = operator.document_number;
     document.getElementById('op-role').textContent = operator.role_name || 'Operador';
+    // Fase 2: Mostrar coordinador del operador
+    const coordEl = document.getElementById('op-coordinator');
+    if (operator.coordinator_name && operator.coordinator_name !== 'Sin asignar') {
+        coordEl.textContent = '👔 Coordinador: ' + operator.coordinator_name +
+            (operator.coordinator_role_name ? ' (' + operator.coordinator_role_name + ')' : '');
+        coordEl.classList.remove('hidden');
+    } else {
+        coordEl.classList.add('hidden');
+    }
     document.getElementById('operator-panel').classList.remove('hidden');
 
     const statusBox = document.getElementById('op-status-box');
@@ -813,7 +827,9 @@ async function _cacheEventData(eventId, data) {
                 operator_id: a.operator_id,  // FIX crítico: faltaba guardar operator_id
                 full_name: a.full_name, document_number: a.document_number,
                 role_name: a.role_name, status: a.status, photo_url: a.photo_url,
-                shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number
+                shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number,
+                coordinator_name: a.coordinator_name || null,
+                coordinator_role_name: a.coordinator_role_name || null
             });
         }
     }
@@ -961,6 +977,191 @@ async function syncPendingRecords() {
         await updateSyncCount();
     } else {
         await updateSyncCount();
+    }
+}
+
+// ============================================================
+//  FASE 1+3 — POLLING TIEMPO REAL (cada 4s) + PRESENCIA
+// ============================================================
+let _pollingTimer = null;
+let _pollingInFlight = false;
+const POLLING_INTERVAL_MS = 4000;
+
+// --- Fase 3: device_id persistente por navegador ---
+function _getDeviceId() {
+    let did = localStorage.getItem('checkin_device_id');
+    if (!did) {
+        did = 'dev_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+        localStorage.setItem('checkin_device_id', did);
+    }
+    return did;
+}
+
+function startCheckinPolling() {
+    if (_pollingTimer) clearInterval(_pollingTimer);
+    _pollingTimer = setInterval(pollCheckinStatus, POLLING_INTERVAL_MS);
+}
+
+async function pollCheckinStatus() {
+    // No pollar si: offline, scanner activo, guardando, o sin datos
+    if (!_isOnline || scannerActive || _pollingInFlight || !eventAssignments.length) return;
+    const btnCk = document.getElementById('btn-checkin');
+    const btnUn = document.getElementById('btn-save-uniform');
+    if ((btnCk && btnCk.disabled) || (btnUn && btnUn.disabled)) return;
+
+    _pollingInFlight = true;
+    try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
+        // Fase 3: enviar device_id para tracking de presencia
+        const did = _getDeviceId();
+        const resp = await fetch(`/api/sync/events/${EVENT_ID}/checkin-status?device_id=${encodeURIComponent(did)}`, {
+            headers: authHeaders(), cache: 'no-store', signal: controller.signal
+        });
+        clearTimeout(t);
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        // --- Fase 3: actualizar badge de viewers ---
+        _updateViewersBadge(data.active_viewers || 0);
+
+        // --- Fase 3: refrescar log compartido de ingresos ---
+        if (data.recent_activity && data.recent_activity.length) {
+            _renderSharedActivity(data.recent_activity);
+        }
+
+        const serverMap = {};
+        for (const a of (data.assignments || [])) serverMap[a.id] = a;
+
+        const changedIds = [];
+        for (const local of eventAssignments) {
+            const srv = serverMap[local.id];
+            if (!srv) continue;
+            if (srv.status !== local.status ||
+                (srv.shirt_number || null) !== (local.shirt_number || null) ||
+                (srv.jacket_number || null) !== (local.jacket_number || null) ||
+                (srv.cap_number || null) !== (local.cap_number || null)) {
+                changedIds.push(local.id);
+            }
+        }
+        if (!changedIds.length) return;
+
+        for (const id of changedIds) {
+            const srv = serverMap[id];
+            const local = eventAssignments.find(a => a.id === id);
+            if (local && srv) {
+                local.status = srv.status;
+                local.shirt_number = srv.shirt_number;
+                local.jacket_number = srv.jacket_number;
+                local.cap_number = srv.cap_number;
+            }
+        }
+
+        const total = countRelevantForCheckin(eventAssignments);
+        const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+        updateStats(total, checked);
+
+        const q = document.getElementById('search-input').value;
+        if (q && q.length >= 2) searchOperator(q);
+
+        if (currentOperator && changedIds.includes(currentOperator.id)) {
+            _refreshOperatorPanelFromPoll();
+        }
+        _flashChangedCards(changedIds);
+        _syncCacheFromPolling(changedIds, serverMap).catch(() => {});
+    } catch(e) { /* silencioso */ }
+    finally { _pollingInFlight = false; }
+}
+
+function _refreshOperatorPanelFromPoll() {
+    const op = currentOperator;
+    if (!op) return;
+    if (op.status === 'checked_in') {
+        const box = document.getElementById('op-status-box');
+        box.className = 'rounded-lg p-3 mb-4 text-center bg-green-50 text-green-700';
+        document.getElementById('op-status-text').textContent = '✅ Ya registrado (actualizado)';
+        document.getElementById('checkin-actions').classList.add('hidden');
+        document.getElementById('btn-save-uniform').classList.remove('hidden');
+        document.getElementById('uniform-shirt').value = op.shirt_number || '';
+        document.getElementById('uniform-jacket').value = op.jacket_number || '';
+        document.getElementById('uniform-cap').value = op.cap_number || '';
+    }
+}
+
+function _flashChangedCards(changedIds) {
+    const cards = document.querySelectorAll('.operator-card');
+    cards.forEach(card => {
+        const onclick = card.getAttribute('onclick') || '';
+        const m = onclick.match(/showOperator\('([^']+)'\)/);
+        if (m && changedIds.includes(m[1])) {
+            card.style.transition = 'background-color 0.3s';
+            card.style.backgroundColor = '#dcfce7';
+            const op = eventAssignments.find(a => a.id === m[1]);
+            const badge = card.querySelector('.status-badge');
+            if (op && badge) {
+                badge.className = 'status-badge ' + (op.status === 'checked_in' ? 'bg-green-100 text-green-700' : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700');
+                badge.textContent = op.status;
+            }
+            setTimeout(() => { card.style.backgroundColor = ''; }, 1500);
+        }
+    });
+}
+
+async function _syncCacheFromPolling(changedIds, serverMap) {
+    try {
+        const db = _getCacheDB();
+        if (!db) return;
+        for (const id of changedIds) {
+            const srv = serverMap[id];
+            const cached = await db.operators.get(id);
+            if (cached && srv) {
+                await db.operators.put({ ...cached, status: srv.status,
+                    shirt_number: srv.shirt_number, jacket_number: srv.jacket_number, cap_number: srv.cap_number });
+            }
+        }
+    } catch(_) {}
+}
+
+// --- Fase 3: UI de presencia multi-dispositivo ---
+function _updateViewersBadge(count) {
+    const badge = document.getElementById('viewers-badge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.classList.remove('hidden');
+        badge.textContent = `👥 ${count}`;
+        // Color dinámico: verde 1-2, azul 3+, ámbar 5+
+        badge.className = 'status-badge ' + (count >= 5 ? 'bg-amber-100 text-amber-700'
+            : count >= 3 ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700');
+        badge.title = `${count} ${count === 1 ? 'persona viendo' : 'personas viendo'} este check-in`;
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function _renderSharedActivity(activities) {
+    // Renderiza los últimos ingresos compartidos (de todos los dispositivos).
+    // Se muestra en la sección "Últimos ingresos" si no hay items locales.
+    const list = document.getElementById('recent-checkins');
+    const empty = document.getElementById('checkin-log-empty');
+    const localItems = list.querySelectorAll(':scope > div').length;
+    // Solo renderizar actividad compartida si no hay items locales recientes
+    // (los locales tienen prioridad — incluyen a este dispositivo)
+    if (localItems === 0 && activities.length) {
+        if (empty) empty.remove();
+        for (const act of activities.slice(0, 15)) {
+            const item = document.createElement('div');
+            item.className = 'text-xs bg-blue-50 rounded p-2';
+            const time = act.check_in_time ? new Date(act.check_in_time).toLocaleTimeString() : '';
+            item.innerHTML = `
+                <div class="flex justify-between">
+                    <span><strong>✅</strong> ${act.operator_name || '—'}</span>
+                    <span class="text-gray-400">${time}</span>
+                </div>
+                <div class="text-gray-400 mt-0.5 text-[11px]">📡 En otro dispositivo (${act.method || 'manual'})</div>
+            `;
+            list.appendChild(item);
+        }
+        _updateCheckinLogCount();
     }
 }
 

@@ -22,19 +22,25 @@ from app.config import settings
 from app.services.auth import hash_password
 
 
+# Formato: (name, slug, description, base_rate, hierarchy_level, area)
+# hierarchy_level: 1=Coordinador General, 2=Coordinador de área, 3=Operador
+# area: categoría funcional (None para roles generales)
 ROLES = [
-    ("Coordinador General", "coordinador_general", "Coordinación general del evento", None),
-    ("Coordinador Grupos Operadores", "coordinador_grupos", "Coordinación de grupos de operadores", None),
-    ("Operador Logístico", "operador_logistico", "Soporte logístico general", None),
-    ("Coordinador de Emergencias", "coordinador_emergencias", "Coordinación de planes de emergencia", None),
-    ("Brigadista de Emergencias", "brigadista", "Brigada de emergencias y primeros auxilios", None),
-    ("Líder Seguridad – Bouncer", "lider_seguridad", "Líder del equipo de seguridad", None),
-    ("Operador de Seguridad – Bouncer", "seguridad_bouncer", "Control de acceso y seguridad", None),
-    ("Acomodador", "acomodador", "Acomodación y guía de asistentes", None),
-    ("Protocolo", "protocolo", "Atención y protocolo institucional", None),
-    ("PMT – Plan de Manejo de Tráfico", "pmt", "Plan de manejo de tráfico vehicular", None),
-    ("Operador de Montaje", "montaje", "Montaje y desmontaje de infraestructura", None),
-    ("Operador de Aseo", "aseo", "Limpieza y mantenimiento del evento", None),
+    # Nivel 1 — Coordinador General
+    ("Coordinador General", "coordinador_general", "Coordinación general del evento", None, 1, None),
+    # Nivel 2 — Coordinadores de área
+    ("Coordinador Grupos Operadores", "coordinador_grupos", "Coordinación de grupos de operadores", None, 2, "Grupos"),
+    ("Coordinador de Emergencias", "coordinador_emergencias", "Coordinación de planes de emergencia", None, 2, "Emergencias"),
+    ("Líder Seguridad – Bouncer", "lider_seguridad", "Líder del equipo de seguridad", None, 2, "Seguridad"),
+    # Nivel 3 — Operadores
+    ("Operador Logístico", "operador_logistico", "Soporte logístico general", None, 3, "Logística"),
+    ("Brigadista de Emergencias", "brigadista", "Brigada de emergencias y primeros auxilios", None, 3, "Emergencias"),
+    ("Operador de Seguridad – Bouncer", "seguridad_bouncer", "Control de acceso y seguridad", None, 3, "Seguridad"),
+    ("Acomodador", "acomodador", "Acomodación y guía de asistentes", None, 3, None),
+    ("Protocolo", "protocolo", "Atención y protocolo institucional", None, 3, None),
+    ("PMT – Plan de Manejo de Tráfico", "pmt", "Plan de manejo de tráfico vehicular", None, 3, "Tráfico"),
+    ("Operador de Montaje", "montaje", "Montaje y desmontaje de infraestructura", None, 3, "Montaje"),
+    ("Operador de Aseo", "aseo", "Limpieza y mantenimiento del evento", None, 3, "Aseo"),
 ]
 
 ARLS = [
@@ -92,13 +98,15 @@ def get_engine():
 
 
 async def seed_roles(db: AsyncSession):
-    for name, slug, desc, rate in ROLES:
+    for name, slug, desc, rate, level, area in ROLES:
         await db.execute(text("""
-            INSERT INTO roles (id, name, slug, description, base_rate, is_active)
-            VALUES (gen_random_uuid(), :name, :slug, :desc, :rate, true)
-            ON CONFLICT (slug) DO UPDATE SET name = :name, description = :desc
-        """), {'name': name, 'slug': slug, 'desc': desc, 'rate': rate})
-    print(f'OK: {len(ROLES)} roles insertados/actualizados')
+            INSERT INTO roles (id, name, slug, description, base_rate, hierarchy_level, area, is_active)
+            VALUES (gen_random_uuid(), :name, :slug, :desc, :rate, :level, :area, true)
+            ON CONFLICT (slug) DO UPDATE SET
+                name = :name, description = :desc,
+                hierarchy_level = :level, area = :area
+        """), {'name': name, 'slug': slug, 'desc': desc, 'rate': rate, 'level': level, 'area': area})
+    print(f'OK: {len(ROLES)} roles insertados/actualizados (con jerarquía y área)')
 
 
 async def seed_arls(db: AsyncSession):

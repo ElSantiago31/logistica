@@ -71,7 +71,13 @@
             <div id="smartChips" class="flex flex-wrap gap-2 mb-3"></div>
             <div class="space-y-2 mb-4">
                 <input type="text" id="searchOps" placeholder="🔍 Buscar por nombre, email, documento..." class="w-full border rounded-lg px-4 py-2.5 text-sm" oninput="debounceSearch()">
-                <select id="assignRole" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <select id="assignRole" class="flex-1 border rounded-lg px-3 py-2 text-sm"></select>
+                    <label id="cityFilterWrap" class="flex items-center gap-2 border rounded-lg px-3 py-2 text-sm bg-gray-50 cursor-pointer whitespace-nowrap sm:max-w-[50%]">
+                        <input type="checkbox" id="cityFilter" onchange="searchOperators(true)" class="rounded">
+                        <span class="text-gray-700 truncate" id="cityFilterLabel">📍 Solo mi ciudad</span>
+                    </label>
+                </div>
             </div>
             <div id="opsResults" class="space-y-2 max-h-60 overflow-y-auto"></div>
             <div class="mt-4 flex justify-between items-center">
@@ -213,6 +219,19 @@ function showAssignModal(){
     selectedOps.clear();opsPage=0;opsTotal=0;
     document.getElementById('searchOps').value='';
     _smartFilter = { role: '', edu: '' };
+    // Configurar el checkbox de filtro por ciudad (desactivado por defecto)
+    const cityCb=document.getElementById('cityFilter');
+    const cityLabel=document.getElementById('cityFilterLabel');
+    const cityWrap=document.getElementById('cityFilterWrap');
+    if(cityCb&&cityLabel&&cityWrap){
+        cityCb.checked=false;  // Desactivado por defecto: muestra TODOS los operadores
+        if(currentEventCity){
+            cityLabel.textContent='📍 Solo '+currentEventCity;
+            cityWrap.classList.remove('hidden');
+        }else{
+            cityWrap.classList.add('hidden');  // Ocultar si el evento no tiene ciudad
+        }
+    }
     const chips=document.getElementById('smartChips');
     if(currentStaffNeeds.length){
         chips.innerHTML=currentStaffNeeds.map(n=>{
@@ -242,7 +261,9 @@ async function searchOperators(resetPage=false){
     opsLoading=true;
     const token=getToken();const q=document.getElementById('searchOps').value;
     const roleId=_smartFilter.role;
-    const city=currentEventCity;
+    // Solo filtrar por ciudad si el usuario activó el checkbox (desactivado por defecto)
+    const cityCb=document.getElementById('cityFilter');
+    const city=(cityCb&&cityCb.checked)?currentEventCity:'';
     const edu=_smartFilter.edu;
     const skip=opsPage*opsPageSize;
     let url=`/api/operators/?skip=${skip}&limit=${opsPageSize}&is_approved=true&exclude_event_id=${encodeURIComponent(EVENT_ID)}`;
