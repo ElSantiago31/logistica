@@ -105,8 +105,9 @@ cat backup_20260616.sql | docker exec -i logistica_postgres psql -U logistica_us
   Esto significa que Cloudflare está entre los usuarios y tu VPS.
 
   ### Configuración SSL/TLS
-  - Modo: **Full** (no Flexible, no Full strict)
-  - En Cloudflare: SSL/TLS → Overview → Full
+  - Modo recomendado: **Full (strict)** — requiere certificado válido en el VPS (ver sección de certificados abajo).
+  - Transición: empezar en **Full**, migrar a **Full (strict)** tras configurar DNS-01.
+  - **NUNCA usar Flexible** (causa loop de redirecciones con Nginx).
 
   ### IPs reales de clientes (auditoría + rate-limit)
   - Nginx está configurado con `set_real_ip_from` para los rangos IP de Cloudflare.
@@ -122,13 +123,44 @@ cat backup_20260616.sql | docker exec -i logistica_postgres psql -U logistica_us
     docker restart logistica_nginx
     ```
 
-  ### ⚠️ Renovación de certificados Let's Encrypt detrás de Cloudflare
-  Cloudflare puede interferir con el challenge HTTP-01 de Let's Encrypt.
-  Si `docker exec logistica_certbot certbot renew` falla:
-  1. **Opción rápida:** Pausar Cloudflare temporalmente (proxy gris en DNS A @ y www).
-  2. Renovar: `docker exec logistica_certbot certbot renew`.
-  3. Volver a poner proxy naranja.
-  Alternativa robusta a futuro: migrar a DNS-01 challenge con el plugin de Cloudflare.
+  ### ⚠️ Renovación de certificados Let's Encrypt — DNS-01 (recomendado)
+
+  El proyecto incluye un certbot con el plugin `certbot-dns-cloudflare` que renueva
+  los certificados vía **DNS-01 challenge** (no requiere pausar Cloudflare ni abrir puertos).
+
+  **Setup inicial (una sola vez):**
+
+  1. Crear un API Token en Cloudflare:
+     - Ir a https://dash.cloudflare.com/profile/api-tokens
+     - "Create Token" → plantilla "Edit zone DNS"
+     - Zone Resource: `ayceventos.com.co`
+
+  2. En el VPS, crear el archivo de credenciales:
+     ```bash
+     sudo cp certbot/cloudflare.ini.example /etc/letsencrypt/cloudflare.ini
+     sudo nano /etc/letsencrypt/cloudflare.ini
+     # Pegar el token de Cloudflare
+     sudo chmod 600 /etc/letsencrypt/cloudflare.ini
+     ```
+
+  3. Obtener certificado inicial con DNS-01:
+     ```bash
+     cd /opt/logistica
+     bash certbot/obtain-cert.sh
+     ```
+
+  4. Reconstruir el servicio certbot (para que use el plugin):
+     ```bash
+     docker compose -f docker-compose.prod.yml up -d --build certbot
+     ```
+
+  **Renovación:** automática cada 12h vía DNS-01 (no interrumpe el servicio).
+
+  ### SSL/TLS Mode: Full (strict)
+  Después de obtener el certificado con DNS-01, cambiar en Cloudflare:
+  - SSL/TLS → Overview → **Full (strict)**
+
+  Esto garantiza cifrado end-to-end (usuario → Cloudflare → VPS) sin posibilidad de downgrade.
 
   ---
 

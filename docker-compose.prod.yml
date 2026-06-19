@@ -62,13 +62,29 @@ services:
       - internal
 
   certbot:
-    image: certbot/certbot
+    build:
+      context: ./certbot
+      dockerfile: Dockerfile
+    image: logistica-certbot-cloudflare:latest
     container_name: logistica_certbot
     restart: unless-stopped
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/www/certbot:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    # Auto-renew using DNS-01 (Cloudflare). The cloudflare.ini must exist at /etc/letsencrypt/cloudflare.ini
+    # Fallback to HTTP-01 if credentials file is not present (first deploy).
+    entrypoint: >
+      /bin/sh -c '
+      trap exit TERM;
+      while :; do
+        if [ -f /etc/letsencrypt/cloudflare.ini ]; then
+          certbot renew --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini --dns-cloudflare-propagation-seconds 30 --quiet;
+        else
+          certbot renew --quiet;
+        fi;
+        sleep 12h & wait $${!};
+      done;
+      '
     networks:
       - internal
 

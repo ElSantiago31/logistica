@@ -1,0 +1,12 @@
+# Cloudflare API credentials for DNS-01 challenge
+# Copy this file to cloudflare.ini and fill with your token
+#
+# How to create the token:
+# 1. Go to https://dash.cloudflare.com/profile/api-tokens
+# 2. Click "Create Token"
+# 3. Use template "Edit zone DNS" OR create custom:
+#    - Permissions: Zone - DNS - Edit
+#    - Zone Resources: Include - Specific zone - ayceventos.com.co
+# 4. Copy the token here:
+
+dns_cloudflare_api_token = YOUR_CLOUDFLARE_API_TOKEN_HERE

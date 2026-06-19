@@ -50,6 +50,9 @@ htmlcov/
 # Alembic
 backend/alembic/versions/__pycache__/
 
-# Docker volumes
-postgres_data/
-pgadmin_data/
+  # Docker volumes
+  postgres_data/
+  pgadmin_data/
+
+  # Cloudflare credentials (never commit real API tokens)
+  certbot/cloudflare.ini
