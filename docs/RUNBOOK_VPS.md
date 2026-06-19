@@ -99,7 +99,40 @@ cat backup_20260616.sql | docker exec -i logistica_postgres psql -U logistica_us
 
 ---
 
-## 🔐 GESTIÓN DE USUARIOS ADMIN
+  ## ☁️ CLOUDFLARE (CDN + Protección)
+
+  El dominio `ayceventos.com.co` está detrás de **Cloudflare** (proxy naranja).
+  Esto significa que Cloudflare está entre los usuarios y tu VPS.
+
+  ### Configuración SSL/TLS
+  - Modo: **Full** (no Flexible, no Full strict)
+  - En Cloudflare: SSL/TLS → Overview → Full
+
+  ### IPs reales de clientes (auditoría + rate-limit)
+  - Nginx está configurado con `set_real_ip_from` para los rangos IP de Cloudflare.
+  - El backend lee el header `CF-Connecting-IP` (ver `app/dependencies/rate_limit.py`).
+  - Para actualizar los rangos IP de Cloudflare (cambian ocasionalmente):
+    ```bash
+    # En el VPS, actualizar nginx.conf con las IPs actuales:
+    curl -s https://www.cloudflare.com/ips-v4 | awk '{print "set_real_ip_from "$1";"}'
+    curl -s https://www.cloudflare.com/ips-v6 | awk '{print "set_real_ip_from "$1";"}'
+    ```
+    Reemplazar el bloque en `nginx/nginx.conf` y reiniciar nginx:
+    ```bash
+    docker restart logistica_nginx
+    ```
+
+  ### ⚠️ Renovación de certificados Let's Encrypt detrás de Cloudflare
+  Cloudflare puede interferir con el challenge HTTP-01 de Let's Encrypt.
+  Si `docker exec logistica_certbot certbot renew` falla:
+  1. **Opción rápida:** Pausar Cloudflare temporalmente (proxy gris en DNS A @ y www).
+  2. Renovar: `docker exec logistica_certbot certbot renew`.
+  3. Volver a poner proxy naranja.
+  Alternativa robusta a futuro: migrar a DNS-01 challenge con el plugin de Cloudflare.
+
+  ---
+
+  ## 🔐 GESTIÓN DE USUARIOS ADMIN
 
 ### Cambiar contraseña del superadmin
 ```bash
