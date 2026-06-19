@@ -14,7 +14,7 @@
 set -e
 
 DOMAIN="${DOMAIN:-ayceventos.com.co}"
-EMAIL="${CERTBOT_EMAIL:-admin@ayceventos.com.co}"
+EMAIL="${CERTBOT_EMAIL:-info@ayceventos.com.co}"
 CRED_FILE="/etc/letsencrypt/cloudflare.ini"
 
 echo "=== Obtain SSL certificate (DNS-01 / Cloudflare) ==="
