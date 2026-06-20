@@ -207,7 +207,7 @@ async def update_operator(
     if hasattr(user, "operator_profile") and user.operator_profile:
         operator_fields = [
             "city", "address", "locality", "blood_type", "emergency_contact_name", 
-            "emergency_contact_phone", "eps_id", "arl_id", "birth_date",
+            "emergency_contact_phone", "eps_id", "arl_id", "birth_date", "gender",
             "whatsapp", "has_protocol_experience", "event_size_experience",
             "shirt_size", "jacket_size"
         ]

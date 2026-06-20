@@ -22,12 +22,14 @@ class OperatorBase(BaseModel):
     education_level: Optional[str] = Field(None, max_length=50)
     shirt_size: Optional[str] = Field(None, max_length=10)
     jacket_size: Optional[str] = Field(None, max_length=10)
+    gender: Optional[str] = Field(None, max_length=20)
 
 # For updating by the operator or admin
 class OperatorUpdateRequest(OperatorBase):
     first_name: Optional[str] = Field(None, min_length=2, max_length=100)
     last_name: Optional[str] = Field(None, min_length=2, max_length=100)
     birth_date: Optional[date] = None
+    gender: Optional[str] = Field(None, max_length=20)
 
 # For admin updating sensitive fields
 class OperatorAdminUpdateRequest(OperatorUpdateRequest):
@@ -67,6 +69,7 @@ class OperatorResponse(BaseModel):
     photo_path: Optional[str]
     photo_thumbnail_path: Optional[str]
     birth_date: Optional[date]
+    gender: Optional[str]
     address: Optional[str]
     city: Optional[str]
     blood_type: Optional[str]
@@ -119,6 +122,7 @@ class OperatorResponse(BaseModel):
                     'photo_path': profile.photo_path,
                     'photo_thumbnail_path': profile.photo_thumbnail_path,
                     'birth_date': profile.birth_date,
+                    'gender': profile.gender,
                     'address': profile.address,
                     'city': profile.city,
                     'blood_type': profile.blood_type,
@@ -140,7 +144,7 @@ class OperatorResponse(BaseModel):
             else:
                 values.update({
                     'eps_id': None, 'arl_id': None, 'eps_name': None, 'arl_name': None, 'photo_path': None,
-                    'photo_thumbnail_path': None, 'birth_date': None,
+                    'photo_thumbnail_path': None, 'birth_date': None, 'gender': None,
                     'address': None, 'city': None, 'blood_type': None,
                     'emergency_contact_name': None, 'emergency_contact_phone': None,
                     'locality': None, 'whatsapp': None,

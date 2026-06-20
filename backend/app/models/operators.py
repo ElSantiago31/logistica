@@ -22,6 +22,7 @@ class Operator(BaseModel):
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     photo_thumbnail_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     birth_date: Mapped[str | None] = mapped_column(Date, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Género: Femenino, Masculino")
     address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     blood_type: Mapped[str | None] = mapped_column(String(5), nullable=True)

@@ -1,6 +1,6 @@
 """Pydantic schemas for authentication."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -84,7 +84,8 @@ class OperatorRegisterRequest(BaseModel):
     photo_data: str = Field(..., min_length=100, description="Foto del operador en base64 (data URL)")
     eps_id: Optional[uuid.UUID] = None
     arl_id: Optional[uuid.UUID] = None
-    birth_date: Optional[str] = None
+    birth_date: Optional[date] = None
+    gender: Optional[str] = Field(None, max_length=20, description="Género: Femenino, Masculino")
     address: Optional[str] = None
     city: Optional[str] = None
     locality: Optional[str] = None

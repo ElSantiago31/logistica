@@ -202,6 +202,24 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
             </div>
 
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de Nacimiento *</label>
+                    <input type="date" id="birth_date" name="birth_date" required
+                        max="2010-12-31"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Género *</label>
+                    <select id="gender" name="gender" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        <option value="">— Seleccionar —</option>
+                        <option value="Femenino">Femenino</option>
+                        <option value="Masculino">Masculino</option>
+                    </select>
+                </div>
+            </div>
+
             <button type="button" onclick="goToStep(2)"
                 class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-lg transition">
                 Siguiente →
@@ -649,6 +667,7 @@ function buildSummary() {
     const fields = [
         ['Email', 'email'], ['Nombre', 'first_name'], ['Apellido', 'last_name'],
         ['Teléfono', 'phone'], ['Tipo Doc', 'document_type'], ['Número Doc', 'document_number'],
+        ['Fecha Nacimiento', 'birth_date'], ['Género', 'gender'],
         ['Departamento', 'department'], ['Ciudad', 'city'], ['Dirección', 'address'], ['Localidad', 'locality'], ['Nivel de Estudio', 'education_level'], ['Tipo Sangre', 'blood_type'], ['EPS', 'eps_id'], ['ARL', 'arl_id'],
     ];
     let html = '';
@@ -698,6 +717,8 @@ async function submitForm() {
         phone: document.getElementById('phone').value,
         document_type: document.getElementById('document_type').value,
         document_number: document.getElementById('document_number').value,
+        birth_date: document.getElementById('birth_date').value || undefined,
+        gender: document.getElementById('gender').value || undefined,
         city: document.getElementById('city').value || undefined,
         blood_type: document.getElementById('blood_type').value || undefined,
         eps_id: document.getElementById('eps_id').value || undefined,
@@ -808,7 +829,7 @@ loadCatalogs();
 // ===== AUTO-SAVE to localStorage =====
 const AUTOSAVE_KEY = 'enroll_autosave';
 const autosaveFields = [
-    'document_type','document_number','email','first_name','last_name','phone',
+    'document_type','document_number','email','first_name','last_name','phone','birth_date','gender',
     'eps_id','arl_id','department','city','locality','whatsapp','education_level',
     'blood_type','has_protocol_experience','event_size_experience',
     'shirt_size','jacket_size',
