@@ -1,23 +1,217 @@
 {% extends "base.html" %}
-{% block title %}Nómina — AyC Eventos{% endblock %}
+{% block title %}Nómina — A&C Eventos{% endblock %}
 {% block head %}
+<!-- [NÓMINA-V2] Signature Pad para firma del operador -->
+<script src="https://unpkg.com/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<!-- [TOPAZ] Wrapper del pad de firmas Topaz (puente local SigPlus Ext Lite) -->
+<script src="/static/js/topaz-signature.js"></script>
 <style>
     .pay-row:hover { background: #fff8f0; }
-    .status-pill { font-size: 0.65rem; padding: 2px 10px; border-radius: 999px; font-weight: 600; }
+    .status-pill {
+        font-size: 0.65rem; padding: 2px 10px; border-radius: 999px;
+        font-weight: 600; display: inline-block;
+    }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-signed { background: #dcfce7; color: #166534; }
+    .status-paid   { background: #dbeafe; color: #1e40af; }
+    .signature-thumb {
+        width: 60px; height: 30px; border: 1px solid #e5d3b8;
+        border-radius: 4px; background: #fff;
+    }
+    /* Signature pad canvas */
+    #sig-canvas, #topaz-preview-canvas {
+        border: 2px dashed #cf9b62; border-radius: 8px;
+        background: #fff; cursor: crosshair; touch-action: none;
+        width: 100%; height: 200px;
+    }
+    /* Modal */
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5); z-index: 50;
+        display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+        background: #fff; border-radius: 16px; padding: 24px;
+        max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;
+    }
+    .btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: #5d4224; color: white; }
+    .btn-primary:hover { background: #4a3520; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-outline { border: 2px solid #cf9b62; color: #5d4224; background: transparent; }
+    .btn-outline:hover { background: #fff8f0; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Flash animation para polling */
+    @keyframes flash-green {
+        0% { background-color: #dcfce7; }
+        100% { background-color: transparent; }
+    }
+    .flash-changed { animation: flash-green 1.5s ease-out; }
+    /* ===== Factura imprimible — Térmica 80mm monocromática ===== */
+    #invoice-print-area { display: none; }
+    /* @page: tamaño papel térmico 80mm, margen mínimo.
+       Elimina URL/fecha/pie del navegador. Compatibilidad Epson/Xprinter/SAT. */
+    @page {
+        size: 80mm auto;
+        margin: 2mm;
+    }
+    @media print {
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            width: 80mm !important;
+        }
+        body * { visibility: hidden; }
+        #invoice-print-area, #invoice-print-area * { visibility: visible; }
+        #invoice-print-area {
+            display: block !important;
+            position: absolute;
+            top: 0; left: 0;
+            width: 76mm;
+            margin: 0 auto;
+            padding: 0;
+        }
+        .no-print { display: none !important; }
+    }
+
+    /* === Estilos del recibo térmico (pantalla + impresión) === */
+    .thermal-receipt {
+        width: 76mm;
+        margin: 0 auto;
+        font-family: 'Courier New', 'Consolas', 'Liberation Mono', monospace;
+        font-size: 10px;
+        color: #000;
+        line-height: 1.45;
+        background: #fff;
+        padding: 4px 2px;
+    }
+    .thermal-receipt * { box-sizing: border-box; }
+    .thermal-receipt .t-center { text-align: center; }
+    .thermal-receipt .t-bold { font-weight: bold; }
+    .thermal-receipt .t-divider {
+        border: none;
+        border-top: 1px dashed #000;
+        margin: 5px 0;
+    }
+    .thermal-receipt .t-solid-divider {
+        border: none;
+        border-top: 1px solid #000;
+        margin: 5px 0;
+    }
+    .thermal-receipt .t-section-title {
+        text-align: center;
+        font-weight: bold;
+        text-transform: uppercase;
+        margin: 3px 0 2px 0;
+        font-size: 10px;
+    }
+    .thermal-receipt .t-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 4px;
+        margin: 1px 0;
+    }
+    .thermal-receipt .t-label { flex-shrink: 0; }
+    .thermal-receipt .t-value {
+        text-align: right;
+        font-weight: bold;
+        word-break: break-word;
+        flex: 1;
+    }
+    .thermal-receipt .t-total-line {
+        text-align: center;
+        font-size: 12px;
+        font-weight: bold;
+        margin: 3px 0 1px 0;
+    }
+    .thermal-receipt .t-amount-words {
+        text-align: center;
+        font-style: italic;
+        margin: 1px 0 3px 0;
+        font-size: 9px;
+    }
+    .thermal-receipt .t-declaration {
+        text-align: justify;
+        margin: 3px 0;
+        font-size: 9px;
+        line-height: 1.4;
+    }
+    .thermal-receipt .t-signature-block {
+        text-align: center;
+        margin: 6px 0 3px 0;
+    }
+    .thermal-receipt .t-signature-img {
+        max-height: 55px;
+        max-width: 70%;
+        margin: 0 auto 1px auto;
+        display: block;
+    }
+    .thermal-receipt .t-sign-line {
+        border-top: 1px solid #000;
+        width: 75%;
+        margin: 4px auto 2px auto;
+    }
+    .thermal-receipt .t-notes {
+        list-style: none;
+        padding: 0;
+        margin: 3px 0;
+    }
+    .thermal-receipt .t-notes li {
+        margin: 2px 0;
+        font-size: 9px;
+        line-height: 1.35;
+        padding-left: 8px;
+        text-indent: -8px;
+    }
+    .thermal-receipt .t-notes li::before {
+        content: "• ";
+    }
+    .thermal-receipt .t-footer {
+        text-align: center;
+        font-size: 8px;
+        margin-top: 4px;
+        line-height: 1.3;
+    }
+    .thermal-receipt .t-header-name {
+        font-weight: bold;
+        font-size: 11px;
+        margin: 0 0 1px 0;
+    }
+    .thermal-receipt .t-header-sub {
+        font-size: 9px;
+        margin: 0;
+    }
+    .thermal-receipt .t-borders {
+        border-top: 1px solid #000;
+        border-bottom: 1px solid #000;
+        padding: 2px 0;
+        margin: 3px 0;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h1 class="text-2xl font-bold" style="color:#5d4224;">Nómina del Evento</h1>
-            <p id="event-name" class="text-gray-500 text-sm">Cargando...</p>
+            <div class="flex items-center gap-3 mb-1">
+                <a href="/admin/events/{{ event_id }}" class="btn btn-outline no-print">← Volver</a>
+                <h1 class="text-2xl font-bold" style="color:#5d4224;">Nómina del Evento</h1>
+            </div>
+            <p id="event-name" class="text-gray-500 text-sm ml-1">Cargando...</p>
         </div>
-        <div class="flex gap-2">
-            <a href="/admin/events/{{ event_id }}" class="px-4 py-2 rounded-lg text-gray-500 hover:text-gray-700">← Volver</a>
+        <div class="flex gap-2 items-center no-print">
+            <span id="viewers-badge" class="status-pill status-signed hidden" title="Personas viendo esta nómina">👥 1</span>
+            <span id="online-badge" class="status-pill status-signed">🟢 Online</span>
+            <span id="offline-badge" class="status-pill status-pending hidden">📴 Offline</span>
         </div>
     </div>
+
     {% if not payroll_enabled %}
     <!-- ===== MODO "PRÓXIMAMENTE" (PRODUCCIÓN) ===== -->
     <div class="bg-white rounded-2xl border-2 border-dashed p-12 text-center" style="border-color:#cf9b62;">
@@ -31,12 +225,10 @@
     </div>
 </div>
 {% else %}
-    <!-- ===== MODO COMPLETO (LOCAL) ===== -->
-    <div class="flex gap-2 mb-6">
-        <button onclick="calculatePayroll()" class="px-4 py-2 rounded-lg font-medium text-white" style="background:#5d4224;">💰 Calcular</button>
-        <button onclick="exportCSV()" class="px-4 py-2 rounded-lg font-medium border-2" style="border-color:#cf9b62; color:#5d4224;">📥 CSV</button>
-    </div>
-    <div class="grid grid-cols-4 gap-3 mb-6">
+    <!-- ===== [NÓMINA-V2] MODO COMPLETO ===== -->
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mb-6 no-print">
         <div class="bg-white rounded-lg p-4 text-center border">
             <div id="stat-total" class="text-2xl font-bold" style="color:#cf9b62;">$0</div>
             <div class="text-xs text-gray-500">Total Nómina</div>
@@ -54,30 +246,217 @@
             <div class="text-xs text-gray-500">Pagados</div>
         </div>
     </div>
-    <div class="bg-white rounded-xl border p-4 mb-6">
-        <div class="flex items-center gap-4">
-            <label class="text-sm font-medium text-gray-600">Tarifa/hora:</label>
-            <input type="number" id="rate-per-hour" value="18000" step="500" class="px-3 py-1 rounded border w-32 text-right font-mono">
-            <span class="text-sm text-gray-400">COP</span>
-        </div>
+
+    <!-- Buscador -->
+    <div class="bg-white rounded-xl border p-4 mb-4 no-print">
+        <input type="text" id="search-input" placeholder="🔍 Buscar por nombre o cédula..."
+            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400"
+            oninput="filterOperators(this.value)">
     </div>
-    <div class="bg-white rounded-xl border overflow-hidden">
+
+    <!-- Tabla de operadores -->
+    <div class="bg-white rounded-xl border overflow-hidden no-print">
         <table class="w-full text-sm">
             <thead style="background:#5d4224; color:#fff2e4;">
                 <tr>
                     <th class="px-4 py-3 text-left">Operador</th>
-                    <th class="px-4 py-3 text-left">Cédula</th>
-                    <th class="px-4 py-3 text-center">Horas</th>
-                    <th class="px-4 py-3 text-right">Bruto</th>
-                    <th class="px-4 py-3 text-right">Neto</th>
-                    <th class="px-4 py-3 text-center">Estado</th>
+                    <th class="px-4 py-3 text-left">Coordinador</th>
+                    <th class="px-4 py-3 text-right">Monto</th>
+                    <th class="px-4 py-3 text-center">Estado Pago</th>
                     <th class="px-4 py-3 text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody id="payroll-body">
-                <tr><td colspan="7" class="text-center py-8 text-gray-400">Calcula la nómina para ver resultados</td></tr>
+                <tr><td colspan="5" class="text-center py-8 text-gray-400">Cargando operadores...</td></tr>
             </tbody>
         </table>
+    </div>
+
+    <!-- Pagos recientes (live desde polling) -->
+    <div class="mt-6 bg-white rounded-xl border p-4 no-print">
+        <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-semibold" style="color:#5d4224;">💸 Pagos recientes (tiempo real)</h4>
+            <span class="text-xs text-gray-400" id="payments-count">0 pagos</span>
+        </div>
+        <div id="recent-payments" class="space-y-1 max-h-40 overflow-y-auto">
+            <p class="text-xs text-gray-400 text-center py-4" id="payments-empty">Aún no hay pagos registrados</p>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- [NÓMINA-V2 + TOPAZ] MODAL: Pad Topaz (default) + Canvas     -->
+<!-- ============================================================ -->
+<div id="sig-modal" class="modal-overlay no-print">
+    <div class="modal-box">
+        <h3 class="text-lg font-bold mb-2" style="color:#5d4224;">✍️ Firmar Factura</h3>
+        <p id="sig-operator-name" class="text-sm text-gray-500 mb-4">Operador: —</p>
+
+        <!-- Selector: Pad Topaz por defecto, Canvas como alternativa -->
+        <div class="flex gap-2 mb-3">
+            <button id="tab-topaz" onclick="switchSignMethod('topaz')" class="btn btn-primary" style="font-size:0.75rem;">📋 Pad Topaz</button>
+            <button id="tab-draw" onclick="switchSignMethod('draw')" class="btn btn-outline" style="font-size:0.75rem;">✏️ Dibujar</button>
+        </div>
+
+        <!-- Modo: Pad Topaz (conexión directa, captura en vivo) -->
+        <div id="sig-topaz-area">
+            <div id="topaz-status" class="mb-3 text-center text-sm font-medium py-2 px-3 rounded-lg"
+                 style="background:#f3f4f6; color:#6b7280;">🔌 Conectando al pad...</div>
+            <div style="border: 2px solid #cf9b62; border-radius: 8px; background:#fff; position:relative; overflow:hidden;">
+                <canvas id="topaz-preview-canvas" style="display:block;"></canvas>
+            </div>
+            <p class="text-xs text-gray-400 text-center mt-2">El operador firma en el pad de firmas Topaz y aparece aquí en vivo</p>
+            <div class="flex gap-2 mt-3 justify-center">
+                <button id="btn-topaz-capture" onclick="captureFromTopazPad()" class="btn btn-success" style="font-size:0.875rem;">✓ Listo — Capturar Firma</button>
+            </div>
+        </div>
+
+        <!-- Modo: Dibujar en canvas (mouse/táctil/lápiz digital) -->
+        <div id="sig-draw-area" style="display:none;">
+            <canvas id="sig-canvas"></canvas>
+        </div>
+
+        <div class="flex gap-2 mt-4 justify-between">
+            <button onclick="clearSignature()" class="btn btn-outline">🗑️ Limpiar</button>
+            <div class="flex gap-2">
+                <button onclick="closeSignatureModal()" class="btn btn-outline">Cancelar</button>
+                <button id="btn-confirm-sig" onclick="confirmSignature()" class="btn btn-success">✅ Confirmar Firma</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FACTURA TÉRMICA 80mm — Monocromática / Profesional           -->
+<!-- Compatible: Epson, Xprinter, SAT (papel 80mm)                -->
+<!-- ============================================================ -->
+<div id="invoice-print-area">
+    <div class="thermal-receipt">
+
+        <!-- ===== 1. ENCABEZADO EMPRESA (centrado) ===== -->
+        <div class="t-center">
+            <p class="t-header-name">A&C LOGISTICA & PRODUCCION</p>
+            <p class="t-header-name">DE EVENTOS LTDA</p>
+            <p class="t-header-sub">NIT: 900.227.354</p>
+            <p class="t-header-sub">Direccion: KR 59 D # 131 - 72</p>
+            <p class="t-header-sub">Bogota - Suba</p>
+            <p class="t-header-sub">Tel: [TELEFONO]</p>
+            <p class="t-header-sub">Email: Facturacion@ayceventos.com.co</p>
+        </div>
+
+        <hr class="t-divider">
+
+        <!-- ===== 2. RECIBO ===== -->
+        <div class="t-section-title">Recibo de Pago de Servicios</div>
+        <div class="t-row">
+            <span class="t-label">Consecutivo:</span>
+            <span class="t-value" id="inv-number">—</span>
+        </div>
+        <div class="t-row">
+            <span class="t-label">Fecha:</span>
+            <span class="t-value" id="inv-date">—</span>
+        </div>
+
+        <hr class="t-divider">
+
+        <!-- ===== 3. DATOS DEL EVENTO ===== -->
+        <div class="t-section-title">Datos del Evento</div>
+        <div class="t-row">
+            <span class="t-label">Evento:</span>
+            <span class="t-value" id="inv-event">—</span>
+        </div>
+        <div class="t-row">
+            <span class="t-label">Lugar:</span>
+            <span class="t-value" id="inv-location">—</span>
+        </div>
+        <div class="t-row">
+            <span class="t-label">Fecha Evento:</span>
+            <span class="t-value" id="inv-event-date">—</span>
+        </div>
+
+        <hr class="t-divider">
+
+        <!-- ===== 4. DATOS DEL OPERADOR ===== -->
+        <div class="t-section-title">Datos del Operador</div>
+        <div class="t-row">
+            <span class="t-label">Nombre:</span>
+            <span class="t-value" id="inv-operator">—</span>
+        </div>
+        <div class="t-row">
+            <span class="t-label">Cedula:</span>
+            <span class="t-value" id="inv-doc">—</span>
+        </div>
+        <div class="t-row">
+            <span class="t-label">Cargo:</span>
+            <span class="t-value" id="inv-role">—</span>
+        </div>
+
+        <hr class="t-divider">
+
+        <!-- ===== 5. VALOR CANCELADO ===== -->
+        <div class="t-section-title">Valor Cancelado</div>
+        <div class="t-total-line">TOTAL PAGADO</div>
+        <div class="t-total-line" id="inv-amount">$0</div>
+        <div class="t-amount-words" id="inv-amount-words">()</div>
+
+        <hr class="t-divider">
+
+        <!-- ===== 6. DECLARACIÓN DEL OPERADOR ===== -->
+        <div class="t-section-title">Declaracion del Operador</div>
+        <p class="t-declaration">
+            "Declaro haber recibido a satisfaccion de A&C LOGISTICA & PRODUCCION DE EVENTOS LTDA la suma anteriormente indicada, correspondiente a los servicios prestados durante el evento relacionado en este documento.
+        </p>
+        <p class="t-declaration">
+            Manifiesto que el valor recibido corresponde a la totalidad de los honorarios pactados por mis servicios y otorgo paz y salvo por todo concepto relacionado con esta actividad."
+        </p>
+
+        <hr class="t-divider">
+
+        <!-- ===== 7. FIRMA DEL OPERADOR ===== -->
+        <div class="t-section-title">Firma del Operador</div>
+        <div class="t-signature-block">
+            <img id="inv-signature" class="t-signature-img" style="display:none;" />
+            <div class="t-sign-line"></div>
+            <div class="t-row">
+                <span class="t-label">Nombre:</span>
+                <span class="t-value" id="inv-sign-name">—</span>
+            </div>
+            <div class="t-row">
+                <span class="t-label">C.C.:</span>
+                <span class="t-value" id="inv-sign-doc">—</span>
+            </div>
+            <div class="t-row">
+                <span class="t-label">Fecha firma:</span>
+                <span class="t-value" id="inv-sign-date">—</span>
+            </div>
+            <div class="t-row">
+                <span class="t-label">Hora firma:</span>
+                <span class="t-value" id="inv-sign-time">—</span>
+            </div>
+        </div>
+
+        <hr class="t-divider">
+
+        <!-- ===== 8. NOTAS LEGALES ===== -->
+        <div class="t-section-title">Notas Legales</div>
+        <ul class="t-notes">
+            <li>Este documento constituye soporte interno de pago por prestacion de servicios ocasionales.</li>
+            <li>La firma plasmada en este documento constituye aceptacion expresa del pago recibido.</li>
+            <li>El operador declara haber prestado efectivamente los servicios relacionados.</li>
+            <li>Este comprobante podra ser utilizado como soporte documental ante procesos administrativos, contables y legales.</li>
+        </ul>
+
+        <hr class="t-divider">
+
+        <!-- ===== 9. PIE ===== -->
+        <div class="t-footer">
+            Documento generado electronicamente<br>
+            por el sistema de gestion de<br>
+            personal eventual.
+        </div>
+
+        <hr class="t-solid-divider">
+
     </div>
 </div>
 {% endif %}
@@ -85,44 +464,696 @@
 
 {% block scripts %}
 {% if payroll_enabled %}
+<!-- ============================================================ -->
+<!-- [NÓMINA-V2 + TOPAZ - inicio] JavaScript completo de nómina   -->
+<!-- ============================================================ -->
 <script>
+// [NÓMINA-V2 + TOPAZ]
 const EVENT_ID = "{{ event_id }}";
+let allOperators = [];        // Datos completos del endpoint /payable
+let currentSignOp = null;     // Operador que se está firmando ahora
+let signaturePad = null;      // Instancia de SignaturePad (canvas)
+let _pollingTimer = null;
+let _pollingInFlight = false;
+let _signMethod = 'topaz';    // 'topaz' (pad físico, DEFAULT) o 'draw' (canvas)
+let _topazPad = null;         // Instancia de TopazSignaturePad
+let _topazSignatureData = null;  // base64 de la firma capturada del pad
+const POLLING_INTERVAL_MS = 4000;
+
+// --- Auth helpers ---
+function getToken() { return localStorage.getItem('access_token'); }
+function authHeaders() {
+    const t = getToken();
+    const h = { 'Content-Type': 'application/json' };
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    return h;
+}
+
+// --- Device ID para presencia (mismo patrón que checkin) ---
+function _getDeviceId() {
+    let did = localStorage.getItem('payroll_device_id');
+    if (!did) {
+        did = 'dev_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+        localStorage.setItem('payroll_device_id', did);
+    }
+    return did;
+}
+
+// ============================================================
+// CARGA INICIAL DE DATOS
+// ============================================================
 async function loadPayroll() {
     try {
-        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/payroll`);
+        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/payable`, {
+            headers: authHeaders()
+        });
+        if (!resp.ok) {
+            if (resp.status === 401) { location.href = '/admin/login'; return; }
+            console.error('Error cargando nómina:', resp.status);
+            return;
+        }
+        const data = await resp.json();
+
+        document.getElementById('event-name').textContent = data.event_name || 'Evento';
+        allOperators = data.operators || [];
+
+        updateStats(data);
+        renderTable(allOperators);
+    } catch(e) {
+        console.error('loadPayroll error:', e);
+        document.getElementById('event-name').textContent = 'Error al cargar';
+    }
+}
+
+function updateStats(data) {
+    document.getElementById('stat-total').textContent = '$' + (data.total_payroll || 0).toLocaleString('es-CO');
+    document.getElementById('stat-records').textContent = data.total || 0;
+    document.getElementById('stat-signed').textContent = data.total_signed || 0;
+    document.getElementById('stat-paid').textContent = data.total_paid || 0;
+}
+
+function updateStatsFromOps() {
+    const total = allOperators.reduce((s, o) => s + (o.payment_amount || 0), 0);
+    const signed = allOperators.filter(o => o.payroll_status === 'signed' || o.payroll_status === 'paid').length;
+    const paid = allOperators.filter(o => o.payroll_status === 'paid').length;
+    document.getElementById('stat-total').textContent = '$' + total.toLocaleString('es-CO');
+    document.getElementById('stat-records').textContent = allOperators.length;
+    document.getElementById('stat-signed').textContent = signed;
+    document.getElementById('stat-paid').textContent = paid;
+}
+
+// ============================================================
+// BUSCADOR EN VIVO
+// ============================================================
+function filterOperators(query) {
+    if (!query || query.length < 2) {
+        renderTable(allOperators);
+        return;
+    }
+    const q = query.toLowerCase();
+    const filtered = allOperators.filter(o =>
+        (o.full_name && o.full_name.toLowerCase().includes(q)) ||
+        (o.document_number && o.document_number.includes(q))
+    );
+    renderTable(filtered);
+}
+
+// ============================================================
+// RENDER TABLA
+// ============================================================
+function renderTable(operators) {
+    const tbody = document.getElementById('payroll-body');
+    if (!operators.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">Sin operadores</td></tr>';
+        return;
+    }
+
+    const statusClass = { pending: 'status-pending', signed: 'status-signed', paid: 'status-paid' };
+    const statusLabel = { pending: 'Sin Pago', signed: 'Firmado', paid: 'Pago Confirmado' };
+
+    tbody.innerHTML = operators.map(op => {
+        const st = op.payroll_status || 'pending';
+        const sc = statusClass[st] || 'status-pending';
+        const sl = statusLabel[st] || st;
+
+        const sigThumb = op.has_signature
+            ? `<img src="${op.signature_preview || ''}" class="signature-thumb" onclick="viewSignature('${op.assignment_id}')" alt="firma">`
+            : '<span class="text-gray-300 text-xs">—</span>';
+
+        let actions = '';
+        if (st === 'pending') {
+            actions = `<button onclick="openSignatureModal('${op.assignment_id}')" class="btn btn-primary">✍️ Firmar</button>`;
+        } else if (st === 'signed') {
+            actions = `<button onclick="confirmPayment('${op.payroll_record_id}')" class="btn btn-success">💰 Confirmar Pago</button>`;
+        } else if (st === 'paid') {
+            actions = `
+                <div class="text-blue-600 text-xs font-bold mb-1">${op.invoice_number || ''}</div>
+                <button onclick="generateInvoice('${op.payroll_record_id}')" class="btn btn-outline">📄 Ver Factura</button>
+            `;
+        }
+
+        return `<tr class="pay-row border-b" id="row-${op.assignment_id}">
+            <td class="px-4 py-3">
+                <div class="font-medium">${op.full_name}</div>
+                <div class="text-xs text-gray-400">${op.document_number} · ${op.role_name}</div>
+            </td>
+            <td class="px-4 py-3 text-gray-600 text-sm">${op.coordinator_name || '—'}</td>
+            <td class="px-4 py-3 text-right font-mono font-bold">$${(op.payment_amount || 0).toLocaleString('es-CO')}</td>
+            <td class="px-4 py-3 text-center">
+                <span class="status-pill ${sc}">${sl}</span>
+                <div class="mt-1">${sigThumb}</div>
+            </td>
+            <td class="px-4 py-3 text-center whitespace-nowrap">${actions}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ============================================================
+// FIRMA — MODAL CON PAD TOPAZ (default) o CANVAS
+// ============================================================
+
+// [TOPAZ] Cambiar entre "Pad Topaz" (default) y "Dibujar"
+function switchSignMethod(method) {
+    _signMethod = method;
+    const tabTopaz = document.getElementById('tab-topaz');
+    const tabDraw = document.getElementById('tab-draw');
+    const topazArea = document.getElementById('sig-topaz-area');
+    const drawArea = document.getElementById('sig-draw-area');
+
+    if (method === 'topaz') {
+        tabTopaz.classList.remove('btn-outline'); tabTopaz.classList.add('btn-primary');
+        tabDraw.classList.remove('btn-primary'); tabDraw.classList.add('btn-outline');
+        topazArea.style.display = '';
+        drawArea.style.display = 'none';
+        if (_topazPad && _topazPad.hasError()) {
+            _initTopazPad();
+        }
+    } else {
+        tabDraw.classList.remove('btn-outline'); tabDraw.classList.add('btn-primary');
+        tabTopaz.classList.remove('btn-primary'); tabTopaz.classList.add('btn-outline');
+        topazArea.style.display = 'none';
+        drawArea.style.display = '';
+        _initDrawCanvas();
+    }
+}
+
+// [TOPAZ] Inicializar el canvas de dibujo (SignaturePad)
+function _initDrawCanvas() {
+    const canvas = document.getElementById('sig-canvas');
+    if (signaturePad) { signaturePad.off(); }
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext('2d').scale(ratio, ratio);
+    signaturePad = new SignaturePad(canvas, {
+        backgroundColor: '#ffffff',
+        penColor: '#1a1a1a',
+        minWidth: 1.5,
+        maxWidth: 3.0,
+    });
+}
+
+// [TOPAZ] Inicializar el wrapper del pad Topaz y conectar
+function _initTopazPad() {
+    const statusEl = document.getElementById('topaz-status');
+    const previewCanvas = document.getElementById('topaz-preview-canvas');
+
+    // Ajustar canvas de preview
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    previewCanvas.width = previewCanvas.offsetWidth * ratio;
+    previewCanvas.height = previewCanvas.offsetHeight * ratio;
+    const ctx = previewCanvas.getContext('2d');
+    ctx.scale(ratio, ratio);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Limpiar instancia previa
+    if (_topazPad) { _topazPad.disconnect(); }
+
+    _topazPad = new TopazSignaturePad({
+        onStatus: (state, msg) => {
+            const colors = {
+                idle:        { bg: '#f3f4f6', fg: '#6b7280' },
+                connecting:  { bg: '#fef3c7', fg: '#92400e' },
+                ready:       { bg: '#dcfce7', fg: '#166534' },
+                signing:     { bg: '#dbeafe', fg: '#1e40af' },
+                captured:    { bg: '#dcfce7', fg: '#166534' },
+                error:       { bg: '#fee2e2', fg: '#991b1b' },
+                disconnected:{ bg: '#f3f4f6', fg: '#9ca3af' },
+            };
+            const c = colors[state] || colors.idle;
+            statusEl.style.background = c.bg;
+            statusEl.style.color = c.fg;
+            statusEl.textContent = msg;
+        },
+        onPoint: (pt) => {
+            if (pt.isStart) ctx.beginPath();
+            ctx.lineTo(pt.x, pt.y);
+            ctx.stroke();
+        },
+        onSign: (base64Png) => {
+            _topazSignatureData = base64Png;
+        },
+    });
+
+    // Intentar conectar
+    _topazPad.connect().then((ok) => {
+        if (ok) {
+            _topazPad.startCapture();
+        } else {
+            statusEl.innerHTML = '⚠️ Pad no detectado. <button onclick="switchSignMethod(\'draw\')" class="underline font-bold">Usa Dibujar</button>';
+        }
+    });
+}
+
+// [TOPAZ] Capturar la firma del pad al dar click en "✓ Listo"
+async function captureFromTopazPad() {
+    if (!_topazPad || !_topazPad.isReady()) {
+        alert('⚠️ El pad no está conectado. Usa "Dibujar" como alternativa.');
+        return;
+    }
+    const sig = await _topazPad.captureDone();
+    if (sig) {
+        _topazSignatureData = sig;
+        const canvas = document.getElementById('topaz-preview-canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+        };
+        img.src = sig;
+    } else {
+        alert('⚠️ No se detectó firma en el pad. Pídele al operador que firme de nuevo.');
+    }
+}
+
+function openSignatureModal(assignmentId) {
+    const op = allOperators.find(o => o.assignment_id === assignmentId);
+    if (!op) return;
+
+    if (op.payroll_status === 'paid') {
+        alert('⚠️ Este operador ya fue pagado. No se puede volver a firmar.');
+        return;
+    }
+
+    currentSignOp = op;
+    document.getElementById('sig-operator-name').textContent = 'Operador: ' + op.full_name + ' (' + op.document_number + ')';
+    document.getElementById('sig-modal').classList.add('active');
+
+    _topazSignatureData = null;
+
+    // Default: Pad Topaz
+    switchSignMethod('topaz');
+    _initTopazPad();
+    _initDrawCanvas();
+}
+
+function closeSignatureModal() {
+    document.getElementById('sig-modal').classList.remove('active');
+    currentSignOp = null;
+    if (signaturePad) signaturePad.clear();
+    _topazSignatureData = null;
+    if (_topazPad) { _topazPad.disconnect(); _topazPad = null; }
+}
+
+function clearSignature() {
+    if (_signMethod === 'topaz') {
+        _topazSignatureData = null;
+        if (_topazPad) _topazPad.clearPad();
+        const canvas = document.getElementById('topaz-preview-canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (_topazPad && _topazPad.isReady()) _topazPad.startCapture();
+    } else if (_signMethod === 'draw') {
+        if (signaturePad) signaturePad.clear();
+    }
+}
+
+async function confirmSignature() {
+    if (!currentSignOp) return;
+
+    let signatureData = null;
+    if (_signMethod === 'topaz') {
+        if (!_topazSignatureData) {
+            alert('⚠️ Captura la firma del pad primero (botón "✓ Listo").');
+            return;
+        }
+        signatureData = _topazSignatureData;
+    } else {
+        if (!signaturePad || signaturePad.isEmpty()) {
+            alert('⚠️ Por favor dibuje la firma antes de confirmar.');
+            return;
+        }
+        signatureData = signaturePad.toDataURL('image/png');
+    }
+
+    const btn = document.getElementById('btn-confirm-sig');
+    btn.disabled = true;
+    btn.textContent = '⏳ Guardando...';
+
+    try {
+        const resp = await fetch(`/api/payroll/assignments/${currentSignOp.assignment_id}/sign`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                signature_data: signatureData,
+                device_id: _getDeviceId(),
+            })
+        });
+
+        if (resp.ok) {
+            const result = await resp.json();
+            currentSignOp.payroll_status = 'signed';
+            currentSignOp.payroll_record_id = result.record_id;
+            currentSignOp.has_signature = true;
+            currentSignOp.signature_preview = signatureData;
+
+            updateStatsFromOps();
+            renderTable(getCurrentFilteredList());
+            closeSignatureModal();
+        } else if (resp.status === 409) {
+            const err = await resp.json().catch(() => ({}));
+            alert('⚠️ ' + (err.detail || 'Conflicto: el operador ya fue pagado.'));
+            await loadPayroll();
+            closeSignatureModal();
+        } else {
+            const errText = await resp.text().catch(() => '');
+            alert('❌ Error al guardar firma: ' + errText.slice(0, 100));
+        }
+    } catch(e) {
+        console.error('confirmSignature error:', e);
+        alert('❌ Error de red: ' + e.message);
+    }
+
+    btn.disabled = false;
+    btn.textContent = '✅ Confirmar Firma';
+}
+
+function getCurrentFilteredList() {
+    const q = document.getElementById('search-input').value;
+    if (!q || q.length < 2) return allOperators;
+    const ql = q.toLowerCase();
+    return allOperators.filter(o =>
+        (o.full_name && o.full_name.toLowerCase().includes(ql)) ||
+        (o.document_number && o.document_number.includes(ql))
+    );
+}
+
+function viewSignature(assignmentId) {
+    const op = allOperators.find(o => o.assignment_id === assignmentId);
+    if (op && op.signature_preview) {
+        const w = window.open('', '_blank', 'width=400,height=300');
+        w.document.write(`<img src="${op.signature_preview}" style="width:100%;">`);
+    }
+}
+
+// ============================================================
+// CONFIRMAR PAGO (genera el número de factura)
+// ============================================================
+async function confirmPayment(recordId) {
+    if (!recordId) return;
+    if (!confirm('¿Confirmar el pago de este operador? Se generará el número de factura.')) return;
+
+    try {
+        const resp = await fetch(`/api/payroll/records/${recordId}/pay`, {
+            method: 'POST',
+            headers: authHeaders()
+        });
+
+        if (resp.ok) {
+            const result = await resp.json();
+            const op = allOperators.find(o => o.payroll_record_id === recordId);
+            if (op) {
+                op.payroll_status = 'paid';
+                op.invoice_number = result.invoice_number;
+            }
+            updateStatsFromOps();
+            renderTable(getCurrentFilteredList());
+
+            if (confirm(`✅ Pago confirmado. Factura generada: ${result.invoice_number}\n\n¿Deseas generar/imprimir la factura ahora?`)) {
+                generateInvoice(recordId);
+            }
+        } else if (resp.status === 409) {
+            const err = await resp.json().catch(() => ({}));
+            alert('⚠️ ' + (err.detail || 'El operador debe firmar antes de pagar.'));
+        } else {
+            alert('❌ Error al confirmar pago');
+        }
+    } catch(e) {
+        console.error('confirmPayment error:', e);
+        alert('❌ Error de red: ' + e.message);
+    }
+}
+
+// ============================================================
+// GENERAR FACTURA (imprimir / guardar PDF) — solo tras pago
+// ============================================================
+async function generateInvoice(recordId) {
+    if (!recordId) return;
+    try {
+        const resp = await fetch(`/api/payroll/invoices/${recordId}`, {
+            headers: authHeaders()
+        });
+        if (!resp.ok) {
+            alert('❌ No se pudo cargar la factura');
+            return;
+        }
+        const inv = await resp.json();
+
+        if (!inv.invoice_number) {
+            alert('⚠️ Esta factura aún no tiene número. Confirma el pago primero.');
+            return;
+        }
+
+        const fechaGen = parseBackendDate(inv.paid_at);
+
+        // Sección 2: Recibo (timeZone explícito Bogotá = UTC-5)
+        document.getElementById('inv-number').textContent = inv.invoice_number;
+        document.getElementById('inv-date').textContent = fechaGen.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
+
+        // Sección 3: Datos del Evento
+        document.getElementById('inv-event').textContent = inv.event_name || '—';
+        document.getElementById('inv-location').textContent = inv.event_location || '—';
+        document.getElementById('inv-event-date').textContent = inv.event_date
+            ? parseBackendDate(inv.event_date).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })
+            : '—';
+
+        // Sección 4: Datos del Operador
+        document.getElementById('inv-operator').textContent = inv.operator_name || '—';
+        document.getElementById('inv-doc').textContent = inv.operator_document || '—';
+        document.getElementById('inv-role').textContent = inv.role_name || '—';
+
+        // Sección 5: Valor Cancelado
+        const monto = parseFloat(inv.payment_amount || 0);
+        document.getElementById('inv-amount').textContent = '$' + monto.toLocaleString('es-CO');
+        const palabras = numeroALetras(monto);
+        document.getElementById('inv-amount-words').textContent = '(' + palabras + ')';
+
+        // Sección 7: Firma del Operador
+        document.getElementById('inv-sign-name').textContent = inv.operator_name || '—';
+        document.getElementById('inv-sign-doc').textContent = inv.operator_document || '—';
+        document.getElementById('inv-sign-date').textContent = fechaGen.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
+        document.getElementById('inv-sign-time').textContent = fechaGen.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
+        const sigImg = document.getElementById('inv-signature');
+        if (inv.signature_data) {
+            sigImg.src = inv.signature_data;
+            sigImg.style.display = 'block';
+        } else {
+            sigImg.style.display = 'none';
+        }
+
+        window.print();
+    } catch(e) {
+        console.error('generateInvoice error:', e);
+        alert('❌ Error: ' + e.message);
+    }
+}
+
+// ============================================================
+// HELPER: Parsear fechas UTC del backend
+// ============================================================
+// El backend usa datetime.utcnow() que genera naive datetime (sin tz).
+// isoformat() produce "2026-06-23T20:10:00" sin 'Z' ni offset.
+// JS interpreta eso como hora local -> muestra +5h (UTC-5 Colombia).
+// Fix: si la cadena no tiene indicador de zona horaria, asumir UTC.
+function parseBackendDate(isoStr) {
+    if (!isoStr) return new Date();
+    // ¿Tiene 'Z' al final o un offset +HH:MM/-HH:MM?
+    if (/[zZ]$/.test(isoStr) || /[+-]\d{2}:?\d{2}$/.test(isoStr)) {
+        return new Date(isoStr);  // Ya tiene tz, JS lo maneja bien
+    }
+    // Sin tz -> agregar 'Z' para indicar que es UTC
+    return new Date(isoStr + 'Z');
+}
+
+// ============================================================
+// CONVERSIÓN DE NÚMERO A LETRAS (formato colombiano)
+// ============================================================
+// Ej: 150000 -> "CIENTO CINCUENTA MIL PESOS M/CTE"
+function numeroALetras(num) {
+    num = Math.round(Math.abs(num));
+    const unidades = ['', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+        'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE',
+        'VEINTE', 'VEINTIUNO', 'VEINTIDOS', 'VEINTITRES', 'VEINTICUATRO', 'VEINTICINCO', 'VEINTISEIS',
+        'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE'];
+    const decenas = ['', '', '', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+    const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS',
+        'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+
+    function convertirGrupo(n) {
+        let palabras = [];
+        if (n === 100) return 'CIEN';
+        if (n === 0) return '';
+
+        let h = Math.floor(n / 100);
+        let resto = n % 100;
+        if (h > 0) palabras.push(centenas[h]);
+
+        if (resto > 0) {
+            if (resto < 30) {
+                palabras.push(unidades[resto]);
+            } else {
+                let d = Math.floor(resto / 10);
+                let u = resto % 10;
+                if (u === 0) {
+                    palabras.push(decenas[d]);
+                } else {
+                    palabras.push(decenas[d] + ' Y ' + unidades[u]);
+                }
+            }
+        }
+        return palabras.join(' ');
+    }
+
+    if (num === 0) return 'CERO PESOS M/CTE';
+
+    let millones = Math.floor(num / 1000000);
+    let miles = Math.floor((num % 1000000) / 1000);
+    let resto = num % 1000;
+
+    let partes = [];
+    if (millones > 0) {
+        let txt = convertirGrupo(millones);
+        if (millones === 1) partes.push('UN MILLON');
+        else partes.push(txt + ' MILLONES');
+    }
+    if (miles > 0) {
+        if (miles === 1) partes.push('MIL');
+        else partes.push(convertirGrupo(miles) + ' MIL');
+    }
+    if (resto > 0) {
+        partes.push(convertirGrupo(resto));
+    }
+
+    let resultado = partes.join(' ').trim();
+    // Caso especial: si solo hay "UNO", se dice "UN PESO"
+    if (num === 1) resultado = 'UN';
+    return resultado + ' PESOS M/CTE';
+}
+
+// ============================================================
+// POLLING TIEMPO REAL — Anti doble pago
+// ============================================================
+function startPolling() {
+    if (_pollingTimer) clearInterval(_pollingTimer);
+    _pollingTimer = setInterval(pollPayrollStatus, POLLING_INTERVAL_MS);
+}
+
+async function pollPayrollStatus() {
+    if (_pollingInFlight) return;
+    _pollingInFlight = true;
+    try {
+        const did = _getDeviceId();
+        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/status?device_id=${encodeURIComponent(did)}`, {
+            headers: authHeaders(),
+            cache: 'no-store'
+        });
         if (!resp.ok) return;
         const data = await resp.json();
-        document.getElementById('stat-total').textContent = '$' + data.total_payroll.toLocaleString('es-CO');
-        document.getElementById('stat-records').textContent = data.total_records;
-        document.getElementById('stat-signed').textContent = data.records.filter(r => r.has_signature).length;
-        document.getElementById('stat-paid').textContent = data.records.filter(r => r.status === 'paid').length;
-        const tbody = document.getElementById('payroll-body');
-        if (!data.records.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">Sin registros</td></tr>'; return; }
-        const sc = { calculated:'bg-yellow-100 text-yellow-700', signed:'bg-green-100 text-green-700', paid:'bg-purple-100 text-purple-700' };
-        tbody.innerHTML = data.records.map(r => `<tr class="pay-row border-b">
-            <td class="px-4 py-3 font-medium">${r.operator_name}</td>
-            <td class="px-4 py-3 text-gray-500">${r.document_number}</td>
-            <td class="px-4 py-3 text-center">${r.hours}</td>
-            <td class="px-4 py-3 text-right font-mono">$${r.total.toLocaleString()}</td>
-            <td class="px-4 py-3 text-right font-mono font-bold">$${r.net.toLocaleString()}</td>
-            <td class="px-4 py-3 text-center"><span class="status-pill ${sc[r.status]||'bg-gray-100'}">${r.status}</span>${r.has_signature?' ✍️':''}</td>
-            <td class="px-4 py-3 text-center">${r.status==='signed'?`<button onclick="markPaid('${r.id}')" class="text-xs px-2 py-1 rounded bg-green-500 text-white">Pagar</button>`:''}</td>
-        </tr>`).join('');
-    } catch(e) { console.error(e); }
+
+        updateViewersBadge(data.active_viewers || 0);
+        renderRecentPayments(data.recent_payments || []);
+
+        const serverMap = {};
+        for (const r of (data.records || [])) {
+            if (r.assignment_id) serverMap[r.assignment_id] = r;
+        }
+
+        const changedIds = [];
+        for (const op of allOperators) {
+            const srv = serverMap[op.assignment_id];
+            if (!srv) continue;
+            if (srv.status !== op.payroll_status ||
+                !!srv.has_signature !== !!op.has_signature ||
+                srv.invoice_number !== op.invoice_number) {
+                changedIds.push(op.assignment_id);
+            }
+        }
+
+        if (changedIds.length === 0) return;
+
+        for (const id of changedIds) {
+            const srv = serverMap[id];
+            const op = allOperators.find(o => o.assignment_id === id);
+            if (op && srv) {
+                op.payroll_status = srv.status;
+                op.has_signature = srv.has_signature;
+                op.invoice_number = srv.invoice_number;
+                op.payroll_record_id = srv.record_id;
+            }
+        }
+
+        updateStatsFromOps();
+        renderTable(getCurrentFilteredList());
+
+        for (const id of changedIds) {
+            const row = document.getElementById('row-' + id);
+            if (row) {
+                row.classList.add('flash-changed');
+                setTimeout(() => row.classList.remove('flash-changed'), 1500);
+            }
+        }
+
+        if (currentSignOp && currentSignOp.payroll_status === 'paid') {
+            closeSignatureModal();
+            alert('⚠️ Este operador acaba de ser pagado desde otro dispositivo.');
+        }
+    } catch(e) {
+        // Silencioso
+    } finally {
+        _pollingInFlight = false;
+    }
 }
-async function calculatePayroll() {
-    const rate = parseFloat(document.getElementById('rate-per-hour').value)||18000;
-    const resp = await fetch(`/api/payroll/events/${EVENT_ID}/calculate?rate_per_hour=${rate}`,{method:'POST'});
-    const data = await resp.json();
-    alert(data.calculated>0?`✅ ${data.calculated} registros calculados`:'ℹ️ Sin registros nuevos');
+
+function updateViewersBadge(count) {
+    const badge = document.getElementById('viewers-badge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.classList.remove('hidden');
+        badge.textContent = `👥 ${count}`;
+        badge.title = `${count} ${count === 1 ? 'persona viendo' : 'personas viendo'} esta nómina`;
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function renderRecentPayments(payments) {
+    const list = document.getElementById('recent-payments');
+    const empty = document.getElementById('payments-empty');
+    const countEl = document.getElementById('payments-count');
+
+    if (!payments.length) {
+        if (empty) empty.style.display = '';
+        list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4" id="payments-empty">Aún no hay pagos registrados</p>';
+        countEl.textContent = '0 pagos';
+        return;
+    }
+
+    countEl.textContent = `${payments.length} ${payments.length === 1 ? 'pago' : 'pagos'}`;
+    list.innerHTML = payments.map(p => {
+        const time = p.paid_at ? parseBackendDate(p.paid_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div class="text-xs bg-blue-50 rounded p-2 flex justify-between">
+            <span><strong>✅</strong> ${p.operator_name} <span class="text-gray-400">· ${p.invoice_number || ''}</span></span>
+            <span class="text-gray-400">${time}</span>
+        </div>`;
+    }).join('');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
     loadPayroll();
-}
-async function markPaid(id) {
-    await fetch(`/api/payroll/payroll/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'paid'})});
-    loadPayroll();
-}
-function exportCSV() { window.location.href=`/api/reports/events/${EVENT_ID}/payroll.csv`; }
-document.addEventListener('DOMContentLoaded', loadPayroll);
+    startPolling();
+});
 </script>
+<!-- ============================================================ -->
+<!-- [NÓMINA-V2 + TOPAZ - fin]                                    -->
+<!-- ============================================================ -->
 {% endif %}
 {% endblock %}

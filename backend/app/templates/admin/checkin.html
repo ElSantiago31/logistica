@@ -370,19 +370,27 @@ async function searchOperator(query) {
         container.innerHTML = '<p class="text-gray-500 text-sm">No se encontraron operadores</p>';
         return;
     }
-    container.innerHTML = results.slice(0, 10).map(op => `
+    container.innerHTML = results.slice(0, 10).map(op => {
+        const photoThumb = op.photo_url
+            ? `<img src="${op.photo_url}" class="w-10 h-10 rounded-full object-cover" alt="${op.full_name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+               <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg" style="display:none;">👤</div>`
+            : `<div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg">👤</div>`;
+        return `
         <div class="operator-card bg-white rounded-lg p-3 border cursor-pointer" onclick="showOperator('${op.id}')">
-            <div class="flex justify-between items-center">
-                <div>
-                    <span class="font-medium">${op.full_name}</span>
-                    <span class="text-xs text-gray-400 ml-2">${op.document_number}</span>
+            <div class="flex justify-between items-center gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="flex-shrink-0">${photoThumb}</div>
+                    <div>
+                        <span class="font-medium">${op.full_name}</span>
+                        <div class="text-xs text-gray-400">${op.document_number}</div>
+                    </div>
                 </div>
                 <span class="status-badge ${op.status === 'checked_in' ? 'bg-green-100 text-green-700' : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}">${op.status}</span>
             </div>
-            <div class="text-xs text-gray-500">${op.role_name || 'Operador'}</div>
+            <div class="text-xs text-gray-500 mt-1">${op.role_name || 'Operador'}</div>
             ${op.coordinator_name && op.coordinator_name !== 'Sin asignar' ? `<div class="text-[11px] text-gray-400 mt-0.5">👔 ${op.coordinator_name}</div>` : ''}
         </div>
-    `).join('');
+    `;}).join('');
 }
 
 async function showOperator(assignmentId) {
@@ -405,6 +413,14 @@ async function showOperator(assignmentId) {
     document.getElementById('op-name').textContent = operator.full_name;
     document.getElementById('op-doc').textContent = operator.document_number;
     document.getElementById('op-role').textContent = operator.role_name || 'Operador';
+
+    // --- Actualizar avatar con la foto del operador (o fallback 👤) ---
+    const avatarEl = document.getElementById('op-avatar');
+    if (operator.photo_url) {
+        avatarEl.innerHTML = `<img src="${operator.photo_url}" alt="${operator.full_name}" class="w-full h-full object-cover rounded-full" onerror="this.parentElement.innerHTML='👤'">`;
+    } else {
+        avatarEl.innerHTML = '👤';
+    }
     // Fase 2: Mostrar coordinador del operador
     const coordEl = document.getElementById('op-coordinator');
     if (operator.coordinator_name && operator.coordinator_name !== 'Sin asignar') {
@@ -787,9 +803,13 @@ async function loadCheckinLog(limit = 20) {
 
 // --- Inline IndexedDB (Dexie) ---
 let _cacheDB = null;
+let _dbRecovering = false;
+
 function _getCacheDB() {
     if (_cacheDB) return _cacheDB;
     if (typeof Dexie === 'undefined') return null;
+    if (_dbRecovering) return null;
+
     const database = new Dexie('ayc_events');
     // Versión 1 original (sin uniform_pending)
     database.version(1).stores({
@@ -806,6 +826,27 @@ function _getCacheDB() {
     database.version(3).stores({
         checkin_log: '++local_id, event_id, assignment_id, created_at'
     });
+    // Versión 4: compatibilidad — navegadores que abrieron v4 en dev
+    // (mismo schema que v3, sin cambios)
+    database.version(4).stores({});
+
+    // Auto-recuperación: si el navegador tiene una versión mayor a la que
+    // definimos (p. ej. de un experimento previo), Dexie lanza VersionError.
+    // En ese caso borramos la DB y la reconstruimos limpia.
+    database.open().catch(err => {
+        if (err && (err.name === 'VersionError' || err.name === 'DatabaseClosedError')) {
+            console.warn('⚠️ IndexedDB version mismatch — wiping and rebuilding...', err.message);
+            _dbRecovering = true;
+            _cacheDB = null;
+            Dexie.delete('ayc_events').then(() => {
+                _dbRecovering = false;
+                console.log('✅ IndexedDB reconstruida. Recarga si el check-in no responde.');
+            }).catch(() => { _dbRecovering = false; });
+        } else {
+            console.error('IndexedDB open error:', err);
+        }
+    });
+
     _cacheDB = database;
     return _cacheDB;
 }

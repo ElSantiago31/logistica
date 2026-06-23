@@ -13,7 +13,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.events import Event
 from app.models.operators import Operator
-from app.models.payroll import Payroll, Evaluation
+from app.models.payroll import PayrollRecord, Evaluation
 from app.models.sync import AttendanceLog
 from app.models.users import User
 
@@ -64,21 +64,21 @@ async def export_payroll_csv(event_id: uuid.UUID, db: AsyncSession = Depends(get
     if not event:
         raise HTTPException(404)
     result = await db.execute(
-        select(Payroll, Operator, User)
-        .join(Operator, Operator.id == Payroll.operator_id)
+        select(PayrollRecord, Operator, User)
+        .join(Operator, Operator.id == PayrollRecord.operator_id)
         .join(User, User.id == Operator.user_id)
-        .where(Payroll.event_id == event_id)
+        .where(PayrollRecord.event_id == event_id)
     )
     rows = result.all()
     data = [{"Nombre": f"{u.first_name} {u.last_name}", "Cedula": u.document_number or "",
-             "Horas": p.hours_worked, "Tarifa": p.rate_per_hour, "Bruto": p.total_amount,
-             "Deducciones": p.deductions, "Neto": p.net_amount, "Estado": p.status,
-             "Firmado": "Si" if p.signature else "No"}
+             "Cargo": p.role_name_snapshot or "", "Monto": p.payment_amount,
+             "Estado": p.status, "Factura": p.invoice_number or "",
+             "Firmado": "Si" if p.signature_data else "No"}
             for p, op, u in rows]
-    total = sum(d["Neto"] for d in data)
-    data.append({"Nombre": "TOTAL", "Cedula": "", "Horas": "", "Tarifa": "", "Bruto": "", "Deducciones": "", "Neto": total, "Estado": "", "Firmado": ""})
+    total = sum(d["Monto"] for d in data)
+    data.append({"Nombre": "TOTAL", "Cedula": "", "Cargo": "", "Monto": total, "Estado": "", "Factura": "", "Firmado": ""})
     fn = f"nomina_{event.name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv"
-    return _csv_response(data, fn, ["Nombre", "Cedula", "Horas", "Tarifa", "Bruto", "Deducciones", "Neto", "Estado", "Firmado"])
+    return _csv_response(data, fn, ["Nombre", "Cedula", "Cargo", "Monto", "Estado", "Factura", "Firmado"])
 
 
 @router.get("/events/{event_id}/evaluations.csv")

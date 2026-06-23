@@ -266,16 +266,12 @@ async def delete_operator(db: AsyncSession, user_id: uuid.UUID, hard_delete: boo
 
         if operator:
             # 2-5. Delete all child records that reference this operator
-            from app.models.payroll import Signature, Payroll, Evaluation
+            from app.models.payroll import PayrollRecord, Evaluation
             from app.models.events import EventAssignment
 
-            # Signatures (must go before payrolls)
+            # Payroll records (includes signature_data + invoice)
             await db.execute(
-                sql_delete(Signature).where(Signature.operator_id == operator.id)
-            )
-            # Payrolls
-            await db.execute(
-                sql_delete(Payroll).where(Payroll.operator_id == operator.id)
+                sql_delete(PayrollRecord).where(PayrollRecord.operator_id == operator.id)
             )
             # Evaluations
             await db.execute(

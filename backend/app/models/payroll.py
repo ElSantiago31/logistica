@@ -1,6 +1,7 @@
-"""Payroll models - evaluations, payroll records, and digital signatures."""
+"""Payroll models - evaluations and payroll records with signatures."""
 import uuid
-from sqlalchemy import String, Text, ForeignKey, Float, Integer
+from datetime import datetime
+from sqlalchemy import String, Text, ForeignKey, Float, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -19,10 +20,10 @@ class Evaluation(BaseModel):
     evaluated_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
     )
-    punctuality_score: Mapped[int] = mapped_column(Integer, nullable=False, comment="1-5")
-    performance_score: Mapped[int] = mapped_column(Integer, nullable=False, comment="1-5")
-    appearance_score: Mapped[int] = mapped_column(Integer, nullable=False, comment="1-5")
-    attitude_score: Mapped[int] = mapped_column(Integer, nullable=False, comment="1-5")
+    punctuality_score: Mapped[int] = mapped_column(nullable=False, comment="1-5")
+    performance_score: Mapped[int] = mapped_column(nullable=False, comment="1-5")
+    appearance_score: Mapped[int] = mapped_column(nullable=False, comment="1-5")
+    attitude_score: Mapped[int] = mapped_column(nullable=False, comment="1-5")
     overall_score: Mapped[float] = mapped_column(Float, nullable=False, comment="Promedio ponderado")
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     would_hire_again: Mapped[bool] = mapped_column(default=True, nullable=False)
@@ -36,9 +37,13 @@ class Evaluation(BaseModel):
         return f"<Evaluation event={self.event_id} op={self.operator_id} score={self.overall_score}>"
 
 
-class Payroll(BaseModel):
-    """Registro de nómina por operador por evento."""
-    __tablename__ = "payroll"
+class PayrollRecord(BaseModel):
+    """Registro de pago a un operador en un evento.
+
+    Flujo: confirmed/checkin → signed (con firma del pad) → paid (con factura generada).
+    La firma se almacena embebida (base64 PNG) en signature_data.
+    """
+    __tablename__ = "payroll_records"
 
     event_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,
@@ -47,55 +52,43 @@ class Payroll(BaseModel):
         ForeignKey("operators.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     assignment_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("event_assignments.id", ondelete="SET NULL"), nullable=True,
+        ForeignKey("event_assignments.id", ondelete="SET NULL"), nullable=True, index=True,
     )
-    hours_worked: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    rate_per_hour: Mapped[float] = mapped_column(Float, nullable=False)
-    total_amount: Mapped[float] = mapped_column(Float, nullable=False)
-    deductions: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    net_amount: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Snapshot del cargo y monto al momento de crear el registro
+    role_name_snapshot: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    payment_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Firma del operador (base64 PNG desde el pad de firmas)
+    signature_data: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Base64 PNG del trazo")
+
+    # Estado del flujo de pago
     status: Mapped[str] = mapped_column(
-        String(20), default="calculated", nullable=False, index=True,
-        comment="calculated | pending_signature | signed | approved | paid",
+        String(20), default="pending", nullable=False, index=True,
+        comment="pending | signed | paid",
     )
-    payment_method: Mapped[str | None] = mapped_column(
-        String(20), nullable=True,
-        comment="cash | transfer | nequi | daviplata",
+    invoice_number: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True, comment="FAC-{año}-{contador}")
+
+    # Metadatos de auditoría
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+        comment="Usuario (coordinador/admin) que presenció la firma",
     )
-    payment_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    paid_at: Mapped[str | None] = mapped_column(String, nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    paid_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+        comment="Usuario que generó la factura",
+    )
+
+    # Soporte offline
+    is_offline: Mapped[bool] = mapped_column(default=False, nullable=False)
+    device_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Relationships
     event = relationship("Event")
     operator = relationship("Operator")
     assignment = relationship("EventAssignment")
-    signature = relationship("Signature", back_populates="payroll", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Payroll event={self.event_id} op={self.operator_id} ${self.net_amount}>"
-
-
-class Signature(BaseModel):
-    """Firma digital del operador validando su nómina."""
-    __tablename__ = "signatures"
-
-    payroll_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("payroll.id", ondelete="CASCADE"), unique=True, nullable=False, index=True,
-    )
-    operator_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("operators.id", ondelete="CASCADE"), nullable=False, index=True,
-    )
-    signature_data: Mapped[str] = mapped_column(Text, nullable=False, comment="Base64 del trazo canvas")
-    signature_hash: Mapped[str] = mapped_column(String(128), nullable=False, comment="SHA-256 hash de verificación")
-    signed_at: Mapped[str | None] = mapped_column(String, nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    device_info: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    is_offline: Mapped[bool] = mapped_column(default=False, nullable=False)
-
-    # Relationships
-    payroll = relationship("Payroll", back_populates="signature")
-    operator = relationship("Operator")
-
-    def __repr__(self):
-        return f"<Signature payroll={self.payroll_id}>"
+        return f"<PayrollRecord event={self.event_id} op={self.operator_id} status={self.status}>"

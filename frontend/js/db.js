@@ -5,9 +5,9 @@
 /* global Dexie */
 
 const DB_NAME = 'ayc_events';
-const DB_VERSION = 1;
 
 let db = null;
+let _dbRecovering = false;
 
 function initDB() {
     if (db) return db;
@@ -26,7 +26,8 @@ function initDB() {
 
 function _createDB() {
     const database = new Dexie(DB_NAME);
-    database.version(DB_VERSION).stores({
+    // Versión 1 original
+    database.version(1).stores({
         // Events downloaded for offline access
         events: 'id, name, status, start_date, location',
         // Operators assigned to events
@@ -36,6 +37,33 @@ function _createDB() {
         // Sync metadata
         sync_meta: 'key, last_sync, etag'
     });
+    // Versión 2: agrega uniform_pending
+    database.version(2).stores({
+        uniform_pending: '++local_id, assignment_id, event_id, sync_status'
+    });
+    // Versión 3: agrega checkin_log
+    database.version(3).stores({
+        checkin_log: '++local_id, event_id, assignment_id, created_at'
+    });
+    // Versión 4: compatibilidad — navegadores que abrieron v4 en dev
+    database.version(4).stores({});
+
+    // Auto-recuperación: si el navegador tiene una versión mayor a la definida,
+    // Dexie lanza VersionError. Borramos y reconstruimos.
+    database.open().catch(err => {
+        if (err && (err.name === 'VersionError' || err.name === 'DatabaseClosedError')) {
+            console.warn('⚠️ IndexedDB version mismatch — wiping and rebuilding...', err.message);
+            _dbRecovering = true;
+            db = null;
+            Dexie.delete(DB_NAME).then(() => {
+                _dbRecovering = false;
+                console.log('✅ IndexedDB reconstruida.');
+            }).catch(() => { _dbRecovering = false; });
+        } else {
+            console.error('IndexedDB open error:', err);
+        }
+    });
+
     return database;
 }
 

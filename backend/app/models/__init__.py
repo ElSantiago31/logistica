@@ -22,7 +22,7 @@ from app.models.whatsapp import WhatsAppOutboundQueue
 from app.models.sync import SyncSession, AttendanceLog
 
 # Payroll
-from app.models.payroll import Evaluation, Payroll, Signature
+from app.models.payroll import Evaluation, PayrollRecord
 
 # Security / Audit
 from app.models.audit import AuditLog, RevokedToken
@@ -35,7 +35,7 @@ __all__ = [
     "Event", "EventStaffNeed", "EventAssignment",
     "WhatsAppOutboundQueue",
     "SyncSession", "AttendanceLog",
-    "Evaluation", "Payroll", "Signature",
+    "Evaluation", "PayrollRecord",
     "AuditLog", "RevokedToken",
     "BlockedDocument",
 ]
