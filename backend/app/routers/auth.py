@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.users import User
@@ -203,7 +204,9 @@ async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends
 
     user_id = payload.get("sub")
     result = await db.execute(
-        select(User).where(User.id == uuid.UUID(user_id), User.is_active == True)
+        select(User).options(selectinload(User.role)).where(
+            User.id == uuid.UUID(user_id), User.is_active == True
+        )
     )
     user = result.scalar_one_or_none()
     if not user:

@@ -6,6 +6,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.models.users import User
@@ -96,9 +97,15 @@ async def revoke_token(db: AsyncSession, jti: str, user_id: uuid.UUID, reason: s
 
 
 async def authenticate_user(db: AsyncSession, document_number: str, password: str) -> User | None:
-    """Authenticate a user by document number and password. Returns User or None."""
+    """Authenticate a user by document number and password. Returns User or None.
+
+    Carga el rol con selectinload para evitar MissingGreenlet al acceder
+    user.role.name en el endpoint de login (async lazy-load crash -> 500).
+    """
     result = await db.execute(
-        select(User).where(User.document_number == document_number, User.is_active == True)
+        select(User).options(selectinload(User.role)).where(
+            User.document_number == document_number, User.is_active == True
+        )
     )
     user = result.scalar_one_or_none()
     if not user:
