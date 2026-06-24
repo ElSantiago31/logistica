@@ -40,7 +40,7 @@
                 <div><label class="text-xs text-gray-500">Email (opcional)</label><input id="email" type="email" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="correo@ejemplo.com"></div>
                 <div><label class="text-xs text-gray-500">Teléfono</label><input id="phone" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
                 <div><label class="text-xs text-gray-500">Contraseña*</label><input id="password" type="password" required class="w-full px-3 py-2 border rounded-lg text-sm" minlength="8"></div>
-                <div><label class="text-xs text-gray-500">Rol</label><select id="userType" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="superadmin">Superadmin</option></select></div>
+                <div><label class="text-xs text-gray-500">Rol</label><select id="userType" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="superadmin">Superadmin</option><option value="checkin">Check-in</option><option value="intendencia">Intendencia</option><option value="coordinator">Coordinador</option></select></div>
                 <div class="flex gap-3 pt-2">
                     <button type="button" onclick="saveAdmin()" class="flex-1 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">Guardar</button>
                     <button type="button" onclick="closeModal()" class="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-200 text-gray-700">Cancelar</button>
@@ -62,8 +62,14 @@
             const admins=await r.json();
             if(!admins.length){container.innerHTML='<p class="p-8 text-center text-gray-400">No hay administradores</p>';return}
             let h='<table class="w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Documento</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th></tr></thead><tbody class="divide-y">';
+            const roleMap={
+                superadmin:'<span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-semibold">Superadmin</span>',
+                checkin:'<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">Check-in</span>',
+                intendencia:'<span class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-semibold">Intendencia</span>',
+                coordinator:'<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">Coordinador</span>'
+            };
             admins.forEach(a=>{
-                const role=a.user_type==='superadmin'?'<span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-semibold">Superadmin</span>':'<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">Coordinador</span>';
+                const role=roleMap[a.user_type]||roleMap.coordinator;
                 const status=a.is_active?'<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Activo</span>':'<span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Inactivo</span>';
                 h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${a.is_active?`<button onclick="deactivateAdmin('${a.id}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`:''}</td></tr>`;
             });
