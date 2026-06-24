@@ -220,6 +220,17 @@ async def update_operator(
             if field in update_dict:
                 setattr(user.operator_profile, field, update_dict[field])
 
+        # experience_roles: lista de role_ids -> JSON string
+        if is_admin and "experience_roles" in update_dict:
+            import json
+            roles_list = update_dict["experience_roles"]
+            if roles_list:
+                user.operator_profile.experience_roles = json.dumps(
+                    [str(r) for r in roles_list]
+                )
+            else:
+                user.operator_profile.experience_roles = None
+
     await db.commit()
     await db.refresh(user)
     return user

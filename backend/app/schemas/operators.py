@@ -43,6 +43,7 @@ class OperatorAdminUpdateRequest(OperatorUpdateRequest):
     notes: Optional[str] = None
     is_active: Optional[bool] = None
     education_level: Optional[str] = Field(None, max_length=50)
+    experience_roles: Optional[List[str]] = None
 
 # Detailed response
 class OperatorResponse(BaseModel):

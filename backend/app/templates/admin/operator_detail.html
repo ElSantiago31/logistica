@@ -183,7 +183,6 @@
                     <p class="text-sm"><span class="text-gray-500">Tel. emergencia:</span> <strong>${o.emergency_contact_phone||'-'}</strong></p>
                     <p class="text-sm"><span class="text-gray-500">Exp. Protocolo:</span> <strong>${o.has_protocol_experience===true?'Sí':o.has_protocol_experience===false?'No':'-'}</strong></p>
                     <p class="text-sm"><span class="text-gray-500">Tamaño Evento:</span> <strong>${o.event_size_experience||'-'}</strong></p>
-                    <p class="text-sm"><span class="text-gray-500">Verificación:</span> <strong>${o.background_check_status||'pending'}</strong></p>
                 </div>
             </div>
             <div>
@@ -310,10 +309,6 @@
                         <label class="text-xs text-gray-400 w-24">Tam. Evento:</label>
                         <input id="ed_event_size" class="edit-input" value="${o.event_size_experience||''}">
                     </div>
-                    <div class="flex items-center gap-2">
-                        <label class="text-xs text-gray-400 w-24">Verificación:</label>
-                        <select id="ed_bg_status" class="edit-select">${bgStatuses.map(v=>`<option value="${v}" ${v===(o.background_check_status||'pending')?'selected':''}>${v}</option>`).join('')}</select>
-                    </div>
                 </div>
                 <h3 class="text-sm font-medium text-gray-500 mb-2 mt-6">👕 Tallas Uniforme</h3>
                 <div class="space-y-2">
@@ -326,6 +321,19 @@
                         <select id="ed_jacket" class="edit-select"><option value="">--</option>${selectOpts(clothSizes,o.jacket_size)}</select>
                     </div>
                 </div>
+            </div>
+        </div>
+        <div class="px-6 pb-2">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">🎭 Roles / Experiencia</h3>
+            <p class="text-xs text-gray-400 mb-2">Selecciona uno o varios roles. Esto determina cómo se agrupa al operador en el dashboard.</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-3 border rounded-lg bg-gray-50">
+                ${allRoles.length ? allRoles.map(r=>{
+                    let ids=[];try{ids=JSON.parse(o.experience_roles||'[]')}catch(e){}
+                    const checked=ids.includes(r.role_id)?'checked':'';
+                    return '<label class="flex items-center gap-2 text-sm bg-white px-2 py-1.5 rounded border hover:bg-blue-50 cursor-pointer">'+
+                        '<input type="checkbox" class="ed_role_cb rounded" value="'+r.role_id+'" '+checked+'>'+
+                        '<span>'+r.role_name+'</span></label>';
+                }).join('') : '<p class="text-sm text-gray-400 col-span-3 text-center py-4">Cargando roles...</p>'}
             </div>
         </div>
         <div class="px-6 pb-6 border-t pt-4">
@@ -357,7 +365,7 @@
             emergency_contact_phone:document.getElementById('ed_emergency_phone').value||null,
             has_protocol_experience:document.getElementById('ed_protocol').value?document.getElementById('ed_protocol').value==='true':null,
             event_size_experience:document.getElementById('ed_event_size').value||null,
-            background_check_status:document.getElementById('ed_bg_status').value||null,
+            experience_roles:Array.from(document.querySelectorAll('.ed_role_cb:checked')).map(cb=>cb.value),
             shirt_size:document.getElementById('ed_shirt').value||null,
             jacket_size:document.getElementById('ed_jacket').value||null,
         };
