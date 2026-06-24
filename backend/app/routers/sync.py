@@ -44,7 +44,7 @@ async def get_offline_data(
     user=Depends(get_current_user),
 ):
     """Download event data for offline PWA use."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     event = await db.get(Event, event_id)
@@ -173,7 +173,7 @@ async def sync_attendance(
     user=Depends(get_current_user),
 ):
     """Batch upload attendance records from offline PWA."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
         raise HTTPException(403, "Sin permisos")
 
     records = payload.get("records", [])
@@ -331,7 +331,7 @@ async def get_attendance(
     user=Depends(get_current_user),
 ):
     """Get attendance records for an event."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
         raise HTTPException(403, "Sin permisos")
 
     result = await db.execute(
@@ -367,7 +367,7 @@ async def check_in(
     user=Depends(get_current_user),
 ):
     """Single check-in (online) via QR scan or manual."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
         raise HTTPException(403, "Sin permisos")
 
     operator_id = _to_uuid(payload.get("operator_id"))
@@ -441,7 +441,7 @@ async def update_uniform(
     user=Depends(get_current_user),
 ):
     """Edita la indumentaria asignada a un operador (incluso después del check-in)."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     assignment = await db.get(EventAssignment, assignment_id)
@@ -558,7 +558,7 @@ async def get_checkin_status(
       - active_viewers: cuántas personas están viendo el check-in ahora
       - recent_activity: últimos ingresos registrados (en cualquier dispositivo)
     """
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
         raise HTTPException(403, "Sin permisos")
 
     # --- Fase 3: registrar presencia ---
