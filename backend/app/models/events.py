@@ -35,6 +35,7 @@ class Event(BaseModel):
     creator = relationship("User", foreign_keys=[created_by])
     staff_needs = relationship("EventStaffNeed", back_populates="event", cascade="all, delete-orphan")
     assignments = relationship("EventAssignment", back_populates="event", cascade="all, delete-orphan")
+    staff_assignments = relationship("EventStaffAssignment", back_populates="event", cascade="all, delete-orphan")
     audit_logs = relationship("EventAuditLog", back_populates="event", cascade="all, delete-orphan", order_by="desc(EventAuditLog.created_at)")
 
     def __repr__(self):
@@ -129,3 +130,30 @@ class EventAssignment(BaseModel):
 
     def __repr__(self):
         return f"<EventAssignment event={self.event_id} op={self.operator_id} status={self.status}>"
+
+
+class EventStaffAssignment(BaseModel):
+    """Asignación de personal del sistema (checkin/intendencia) a un evento.
+
+    Permite que usuarios con user_type='checkin' o 'intendencia' solo vean
+    los eventos donde el superadmin los asignó explícitamente.
+    """
+    __tablename__ = "event_staff_assignments"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    staff_role: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True,
+        comment="checkin | intendencia",
+    )
+
+    # Relationships
+    event = relationship("Event", back_populates="staff_assignments")
+    user = relationship("User")
+
+    def __repr__(self):
+        return f"<EventStaffAssignment event={self.event_id} user={self.user_id} role={self.staff_role}>"
