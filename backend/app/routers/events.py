@@ -355,6 +355,20 @@ async def delete_assignment(
     assignment = result.scalar_one_or_none()
     if not assignment:
         raise HTTPException(404, "Asignación no encontrada")
+
+    # Si estaba confirmado, decrementar quantity_confirmed del EventStaffNeed
+    if assignment.status == "confirmed" and assignment.role_id:
+        from app.models.events import EventStaffNeed
+        sn_r = await db.execute(
+            sel(EventStaffNeed).where(
+                EventStaffNeed.event_id == assignment.event_id,
+                EventStaffNeed.role_id == assignment.role_id,
+            )
+        )
+        sn = sn_r.scalar_one_or_none()
+        if sn:
+            sn.quantity_confirmed = max(sn.quantity_confirmed - 1, 0)
+
     await db.delete(assignment)
     await db.commit()
     return {"message": "Operador desasignado del evento"}
