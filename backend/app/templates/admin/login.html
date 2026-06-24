@@ -102,12 +102,18 @@
     </div>
 
     <script>
-        // Check if already logged in
+        // Check if already logged in and redirect to correct page
         (function() {
             const token = localStorage.getItem('access_token');
             const user = JSON.parse(localStorage.getItem('user') || '{}');
-            if (token && ['superadmin', 'coordinator'].includes(user.user_type)) {
-                window.location.href = '/admin';
+            if (token && user.user_type) {
+                if (['superadmin', 'coordinator'].includes(user.user_type)) {
+                    window.location.href = '/admin';
+                } else if (['checkin', 'intendencia'].includes(user.user_type)) {
+                    window.location.href = '/staff';
+                } else if (user.user_type === 'operator') {
+                    window.location.href = '/enrolamiento/perfil';
+                }
             }
         })();
 
@@ -162,7 +168,15 @@
                     localStorage.setItem('refresh_token', data.refresh_token);
                     localStorage.setItem('user', JSON.stringify(data.user));
                     showToast('¡Bienvenido!', 'success');
-                    setTimeout(() => { window.location.href = '/admin'; }, 500);
+                    // Redirect based on user role
+                    const userType = data.user.user_type;
+                    let redirectUrl = '/admin';
+                    if (['checkin', 'intendencia'].includes(userType)) {
+                        redirectUrl = '/staff';
+                    } else if (userType === 'operator') {
+                        redirectUrl = '/enrolamiento/perfil';
+                    }
+                    setTimeout(() => { window.location.href = redirectUrl; }, 500);
                 } else {
                     showToast(data.detail || 'Error al iniciar sesión', 'error');
                 }
