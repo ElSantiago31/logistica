@@ -70,6 +70,21 @@
                 </div>
                 <div id="staffRows" class="space-y-3"></div>
             </div>
+            <!-- Staff System Assignments (checkin / intendencia) -->
+            <div class="bg-white rounded-lg shadow p-6 space-y-4">
+                <h2 class="text-lg font-semibold text-gray-800">Personal del Sistema</h2>
+                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in e Intendencia pueden ver este evento.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">🟢 Check-in</label>
+                        <div id="checkinList" class="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">🟠 Intendencia</label>
+                        <div id="intendenciaList" class="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
+                    </div>
+                </div>
+            </div>
             <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
             <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
                 <a href="/admin/events/{{ event_id }}" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-center">Cancelar</a>
@@ -113,6 +128,63 @@ function addStaffRow(roleId='',qty=1,rate='',edu=''){
     div.appendChild(row);
 }
 
+let allStaffUsers = [];
+
+async function loadStaffUsers() {
+    const token = getToken();
+    const res = await fetch('/api/auth/admins', {headers: {'Authorization': 'Bearer ' + token}});
+    const admins = await res.json();
+    allStaffUsers = admins.filter(a => a.user_type === 'checkin' || a.user_type === 'intendencia');
+    renderStaffLists();
+}
+
+async function loadCurrentStaffAssignments() {
+    const token = getToken();
+    try {
+        const res = await fetch(`/api/events/${EVENT_ID}/staff`, {headers: {'Authorization': 'Bearer ' + token}});
+        if (!res.ok) return;
+        const staff = await res.json();
+        staff.forEach(s => {
+            const list = s.staff_role === 'checkin' ? 'checkinList' : 'intendenciaList';
+            const cb = document.querySelector(`#${list} input[value="${s.user_id}"]`);
+            if (cb) cb.checked = true;
+        });
+    } catch (e) {}
+}
+
+function renderStaffLists() {
+    const render = (containerId, role) => {
+        const container = document.getElementById(containerId);
+        const users = allStaffUsers.filter(u => u.user_type === role);
+        if (!users.length) {
+            container.innerHTML = '<p class="text-xs text-gray-400">No hay usuarios ' + role + '. Créalos en Superadmin.</p>';
+            return;
+        }
+        container.innerHTML = users.map(u =>
+            `<label class="flex items-center gap-2 text-sm hover:bg-gray-50 px-2 py-1 rounded">
+                <input type="checkbox" value="${u.id}" class="staff-cb rounded">
+                <span>${u.first_name} ${u.last_name}</span>
+                <span class="text-xs text-gray-400">${u.document_number}</span>
+            </label>`
+        ).join('');
+    };
+    render('checkinList', 'checkin');
+    render('intendenciaList', 'intendencia');
+}
+
+async function saveStaffAssignments() {
+    const token = getToken();
+    const collect = (containerId) => Array.from(document.querySelectorAll(`#${containerId} input:checked`)).map(cb => cb.value);
+    const body = {checkin: collect('checkinList'), intendencia: collect('intendenciaList')};
+    try {
+        await fetch(`/api/events/${EVENT_ID}/staff`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify(body)
+        });
+    } catch (e) {}
+}
+
 async function loadEvent(){
     const token=getToken();
     const res=await fetch(`/api/events/${EVENT_ID}`,{headers:{'Authorization':'Bearer '+token}});
@@ -145,6 +217,9 @@ async function loadEvent(){
     if(ev.staff_needs&&ev.staff_needs.length){
         ev.staff_needs.forEach(n=>addStaffRow(n.role_id,n.quantity_needed,n.rate_per_shift||'',n.education_level||''));
     }
+    // Load staff system assignments
+    await loadStaffUsers();
+    await loadCurrentStaffAssignments();
 }
 
 document.getElementById('eventForm').addEventListener('submit',async(e)=>{
@@ -176,8 +251,11 @@ document.getElementById('eventForm').addEventListener('submit',async(e)=>{
     };
     try{
         const res=await fetch(`/api/events/${EVENT_ID}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
-        if(res.ok){showToast('Evento actualizado','bg-green-500');setTimeout(()=>window.location.href='/admin/events/'+EVENT_ID,1000);}
-        else{const err=await res.json();showToast(err.detail||'Error al actualizar','bg-red-500');}
+        if(!res.ok){const err=await res.json();showToast(err.detail||'Error al actualizar','bg-red-500');return}
+        // Save staff assignments after successful event update
+        await saveStaffAssignments();
+        showToast('Evento actualizado','bg-green-500');
+        setTimeout(()=>window.location.href='/admin/events/'+EVENT_ID,1000);
     }catch(e){showToast('Error de conexión','bg-red-500');}
 });
 
