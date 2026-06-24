@@ -352,16 +352,22 @@ async def import_operators(
             continue
 
         # --- Crear Operator profile ---
+        # experience_roles: JSON con el role_id para que el admin agrupe correctamente
+        import json as _json
+        experience_roles_json = _json.dumps([str(role_id)]) if role_id else None
+
         try:
             await db.execute(text("""
                 INSERT INTO operators (
                     id, user_id, eps_id, birth_date, gender, address,
                     emergency_contact_name, emergency_contact_phone,
-                    whatsapp, background_check_status, total_events, is_active
+                    whatsapp, background_check_status, total_events, is_active,
+                    experience_roles, has_protocol_experience, event_size_experience
                 ) VALUES (
                     gen_random_uuid(), :user_id, :eps_id, :birth_date, :gender, :address,
                     :emergency_name, :emergency_phone,
-                    :whatsapp, 'pending', 0, true
+                    :whatsapp, 'pending', 0, true,
+                    :experience_roles, true, '100'
                 )
             """), {
                 "user_id": user_id,
@@ -372,6 +378,7 @@ async def import_operators(
                 "emergency_name": emergency_name or None,
                 "emergency_phone": emergency_phone or None,
                 "whatsapp": phone or None,
+                "experience_roles": experience_roles_json,
             })
         except Exception as exc:
             print(f"  [{i}] ❌ Error creando operator profile {doc}: {exc}")
