@@ -62,14 +62,6 @@
                     <textarea id="notes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
                 </div>
             </div>
-            <!-- Staff Needs -->
-            <div class="bg-white rounded-lg shadow p-6 space-y-4">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-800">Personal Requerido</h2>
-                    <button type="button" onclick="addStaffRow()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ Agregar rol</button>
-                </div>
-                <div id="staffRows" class="space-y-3"></div>
-            </div>
             <!-- Staff System Assignments (checkin / intendencia) -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <h2 class="text-lg font-semibold text-gray-800">Personal del Sistema</h2>
@@ -84,6 +76,14 @@
                         <div id="intendenciaList" class="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
                     </div>
                 </div>
+            </div>
+            <!-- Staff Needs -->
+            <div class="bg-white rounded-lg shadow p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-800">Personal Requerido</h2>
+                    <button type="button" onclick="addStaffRow()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ Agregar rol</button>
+                </div>
+                <div id="staffRows" class="space-y-3"></div>
             </div>
             <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
             <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
