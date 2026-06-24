@@ -184,6 +184,9 @@ async def sync_attendance(
     if not session_event_id:
         raise HTTPException(400, "event_id inválido o vacío en records[0]")
 
+    # Rol checkin no puede setear indumentaria en sync batch
+    can_set_uniform_batch = user.user_type in ("admin", "superadmin", "coordinator", "intendencia")
+
     synced = 0
     failed = 0
     sync_session = None
@@ -252,15 +255,16 @@ async def sync_attendance(
                     assignment = await db.get(EventAssignment, assignment_id)
                     if assignment:
                         assignment.status = "checked_in"
-                        shirt = rec.get("shirt_number")
-                        jacket = rec.get("jacket_number")
-                        cap = rec.get("cap_number")
-                        if shirt:
-                            assignment.shirt_number = str(shirt)
-                        if jacket:
-                            assignment.jacket_number = str(jacket)
-                        if cap:
-                            assignment.cap_number = str(cap)
+                        if can_set_uniform_batch:
+                            shirt = rec.get("shirt_number")
+                            jacket = rec.get("jacket_number")
+                            cap = rec.get("cap_number")
+                            if shirt:
+                                assignment.shirt_number = str(shirt)
+                            if jacket:
+                                assignment.jacket_number = str(jacket)
+                            if cap:
+                                assignment.cap_number = str(cap)
 
                 synced += 1
         except Exception as exc:
@@ -374,10 +378,11 @@ async def check_in(
     assignment_id = _to_uuid(payload.get("assignment_id"))
     method = payload.get("method", "manual")
     code = payload.get("scanned_code")
-    # Optional uniform fields
-    shirt_number = payload.get("shirt_number")
-    jacket_number = payload.get("jacket_number")
-    cap_number = payload.get("cap_number")
+    # Optional uniform fields — solo intendencia/admin/coordinator pueden setearlos
+    can_set_uniform = user.user_type in ("admin", "superadmin", "coordinator", "intendencia")
+    shirt_number = payload.get("shirt_number") if can_set_uniform else None
+    jacket_number = payload.get("jacket_number") if can_set_uniform else None
+    cap_number = payload.get("cap_number") if can_set_uniform else None
 
     if not operator_id:
         raise HTTPException(400, "operator_id requerido")
@@ -441,7 +446,7 @@ async def update_uniform(
     user=Depends(get_current_user),
 ):
     """Edita la indumentaria asignada a un operador (incluso después del check-in)."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     assignment = await db.get(EventAssignment, assignment_id)

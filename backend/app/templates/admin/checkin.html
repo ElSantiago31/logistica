@@ -179,6 +179,15 @@ function authHeaders() {
     }
 })();
 
+// Permiso: solo intendencia/admin/coordinator/superadmin pueden editar indumentaria.
+// El rol checkin NO debe poder setear camisa/chaqueta/gorra.
+function _canManageUniform() {
+    try {
+        const u = JSON.parse(localStorage.getItem('user') || '{}');
+        return ['superadmin', 'coordinator', 'intendencia', 'admin'].includes(u.user_type);
+    } catch(_) { return false; }
+}
+
 // --- Estado de conexión (doble verificación: internet real + servidor) ---
 let _isOnline = navigator.onLine;
 
@@ -438,20 +447,21 @@ async function showOperator(assignmentId) {
     const uniformSection = document.getElementById('uniform-section');
     const btnSaveUniform = document.getElementById('btn-save-uniform');
 
+    const canUniform = _canManageUniform();
     if (operator.status === 'checked_in') {
         statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-green-50 text-green-700';
         statusText.textContent = '✅ Ya registrado';
         actions.classList.add('hidden');
-        uniformSection.classList.remove('hidden');
+        uniformSection.classList.toggle('hidden', !canUniform);
         document.getElementById('uniform-shirt').value = operator.shirt_number || '';
         document.getElementById('uniform-jacket').value = operator.jacket_number || '';
         document.getElementById('uniform-cap').value = operator.cap_number || '';
-        btnSaveUniform.classList.remove('hidden');
+        btnSaveUniform.classList.toggle('hidden', !canUniform);
     } else {
         statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-gray-50 text-gray-600';
         statusText.textContent = `Estado: ${operator.status}`;
         actions.classList.remove('hidden');
-        uniformSection.classList.remove('hidden');
+        uniformSection.classList.toggle('hidden', !canUniform);
         document.getElementById('uniform-shirt').value = operator.shirt_number || '';
         document.getElementById('uniform-jacket').value = operator.jacket_number || '';
         document.getElementById('uniform-cap').value = operator.cap_number || '';
@@ -480,15 +490,17 @@ function checkUniformConflict(shirt, jacket, cap) {
 async function doCheckIn() {
     if (!currentOperator) return;
 
-    const shirt = document.getElementById('uniform-shirt').value.trim();
-    const jacket = document.getElementById('uniform-jacket').value.trim();
-    const cap = document.getElementById('uniform-cap').value.trim();
+    // checkin no puede setear indumentaria — enviar vacío
+    const canUniform = _canManageUniform();
+    const shirt = canUniform ? document.getElementById('uniform-shirt').value.trim() : '';
+    const jacket = canUniform ? document.getElementById('uniform-jacket').value.trim() : '';
+    const cap = canUniform ? document.getElementById('uniform-cap').value.trim() : '';
     const btn = document.getElementById('btn-checkin');
     btn.disabled = true;
     btn.textContent = '⏳ Guardando...';
 
     // Validación local de duplicados (instantánea, funciona offline)
-    const localConflict = checkUniformConflict(shirt, jacket, cap);
+    const localConflict = canUniform ? checkUniformConflict(shirt, jacket, cap) : null;
     if (localConflict) {
         // Mostrar el conflicto SIN ocultar los botones para poder corregir
         const box = document.getElementById('op-status-box');
@@ -522,7 +534,7 @@ async function doCheckIn() {
                 currentOperator.cap_number = cap || null;
                 const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
                 updateStats(countRelevantForCheckin(eventAssignments), checked);
-                document.getElementById('btn-save-uniform').classList.remove('hidden');
+                document.getElementById('btn-save-uniform').classList.toggle('hidden', !_canManageUniform());
             } else if (resp.status === 409) {
                 const errData = await resp.json().catch(() => ({}));
                 const errMsg = errData.detail || errData.message || '';
@@ -539,7 +551,7 @@ async function doCheckIn() {
                     currentOperator.cap_number = cap || null;
                     const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
                     updateStats(countRelevantForCheckin(eventAssignments), checked);
-                    document.getElementById('btn-save-uniform').classList.remove('hidden');
+                    document.getElementById('btn-save-uniform').classList.toggle('hidden', !_canManageUniform());
                 }
             } else {
                 const errBody = await resp.text().catch(() => '');
@@ -561,9 +573,11 @@ async function offlineCheckIn() {
     try {
         const db = _getCacheDB();
         if (!db) throw new Error('Sin BD local');
-        const shirt = document.getElementById('uniform-shirt').value.trim();
-        const jacket = document.getElementById('uniform-jacket').value.trim();
-        const cap = document.getElementById('uniform-cap').value.trim();
+        // checkin no puede setear indumentaria — guardar vacío
+        const canUniform = _canManageUniform();
+        const shirt = canUniform ? document.getElementById('uniform-shirt').value.trim() : '';
+        const jacket = canUniform ? document.getElementById('uniform-jacket').value.trim() : '';
+        const cap = canUniform ? document.getElementById('uniform-cap').value.trim() : '';
         await db.attendance.add({
             event_id: EVENT_ID,
             operator_id: currentOperator.operator_id || currentOperator.id,
@@ -580,7 +594,7 @@ async function offlineCheckIn() {
         const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
         updateStats(countRelevantForCheckin(eventAssignments), checked);
         await updateSyncCount();
-        document.getElementById('btn-save-uniform').classList.remove('hidden');
+        document.getElementById('btn-save-uniform').classList.toggle('hidden', !_canManageUniform());
     } catch(e) {
         console.error('offlineCheckIn error:', e);
         showCheckInResult('❌ Error al guardar: ' + e.message, false);
@@ -1122,7 +1136,7 @@ function _refreshOperatorPanelFromPoll() {
         box.className = 'rounded-lg p-3 mb-4 text-center bg-green-50 text-green-700';
         document.getElementById('op-status-text').textContent = '✅ Ya registrado (actualizado)';
         document.getElementById('checkin-actions').classList.add('hidden');
-        document.getElementById('btn-save-uniform').classList.remove('hidden');
+        document.getElementById('btn-save-uniform').classList.toggle('hidden', !_canManageUniform());
         document.getElementById('uniform-shirt').value = op.shirt_number || '';
         document.getElementById('uniform-jacket').value = op.jacket_number || '';
         document.getElementById('uniform-cap').value = op.cap_number || '';
