@@ -41,6 +41,7 @@ ROLES = [
     ("PMT – Plan de Manejo de Tráfico", "pmt", "Plan de manejo de tráfico vehicular", None, 3, "Tráfico"),
     ("Operador de Montaje", "montaje", "Montaje y desmontaje de infraestructura", None, 3, "Montaje"),
     ("Operador de Aseo", "aseo", "Limpieza y mantenimiento del evento", None, 3, "Aseo"),
+    ("Universitario", "universitario", "Personal universitario cercano a artistas", None, 3, "Seguridad"),
 ]
 
 ARLS = [
