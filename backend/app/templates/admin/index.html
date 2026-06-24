@@ -72,6 +72,9 @@
         <div id="rolesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div class="col-span-full p-8 text-center text-gray-400 loading">Cargando...</div>
         </div>
+
+        <!-- Sin experiencia container (filled by JS) -->
+        <div id="sinExpWrapper"></div>
     </div>
 
     <script>
@@ -99,7 +102,12 @@
             setTimeout(() => toast.remove(), 4000);
         }
 
-        // Role colors for card accents
+        // --- Pagination state ---
+        const MEMBERS_PER_PAGE = 10;
+        const rolePages = {};
+        let sinExpPage = 0;
+        let dashData = null;
+
         const roleColors = [
             'border-blue-400', 'border-green-400', 'border-purple-400',
             'border-orange-400', 'border-pink-400', 'border-teal-400',
@@ -119,6 +127,125 @@
             'text-cyan-700',
         ];
 
+        function memberLi(member, isMulti) {
+            const avatar = member.photo_thumbnail_path
+                ? `<img src="${member.photo_thumbnail_path}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}">`
+                : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}" style="background:${isMulti ? '#eab308' : '#cf9b62'};">${(member.name||'?').charAt(0)}</div>`;
+            return `
+                <li class="py-2">
+                    <div class="flex items-center min-w-0">
+                        <div class="mr-3 flex-shrink-0">${avatar}</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center flex-wrap gap-1">
+                                <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600">${member.name}</a>
+                                ${isMulti ? '<span class="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-semibold">MULTI</span>' : ''}
+                            </div>
+                            <div class="text-xs text-gray-400">${member.city || ''}</div>
+                        </div>
+                        ${member.phone ? `<a href="tel:${member.phone}" class="text-xs text-primary-600 hover:text-primary-800 flex-shrink-0 ml-2 whitespace-nowrap">${member.phone}</a>` : ''}
+                    </div>
+                </li>`;
+        }
+
+        function paginationControls(total, current, onclickPrev, onclickNext) {
+            const totalPages = Math.ceil(total / MEMBERS_PER_PAGE);
+            if (totalPages <= 1) return '';
+            const start = current * MEMBERS_PER_PAGE + 1;
+            const end = Math.min((current + 1) * MEMBERS_PER_PAGE, total);
+            let h = `<div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">`;
+            h += `<span class="text-xs text-gray-400">Mostrando ${start}-${end} de ${total}</span>`;
+            h += `<div class="flex gap-1 items-center">`;
+            if (current > 0) h += `<button ${onclickPrev} class="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-600">← Ant</button>`;
+            h += `<span class="px-2 py-1 text-xs text-gray-500">${current+1}/${totalPages}</span>`;
+            if (current < totalPages-1) h += `<button ${onclickNext} class="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-600">Sig →</button>`;
+            h += `</div></div>`;
+            return h;
+        }
+
+        function renderRoleMembers(roleId) {
+            const role = (dashData.operators_by_role || []).find(r => r.role_id === roleId);
+            if (!role) return;
+            const page = rolePages[roleId] || 0;
+            const members = role.members || [];
+            const total = members.length;
+            const start = page * MEMBERS_PER_PAGE;
+            const pageMembers = members.slice(start, start + MEMBERS_PER_PAGE);
+
+            const memberRoleCount = {};
+            (dashData.operators_by_role || []).forEach(r => r.members.forEach(m => { memberRoleCount[m.id] = (memberRoleCount[m.id]||0)+1; }));
+
+            const body = document.getElementById('roleBody-'+roleId);
+            if (!body) return;
+
+            let html = '';
+            if (total === 0) {
+                html = '<p class="text-sm text-gray-400 italic py-2">Sin operadores asignados</p>';
+            } else {
+                html = '<ul class="divide-y divide-gray-100">';
+                pageMembers.forEach(member => {
+                    const isMulti = memberRoleCount[member.id] > 1;
+                    html += memberLi(member, isMulti);
+                });
+                html += '</ul>';
+                html += paginationControls(total, page,
+                    `onclick="goRolePage('${roleId}',${page-1})"`,
+                    `onclick="goRolePage('${roleId}',${page+1})"`);
+            }
+            body.innerHTML = html;
+        }
+
+        function goRolePage(roleId, page) {
+            rolePages[roleId] = page;
+            renderRoleMembers(roleId);
+            const el = document.getElementById('roleBody-'+roleId);
+            if (el) el.closest('.role-card').scrollIntoView({behavior:'smooth', block:'nearest'});
+        }
+
+        function renderSinExp(page) {
+            sinExpPage = page;
+            const sinExp = dashData.sin_experiencia || [];
+            const total = sinExp.length;
+            const start = page * MEMBERS_PER_PAGE;
+            const pageMembers = sinExp.slice(start, start + MEMBERS_PER_PAGE);
+
+            const wrapper = document.getElementById('sinExpWrapper');
+            if (total === 0) { wrapper.innerHTML = ''; return; }
+
+            let html = `
+            <div class="mb-4 mt-8 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-gray-800">⚠️ Sin Experiencia Asignada</h2>
+                <span class="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800">${total}</span>
+            </div>
+            <div class="bg-white rounded-xl shadow overflow-hidden border-t-4 border-amber-400">
+                <div class="px-5 py-4 flex items-center justify-between bg-amber-50">
+                    <h3 class="font-bold text-amber-700 text-base">Operadores sin rol asignado</h3>
+                </div>
+                <div class="px-5 py-3">
+                    <ul class="divide-y divide-gray-100">`;
+            pageMembers.forEach(member => {
+                const sinAvatar = member.photo_thumbnail_path
+                    ? `<img src="${member.photo_thumbnail_path}" class="w-7 h-7 rounded-full object-cover flex-shrink-0">`
+                    : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#9ca3af;">${(member.name||'?').charAt(0)}</div>`;
+                html += `
+                    <li class="py-2 flex items-center justify-between">
+                        <div class="flex items-center min-w-0">
+                            <div class="mr-3 flex-shrink-0">${sinAvatar}</div>
+                            <div class="min-w-0">
+                                <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600 truncate">${member.name}</a>
+                                <div class="text-xs text-gray-400">${member.city || ''}</div>
+                            </div>
+                        </div>
+                        ${member.phone ? `<a href="tel:${member.phone}" class="text-xs text-primary-600 hover:text-primary-800 flex-shrink-0 ml-2">${member.phone}</a>` : ''}
+                    </li>`;
+            });
+            html += `</ul>`;
+            html += paginationControls(total, page,
+                `onclick="renderSinExp(${page-1})"`,
+                `onclick="renderSinExp(${page+1})"`);
+            html += `</div></div>`;
+            wrapper.innerHTML = html;
+        }
+
         async function loadDashboard() {
             try {
                 const response = await fetch('/api/operators/dashboard/stats', {
@@ -132,12 +259,11 @@
                 }
 
                 const data = await response.json();
+                dashData = data;
 
-                // Update stats
                 document.getElementById('statEvents').textContent = data.active_events || 0;
                 document.getElementById('statOperators').textContent = data.total_operators || 0;
 
-                // Render role cards
                 const container = document.getElementById('rolesContainer');
                 const roles = data.operators_by_role || [];
 
@@ -145,10 +271,6 @@
                     container.innerHTML = '<div class="col-span-full p-8 text-center text-gray-400">No hay roles configurados</div>';
                     return;
                 }
-
-                // Track multi-role operators
-                const memberRoleCount = {};
-                roles.forEach(r => r.members.forEach(m => { memberRoleCount[m.id] = (memberRoleCount[m.id]||0)+1; }));
 
                 let html = '';
                 roles.forEach((role, idx) => {
@@ -165,78 +287,20 @@
                                 ${role.count}
                             </span>
                         </div>
-                        <div class="px-5 py-3">
-                    `;
-
-                    if (role.members.length === 0) {
-                        html += '<p class="text-sm text-gray-400 italic py-2">Sin operadores asignados</p>';
-                    } else {
-                        html += '<ul class="divide-y divide-gray-100">';
-                        role.members.forEach(member => {
-                            const isMulti = memberRoleCount[member.id] > 1;
-                            const avatar = member.photo_thumbnail_path
-                                ? `<img src="${member.photo_thumbnail_path}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}">`
-                                : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isMulti ? 'ring-2 ring-yellow-400' : ''}" style="background:${isMulti ? '#eab308' : '#cf9b62'};">${member.name.charAt(0)}</div>`;
-                            html += `
-                            <li class="py-2">
-                                <div class="flex items-center min-w-0">
-                                    <div class="mr-3 flex-shrink-0">${avatar}</div>
-                                    <div class="min-w-0 flex-1">
-                                        <div class="flex items-center flex-wrap gap-1">
-                                            <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600">${member.name}</a>
-                                            ${isMulti ? '<span class="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-semibold">MULTI</span>' : ''}
-                                        </div>
-                                        <div class="text-xs text-gray-400">${member.city || ''}</div>
-                                    </div>
-                                    ${member.phone ? `<a href="tel:${member.phone}" class="text-xs text-primary-600 hover:text-primary-800 flex-shrink-0 ml-2 whitespace-nowrap">${member.phone}</a>` : ''}
-                                </div>
-                            </li>`;
-                        });
-                        html += '</ul>';
-                    }
-
-                    html += `
+                        <div id="roleBody-${role.role_id}" class="px-5 py-3">
+                            <p class="text-sm text-gray-400 italic py-2">Cargando...</p>
                         </div>
                     </div>`;
                 });
 
-                // Sin experiencia section
-                const sinExp = data.sin_experiencia || [];
-                let sinExpHtml = '';
-                if (sinExp.length > 0) {
-                    sinExpHtml = `
-                    <div class="mb-4 mt-8 flex items-center justify-between">
-                        <h2 class="text-xl font-bold text-gray-800">⚠️ Sin Experiencia Asignada</h2>
-                        <span class="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800">${sinExp.length}</span>
-                    </div>
-                    <div class="bg-white rounded-xl shadow overflow-hidden border-t-4 border-amber-400">
-                        <div class="px-5 py-4 flex items-center justify-between bg-amber-50">
-                            <h3 class="font-bold text-amber-700 text-base">Operadores sin rol asignado</h3>
-                        </div>
-                        <div class="px-5 py-3">
-                            <ul class="divide-y divide-gray-100">`;
-                    sinExp.forEach(member => {
-                        const sinAvatar = member.photo_thumbnail_path
-                            ? `<img src="${member.photo_thumbnail_path}" class="w-7 h-7 rounded-full object-cover flex-shrink-0">`
-                            : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#9ca3af;">${member.name.charAt(0)}</div>`;
-                        sinExpHtml += `
-                            <li class="py-2 flex items-center justify-between">
-                                <div class="flex items-center min-w-0">
-                                    <div class="mr-3 flex-shrink-0">${sinAvatar}</div>
-                                    <div class="min-w-0">
-                                        <a href="/admin/operator/${member.id}" class="text-sm font-medium text-gray-800 hover:text-primary-600 truncate">${member.name}</a>
-                                        <div class="text-xs text-gray-400">${member.city || ''}</div>
-                                    </div>
-                                </div>
-                                ${member.phone ? `<a href="tel:${member.phone}" class="text-xs text-primary-600 hover:text-primary-800 flex-shrink-0 ml-2">${member.phone}</a>` : ''}
-                            </li>`;
-                    });
-                    sinExpHtml += `</ul></div></div>`;
-                }
-                // Append sin experiencia after role cards
-                container.insertAdjacentHTML('afterend', sinExpHtml);
-
                 container.innerHTML = html;
+
+                roles.forEach(role => {
+                    rolePages[role.role_id] = 0;
+                    renderRoleMembers(role.role_id);
+                });
+
+                renderSinExp(0);
 
             } catch (err) {
                 console.error('Error loading dashboard:', err);
@@ -252,7 +316,6 @@
             window.location.href = '/admin/login';
         }
 
-        // Initial load
         loadDashboard();
     </script>
 </body>
