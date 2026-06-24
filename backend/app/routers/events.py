@@ -253,7 +253,7 @@ async def get_assignments(
     user=Depends(get_current_user),
 ):
     """Get all assignments for an event."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
     return await svc.get_assignments(db, event_id)
 
@@ -336,3 +336,58 @@ async def set_event_staff(
 
     await db.commit()
     return {"message": "Staff asignado", "count": created}
+
+
+@router.patch("/assignments/{assignment_id}/uniform")
+async def update_assignment_uniform(
+    assignment_id: uuid.UUID,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Actualiza campos de uniforme (shirt_number, jacket_number, cap_number).
+    Accesible para superadmin, coordinator e intendencia."""
+    if user.user_type not in ("superadmin", "coordinator", "intendencia"):
+        raise HTTPException(403, "Sin permisos")
+    from sqlalchemy import select as sel
+    from app.models.events import EventAssignment
+
+    result = await db.execute(sel(EventAssignment).where(EventAssignment.id == assignment_id))
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+
+    for field in ("shirt_number", "jacket_number", "cap_number"):
+        if field in data:
+            val = data[field]
+            setattr(assignment, field, val if val else None)
+
+    await db.commit()
+    return {"message": "Indumentaria actualizada"}
+
+
+@router.patch("/assignments/{assignment_id}/checkin")
+async def checkin_assignment(
+    assignment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Marca un operador como 'checked_in' (ingreso al evento).
+    Accesible para superadmin, coordinator y checkin."""
+    if user.user_type not in ("superadmin", "coordinator", "checkin"):
+        raise HTTPException(403, "Sin permisos")
+    from sqlalchemy import select as sel
+    from app.models.events import EventAssignment
+
+    result = await db.execute(sel(EventAssignment).where(EventAssignment.id == assignment_id))
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+
+    # Solo se puede hacer check-in si está confirmed o standby
+    if assignment.status not in ("confirmed", "standby"):
+        raise HTTPException(400, f"No se puede hacer check-in: el operador está '{assignment.status}'")
+
+    assignment.status = "checked_in"
+    await db.commit()
+    return {"message": "Check-in realizado", "status": "checked_in"}

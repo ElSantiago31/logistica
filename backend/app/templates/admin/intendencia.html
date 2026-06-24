@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indumentaria - Evento</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <img src="/static/frontend/logo.jpeg" alt="A&C" class="h-9 w-9 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+            <span class="font-bold text-sm" style="color:#fff2e4;">Indumentaria</span>
+            <span id="roleBadge" class="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-600 text-white">Intendencia</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/staff" class="px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80" style="color:#f8d9b6;">← Mis eventos</a>
+            <button onclick="localStorage.clear();location.href='/admin/login'" class="px-3 py-1.5 rounded-lg text-xs font-medium" style="background:#cf9b62;color:#1a1a1a">Salir</button>
+        </div>
+    </div>
+</nav>
+
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <div id="eventHeader" class="mb-4">
+        <h1 class="text-xl font-bold text-gray-800">👕 Asignación de Indumentaria</h1>
+        <p id="eventInfo" class="text-sm text-gray-500">Cargando...</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-col sm:flex-row gap-3">
+        <input type="text" id="searchInput" placeholder="🔍 Buscar por nombre o documento..." class="flex-1 border rounded-lg px-3 py-2 text-sm" oninput="filterAssignments()">
+        <select id="filterRole" class="border rounded-lg px-3 py-2 text-sm" onchange="filterAssignments()"><option value="">Todos los roles</option></select>
+    </div>
+
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div id="assignmentsTable" class="p-8 text-center text-gray-400">Cargando...</div>
+    </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
+
+<script>
+(function(){
+    const t = localStorage.getItem('access_token');
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!t || !['intendencia', 'superadmin'].includes(u.user_type)) {
+        location.href = '/admin/login';
+        return;
+    }
+})();
+const EVENT_ID = '{{ event_id }}';
+let allAssignments = [];
+
+function authH() { return {'Authorization': 'Bearer ' + localStorage.getItem('access_token')}; }
+function showToast(msg, cls) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white ${cls}`;
+    setTimeout(() => t.className = 'hidden', 3000);
+}
+
+async function loadAssignments() {
+    const container = document.getElementById('assignmentsTable');
+    try {
+        const res = await fetch(`/api/events/${EVENT_ID}/assignments`, {headers: authH()});
+        if (!res.ok) { container.innerHTML = '<p class="text-red-500">Error</p>'; return; }
+        allAssignments = await res.json();
+        renderTable();
+    } catch (e) {
+        container.innerHTML = '<p class="text-red-500">Error de conexión</p>';
+    }
+}
+
+function renderTable() {
+    const container = document.getElementById('assignmentsTable');
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const roleFilter = document.getElementById('filterRole').value;
+
+    let filtered = allAssignments.filter(a => {
+        const name = (a.operator_first_name + ' ' + a.operator_last_name).toLowerCase();
+        const doc = (a.operator_document_number || '').toLowerCase();
+        const matchesSearch = !search || name.includes(search) || doc.includes(search);
+        const matchesRole = !roleFilter || a.role_name === roleFilter;
+        return matchesSearch && matchesRole;
+    });
+
+    // Populate role filter options
+    const roles = [...new Set(allAssignments.map(a => a.role_name).filter(Boolean))];
+    const roleSelect = document.getElementById('filterRole');
+    const currentVal = roleSelect.value;
+    roleSelect.innerHTML = '<option value="">Todos los roles</option>' + roles.map(r => `<option value="${r}" ${r === currentVal ? 'selected' : ''}>${r}</option>`).join('');
+
+    if (!filtered.length) {
+        container.innerHTML = '<p class="text-gray-400 py-8">No hay operadores asignados</p>';
+        return;
+    }
+
+    const statusMap = {invited:'Invitado', confirmed:'Confirmado', rejected:'Rechazado', standby:'En espera', no_show:'No asistió', checked_in:'Ingresó'};
+    container.innerHTML = '<table class="w-full"><thead class="bg-gray-50"><tr>' +
+        '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operador</th>' +
+        '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>' +
+        '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>' +
+        '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">👕 Camisa</th>' +
+        '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">🧥 Chaqueta</th>' +
+        '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">🧢 Gorra</th>' +
+        '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Acción</th>' +
+        '</tr></thead><tbody class="divide-y">' + filtered.map(a => {
+            const st = statusMap[a.status] || a.status;
+            return `<tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 text-sm">
+                    <div class="font-medium">${a.operator_first_name} ${a.operator_last_name}</div>
+                    <div class="text-xs text-gray-400">${a.operator_document_number || ''}</div>
+                </td>
+                <td class="px-3 py-2 text-sm text-gray-600">${a.role_name || '-'}</td>
+                <td class="px-3 py-2 text-xs"><span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">${st}</span></td>
+                <td class="px-3 py-2 text-center"><input type="text" value="${a.shirt_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm" data-field="shirt_number" data-id="${a.id}"></td>
+                <td class="px-3 py-2 text-center"><input type="text" value="${a.jacket_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm" data-field="jacket_number" data-id="${a.id}"></td>
+                <td class="px-3 py-2 text-center"><input type="text" value="${a.cap_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm" data-field="cap_number" data-id="${a.id}"></td>
+                <td class="px-3 py-2 text-center"><button onclick="saveUniform('${a.id}')" class="bg-amber-600 text-white px-2 py-1 rounded text-xs hover:bg-amber-700">💾</button></td>
+            </tr>`;
+        }).join('') + '</tbody></table>';
+}
+
+function filterAssignments() { renderTable(); }
+
+async function saveUniform(assignmentId) {
+    const row = document.querySelector(`[data-id="${assignmentId}"]`).closest('tr');
+    const shirt = row.querySelector('[data-field="shirt_number"]').value.trim() || null;
+    const jacket = row.querySelector('[data-field="jacket_number"]').value.trim() || null;
+    const cap = row.querySelector('[data-field="cap_number"]').value.trim() || null;
+
+    try {
+        const res = await fetch(`/api/events/assignments/${assignmentId}/uniform`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json', ...authH()},
+            body: JSON.stringify({shirt_number: shirt, jacket_number: jacket, cap_number: cap})
+        });
+        if (res.ok) {
+            showToast('Indumentaria guardada', 'bg-green-500');
+            const a = allAssignments.find(x => x.id === assignmentId);
+            if (a) { a.shirt_number = shirt; a.jacket_number = jacket; a.cap_number = cap; }
+        } else {
+            showToast('Error al guardar', 'bg-red-500');
+        }
+    } catch (e) {
+        showToast('Error de conexión', 'bg-red-500');
+    }
+}
+
+async function loadEventInfo() {
+    try {
+        const res = await fetch(`/api/events/${EVENT_ID}`, {headers: authH()});
+        if (res.ok) {
+            const ev = await res.json();
+            const dt = ev.start_date ? new Date(ev.start_date).toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'}) : '';
+            document.getElementById('eventInfo').textContent = `${ev.name} · 📍 ${ev.location} · 🕒 ${dt}`;
+        }
+    } catch (e) {}
+}
+
+loadEventInfo();
+loadAssignments();
+</script>
+</body>

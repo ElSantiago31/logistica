@@ -198,6 +198,18 @@ async def admin_payroll(request: Request, event_id: str):
     })
 
 
+@app.get("/admin/events/{event_id}/intendencia", response_class=HTMLResponse)
+async def admin_intendencia(request: Request, event_id: str):
+    """Vista de intendencia: gestión de indumentaria del evento."""
+    return templates.TemplateResponse("admin/intendencia.html", {"request": request, "event_id": event_id})
+
+
+@app.get("/staff", response_class=HTMLResponse)
+async def staff_dashboard(request: Request):
+    """Dashboard para usuarios checkin/intendencia - solo sus eventos asignados."""
+    return templates.TemplateResponse("admin/staff_dashboard.html", {"request": request})
+
+
 @app.get("/coordinador", response_class=HTMLResponse)
 async def coordinator_dashboard(request: Request):
     """Panel del coordinador: lista de eventos donde es coordinador."""

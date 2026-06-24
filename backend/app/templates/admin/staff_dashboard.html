@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Eventos - Staff</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <img src="/static/frontend/logo.jpeg" alt="A&C" class="h-9 w-9 rounded-full object-cover border-2" style="border-color:#cf9b62;">
+            <span class="font-bold text-sm" style="color:#fff2e4;">A&C Logística</span>
+            <span id="roleBadge" class="text-xs px-2 py-0.5 rounded-full font-semibold"></span>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="userName" class="text-xs sm:text-sm" style="color:#e3be95;"></span>
+            <button onclick="localStorage.clear();location.href='/admin/login'" class="px-3 py-1.5 rounded-lg text-xs font-medium" style="background:#cf9b62;color:#1a1a1a">Salir</button>
+        </div>
+    </div>
+</nav>
+
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <h1 class="text-xl font-bold text-gray-800 mb-1">📅 Mis Eventos Asignados</h1>
+    <p class="text-sm text-gray-500 mb-6">Solo puedes ver los eventos donde el coordinador te asignó.</p>
+    <div id="eventsList" class="space-y-3">
+        <div class="text-center text-gray-400 py-8">Cargando eventos...</div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const t = localStorage.getItem('access_token');
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!t || !['checkin', 'intendencia', 'superadmin'].includes(u.user_type)) {
+        location.href = '/admin/login';
+        return;
+    }
+    document.getElementById('userName').textContent = u.first_name + ' ' + u.last_name;
+    const badge = document.getElementById('roleBadge');
+    const roleMap = {
+        checkin: {text: 'Check-in', bg: 'bg-green-600'},
+        intendencia: {text: 'Intendencia', bg: 'bg-amber-600'},
+        superadmin: {text: 'Superadmin', bg: 'bg-purple-600'},
+    };
+    const r = roleMap[u.user_type] || roleMap.checkin;
+    badge.textContent = r.text;
+    badge.className = 'text-xs px-2 py-0.5 rounded-full font-semibold text-white ' + r.bg;
+    loadEvents();
+})();
+
+function authH() { return {'Authorization': 'Bearer ' + localStorage.getItem('access_token')}; }
+
+async function loadEvents() {
+    const container = document.getElementById('eventsList');
+    try {
+        const res = await fetch('/api/events/my-events/staff', {headers: authH()});
+        if (!res.ok) {
+            container.innerHTML = '<p class="text-center text-red-500 py-8">Error al cargar eventos</p>';
+            return;
+        }
+        const events = await res.json();
+        if (!events.length) {
+            container.innerHTML = '<div class="bg-white rounded-lg shadow p-8 text-center text-gray-400"><p class="text-lg">📭 No tienes eventos asignados todavía.</p><p class="text-sm mt-2">Contacta al coordinador para que te asigne a un evento.</p></div>';
+            return;
+        }
+        container.innerHTML = events.map(e => {
+            const dt = e.start_date ? new Date(e.start_date).toLocaleDateString('es-CO', {weekday:'short', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'}) : 'N/A';
+            const statusMap = {draft:'Borrador', published:'Publicado', in_progress:'En curso', completed:'Completado', cancelled:'Cancelado'};
+            const statusCls = {draft:'bg-gray-100 text-gray-700', published:'bg-blue-100 text-blue-700', in_progress:'bg-green-100 text-green-700', completed:'bg-gray-100 text-gray-500', cancelled:'bg-red-100 text-red-700'};
+            const st = statusMap[e.status] || e.status;
+            const sc = statusCls[e.status] || '';
+            const btns = [];
+            if (e.staff_role === 'checkin' || e.staff_role === 'superadmin') {
+                btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in</a>`);
+            }
+            if (e.staff_role === 'intendencia' || e.staff_role === 'superadmin') {
+                btns.push(`<a href="/admin/events/${e.id}/intendencia" class="inline-block bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700">👕 Indumentaria</a>`);
+            }
+            return `<div class="bg-white rounded-lg shadow p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h3 class="font-semibold text-gray-800">${e.name}</h3>
+                    <p class="text-sm text-gray-500">📍 ${e.location}</p>
+                    <p class="text-xs text-gray-400">🕒 ${dt}</p>
+                </div>
+                <div class="flex flex-col items-start sm:items-end gap-2">
+                    <span class="text-xs px-2 py-1 rounded-full font-semibold ${sc}">${st}</span>
+                    <div class="flex gap-2">${btns.join('')}</div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        container.innerHTML = '<p class="text-center text-red-500 py-8">Error de conexión</p>';
+    }
+}
+</script>
+</body>

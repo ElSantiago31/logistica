@@ -107,6 +107,12 @@ class AssignmentResponse(BaseModel):
     invited_at: Optional[datetime]
     confirmed_at: Optional[datetime]
     rate_applied: Optional[float]
+    operator_first_name: Optional[str] = None
+    operator_last_name: Optional[str] = None
+    operator_document_number: Optional[str] = None
+    shirt_number: Optional[str] = None
+    jacket_number: Optional[str] = None
+    cap_number: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

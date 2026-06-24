@@ -72,9 +72,11 @@
                             PRODUCCION DE EVENTOS LTDA</span>
                 </div>
                 <div class="hidden sm:flex items-center space-x-1 ml-2 sm:ml-4">
-                    <a href="/admin" data-nav="dashboard" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Dashboard</a>
-                    <a href="/admin/operators" data-nav="operators" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Operadores</a>
-                    <a href="/admin/events" data-nav="events" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Eventos</a>
+                    <a href="/admin" data-nav="dashboard" data-role="admin" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Dashboard</a>
+                    <a href="/admin/operators" data-nav="operators" data-role="admin" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Operadores</a>
+                    <a href="/admin/events" data-nav="events" data-role="admin" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Eventos</a>
+                    <a href="/staff" data-nav="checkin" data-role="checkin" class="desktop-nav hidden px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">✅ Check-in</a>
+                    <a href="/staff" data-nav="intendencia" data-role="intendencia" class="desktop-nav hidden px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">👕 Intendencia</a>
                 </div>
             </div>
             <div class="flex items-center space-x-2 sm:space-x-4">
@@ -95,9 +97,11 @@
     <!-- Mobile menu -->
     <div id="mobile-menu" class="hidden sm:hidden border-t border-white/20 pb-3">
         <div class="px-3 pt-2 space-y-1">
-            <a href="/admin" data-nav="dashboard" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📊 Dashboard</a>
-            <a href="/admin/operators" data-nav="operators" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">👥 Operadores</a>
-            <a href="/admin/events" data-nav="events" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📅 Eventos</a>
+            <a href="/admin" data-nav="dashboard" data-role="admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📊 Dashboard</a>
+            <a href="/admin/operators" data-nav="operators" data-role="admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">👥 Operadores</a>
+            <a href="/admin/events" data-nav="events" data-role="admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📅 Eventos</a>
+            <a href="/staff" data-nav="checkin" data-role="checkin" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">✅ Check-in</a>
+            <a href="/staff" data-nav="intendencia" data-role="intendencia" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">👕 Intendencia</a>
             <a id="superadminLinkM" href="/admin/superadmin" data-nav="superadmin" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">⚙️ Superadmin</a>
         </div>
     </div>
@@ -110,9 +114,18 @@
         var s=document.getElementById('superadminLink');if(s)s.classList.remove('hidden');
         var sm=document.getElementById('superadminLinkM');if(sm)sm.classList.remove('hidden');
     }
+    // Role-based nav filtering: hide admin-only links from checkin/intendencia
+    if(u.user_type==='checkin'||u.user_type==='intendencia'){
+        document.querySelectorAll('[data-role="admin"]').forEach(function(el){ el.style.display='none'; });
+        // Show only the link matching their role
+        document.querySelectorAll('[data-role="'+u.user_type+'"]').forEach(function(el){ el.classList.remove('hidden'); });
+    } else {
+        // superadmin/coordinator: show all staff links too
+        document.querySelectorAll('[data-role="checkin"],[data-role="intendencia"]').forEach(function(el){ el.classList.remove('hidden'); });
+    }
     // Highlight active mobile menu item based on current URL
     var path=window.location.pathname;
-    var map={'/admin':'dashboard','/admin/':'dashboard','/admin/operators':'operators','/admin/events':'events','/admin/superadmin':'superadmin'};
+    var map={'/admin':'dashboard','/admin/':'dashboard','/admin/operators':'operators','/admin/events':'events','/admin/superadmin':'superadmin','/admin/checkin':'checkin','/admin/intendencia':'intendencia'};
     var active=map[path];
     if(!active){
         if(path.indexOf('/admin/operator')===0)active='operators';

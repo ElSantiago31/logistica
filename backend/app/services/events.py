@@ -464,6 +464,12 @@ async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
             "invited_at": a.invited_at,
             "confirmed_at": a.confirmed_at,
             "rate_applied": a.rate_applied,
+            "operator_first_name": user.first_name if user else None,
+            "operator_last_name": user.last_name if user else None,
+            "operator_document_number": user.document_number if user else None,
+            "shirt_number": a.shirt_number,
+            "jacket_number": a.jacket_number,
+            "cap_number": a.cap_number,
         })
     return items
 
