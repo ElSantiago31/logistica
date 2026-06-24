@@ -1,7 +1,7 @@
 """add uniform fields to event_assignments
 
 Revision ID: add_uniform_fields
-Revises: add_event_staff_assignments
+Revises: remove_shoe_pants_size
 Create Date: 2026-06-23
 
 Añade campos shirt_number, jacket_number, cap_number a la tabla
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_uniform_fields'
-down_revision = 'add_event_staff_assignments'
+down_revision = 'remove_shoe_pants_size'
 branch_labels = None
 depends_on = None
 
