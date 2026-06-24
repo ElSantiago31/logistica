@@ -173,7 +173,7 @@ async def sync_attendance(
     user=Depends(get_current_user),
 ):
     """Batch upload attendance records from offline PWA."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     records = payload.get("records", [])
@@ -335,7 +335,7 @@ async def get_attendance(
     user=Depends(get_current_user),
 ):
     """Get attendance records for an event."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     result = await db.execute(
@@ -371,7 +371,7 @@ async def check_in(
     user=Depends(get_current_user),
 ):
     """Single check-in (online) via QR scan or manual."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     operator_id = _to_uuid(payload.get("operator_id"))
@@ -563,7 +563,7 @@ async def get_checkin_status(
       - active_viewers: cuántas personas están viendo el check-in ahora
       - recent_activity: últimos ingresos registrados (en cualquier dispositivo)
     """
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     # --- Fase 3: registrar presencia ---

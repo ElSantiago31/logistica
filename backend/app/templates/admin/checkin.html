@@ -173,7 +173,7 @@ function authHeaders() {
 // Auth guard
 (function() {
     const t = getToken(), u = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!t || !['superadmin', 'coordinator', 'checkin'].includes(u.user_type)) {
+    if (!t || !['superadmin', 'coordinator', 'checkin', 'intendencia'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
