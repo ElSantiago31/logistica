@@ -338,6 +338,28 @@ async def set_event_staff(
     return {"message": "Staff asignado", "count": created}
 
 
+@router.delete("/assignments/{assignment_id}")
+async def delete_assignment(
+    assignment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Elimina (desasigna) un operador de un evento.
+    Solo superadmin/coordinator. Borra el registro de asignación."""
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    from sqlalchemy import select as sel
+    from app.models.events import EventAssignment
+
+    result = await db.execute(sel(EventAssignment).where(EventAssignment.id == assignment_id))
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+    await db.delete(assignment)
+    await db.commit()
+    return {"message": "Operador desasignado del evento"}
+
+
 @router.patch("/assignments/{assignment_id}/uniform")
 async def update_assignment_uniform(
     assignment_id: uuid.UUID,
