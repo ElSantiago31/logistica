@@ -190,6 +190,62 @@ async def get_audit_logs(
     return await svc.get_audit_logs(db, event_id, limit=limit)
 
 
+# Ruta estática ANTES de las dinámicas /{event_id} para que no colisione
+@router.get("/my-events/staff")
+async def get_my_staff_events(
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Lista los eventos donde el usuario actual está asignado como staff (checkin/intendencia).
+    También incluye todos los eventos si es superadmin."""
+    from sqlalchemy import select as sel
+    from app.models.events import EventStaffAssignment, Event as EventModel
+
+    # Superadmin ve todos los eventos
+    if user.user_type == "superadmin":
+        result = await db.execute(
+            sel(EventModel)
+            .where(EventModel.is_active == True, EventModel.status.in_(["draft", "published", "in_progress"]))
+            .order_by(EventModel.start_date.desc())
+        )
+        events = result.scalars().all()
+        return [
+            {
+                "id": str(e.id),
+                "name": e.name,
+                "location": e.location,
+                "start_date": e.start_date.isoformat() if e.start_date else None,
+                "status": e.status,
+                "staff_role": "superadmin",
+            }
+            for e in events
+        ]
+
+    # checkin/intendencia: solo eventos asignados
+    result = await db.execute(
+        sel(EventModel, EventStaffAssignment)
+        .join(EventStaffAssignment, EventStaffAssignment.event_id == EventModel.id)
+        .where(
+            EventStaffAssignment.user_id == user.id,
+            EventStaffAssignment.is_active == True,
+            EventModel.is_active == True,
+        )
+        .order_by(EventModel.start_date.desc())
+    )
+    rows = result.all()
+    return [
+        {
+            "id": str(e.id),
+            "name": e.name,
+            "location": e.location,
+            "start_date": e.start_date.isoformat() if e.start_date else None,
+            "status": e.status,
+            "staff_role": sa.staff_role,
+        }
+        for e, sa in rows
+    ]
+
+
 @router.get("/{event_id}/assignments", response_model=list[AssignmentResponse])
 async def get_assignments(
     event_id: uuid.UUID,
@@ -200,3 +256,83 @@ async def get_assignments(
     if user.user_type not in ("superadmin", "coordinator"):
         raise HTTPException(403, "Sin permisos")
     return await svc.get_assignments(db, event_id)
+
+
+# ============================================================
+# STAFF ASSIGNMENTS (checkin / intendencia)
+# ============================================================
+
+@router.get("/{event_id}/staff")
+async def get_event_staff(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Lista el personal (checkin/intendencia) asignado a un evento."""
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    from sqlalchemy import select as sel
+    from app.models.events import EventStaffAssignment
+
+    result = await db.execute(
+        sel(EventStaffAssignment, User)
+        .join(User, EventStaffAssignment.user_id == User.id)
+        .where(EventStaffAssignment.event_id == event_id, EventStaffAssignment.is_active == True)
+    )
+    rows = result.all()
+    return [
+        {
+            "id": str(sa.id),
+            "user_id": str(sa.user_id),
+            "staff_role": sa.staff_role,
+            "full_name": f"{u.first_name} {u.last_name}",
+            "document_number": u.document_number,
+        }
+        for sa, u in rows
+    ]
+
+
+@router.post("/{event_id}/staff")
+async def set_event_staff(
+    event_id: uuid.UUID,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Reemplaza TODA la asignación de staff de un evento.
+    Body: {"checkin": [user_id, ...], "intendencia": [user_id, ...]}
+    """
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    from sqlalchemy import select as sel, delete
+    from app.models.events import EventStaffAssignment
+
+    # Verificar que el evento existe
+    event = await svc.get_event(db, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
+    # Eliminar asignaciones previas
+    await db.execute(
+        delete(EventStaffAssignment).where(EventStaffAssignment.event_id == event_id)
+    )
+
+    created = 0
+    for staff_role, user_ids in data.items():
+        if staff_role not in ("checkin", "intendencia"):
+            continue
+        for uid_str in (user_ids or []):
+            try:
+                uid = uuid.UUID(str(uid_str))
+            except (ValueError, TypeError):
+                continue
+            sa = EventStaffAssignment(
+                event_id=event_id,
+                user_id=uid,
+                staff_role=staff_role,
+            )
+            db.add(sa)
+            created += 1
+
+    await db.commit()
+    return {"message": "Staff asignado", "count": created}
