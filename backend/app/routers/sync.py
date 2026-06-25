@@ -73,6 +73,13 @@ async def get_offline_data(
         if role and role.area and role.area in area_to_coord:
             coord_name, coord_role = area_to_coord[role.area]
 
+        # Si el operador tiene programmed_by (del formulario de registro),
+        # ese coordinador tiene PRIORIDAD sobre el inferido por área.
+        programmed_by = getattr(assignment, "programmed_by", None)
+        if programmed_by:
+            coord_name = programmed_by
+            coord_role = "Programado por"
+
         assignments.append({
             "id": str(assignment.id),
             "operator_id": str(operator.id),

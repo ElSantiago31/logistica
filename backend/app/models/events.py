@@ -118,6 +118,11 @@ class EventAssignment(BaseModel):
     rejected_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(default=False, nullable=False)
     rate_applied: Mapped[float | None] = mapped_column(Float, nullable=True, comment="Tarifa aplicada al momento de asignación")
+    # Coordinador que programó al operador (del formulario de registro)
+    programmed_by: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="Coordinador que programó al operador (del formulario de inyección)",
+    )
     # Uniform assignment fields
     shirt_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de camisa asignada")
     jacket_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de chaqueta asignada")

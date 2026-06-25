@@ -430,11 +430,14 @@ async function showOperator(assignmentId) {
     } else {
         avatarEl.innerHTML = '👤';
     }
-    // Fase 2: Mostrar coordinador del operador
+    // Mostrar coordinador/programador del operador
     const coordEl = document.getElementById('op-coordinator');
     if (operator.coordinator_name && operator.coordinator_name !== 'Sin asignar') {
-        coordEl.textContent = '👔 Coordinador: ' + operator.coordinator_name +
-            (operator.coordinator_role_name ? ' (' + operator.coordinator_role_name + ')' : '');
+        const isProgrammed = operator.coordinator_role_name === 'Programado por';
+        const label = isProgrammed ? '🎯 Programado por: ' : '👔 Coordinador: ';
+        const suffix = (!isProgrammed && operator.coordinator_role_name)
+            ? ' (' + operator.coordinator_role_name + ')' : '';
+        coordEl.textContent = label + operator.coordinator_name + suffix;
         coordEl.classList.remove('hidden');
     } else {
         coordEl.classList.add('hidden');
