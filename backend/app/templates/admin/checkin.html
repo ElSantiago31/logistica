@@ -1404,6 +1404,32 @@ async function pollQuotas() {
 }
 
 // ============================================================
+//  HELPER: Toast temporal (notificación flotante)
+// ============================================================
+function _showToast(message, type = 'info') {
+    // Crea un contenedor de toasts si no existe
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px;';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6';
+    toast.style.cssText = `background:${bgColor}; color:#fff; padding:12px 18px; border-radius:8px; font-size:0.85rem; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-width:340px; animation:slideIn 0.3s ease;`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    // Auto-eliminar después de 4 segundos
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.4s, transform 0.4s';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(20px)';
+        setTimeout(() => toast.remove(), 400);
+    }, 4000);
+}
+
+// ============================================================
 //  FASE 4: REASIGNACIÓN DE COORDINADOR
 // ============================================================
 let _reassignAssignmentId = null;
@@ -1461,11 +1487,27 @@ async function confirmReassign(newCoordinator) {
                     sel.value = newCoordinator;
                 }
             }
-            // Actualizar el operador localmente
+            // Actualizar el operador localmente + mostrar cesión explícita
             if (currentOperator && currentOperator.id === _reassignAssignmentId) {
+                const oldCoord = currentOperator.admitted_by || null;
                 currentOperator.admitted_by = newCoordinator;
                 currentOperator.coordinator_name = newCoordinator;
-                document.getElementById('op-coordinator').textContent = '🎟️ Reasignado a: ' + newCoordinator;
+                // Mensaje legible de la cesión: "XIMENA cedió a STEVEN"
+                const cesionMsg = result.message
+                    || (oldCoord
+                        ? `${oldCoord} cedió el operador a ${newCoordinator}`
+                        : `Reasignado a ${newCoordinator}`);
+                const coordEl = document.getElementById('op-coordinator');
+                coordEl.textContent = '🎟️ ' + cesionMsg;
+                coordEl.classList.remove('hidden');
+                // Toast temporal para confirmar la cesión visualmente
+                _showToast('✅ ' + cesionMsg, 'success');
+                // Log persistente de la cesión
+                _addCheckinLog(
+                    `${currentOperator.full_name} — ${cesionMsg}`,
+                    currentOperator.id,
+                    true
+                ).catch(() => {});
             }
             // Reintentar el check-in automáticamente (ahora con el coordinador nuevo)
             await doCheckIn();

@@ -677,11 +677,33 @@ async def reassign_coordinator(
         logger.error("Error en reasignación: %s", exc)
         raise HTTPException(500, f"Error al reasignar: {exc}")
 
+    # --- Registrar cesión en audit log ---
+    try:
+        from app.services.events import _add_audit_log
+        await _add_audit_log(
+            db,
+            event_id=assignment.event_id,
+            user_id=user.id,
+            action="coordinator_reassign",
+            changes={
+                "assignment_id": str(assignment.id),
+                "operator_id": str(assignment.operator_id),
+                "old_coordinator": old,
+                "new_coordinator": new_coordinator,
+                "reason": "Cupo lleno - reasignación automática en check-in",
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.warning("No se pudo registrar audit log de reasignación: %s", exc)
+
     return {
         "status": "reassigned",
         "assignment_id": str(assignment.id),
         "old_coordinator": old,
         "new_coordinator": new_coordinator,
+        "message": f"{old or 'Sin coordinador'} cedió el operador a {new_coordinator}",
     }
 
 
