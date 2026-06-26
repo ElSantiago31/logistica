@@ -10,6 +10,8 @@ Añade:
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+import uuid
 
 
 # revision identifiers, used by Alembic.
@@ -23,14 +25,15 @@ def upgrade() -> None:
     # 1) Tabla de cupos por coordinador
     op.create_table(
         'event_coordinator_quotas',
-        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text("gen_random_uuid()")),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('event_id', sa.String(), sa.ForeignKey('events.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('event_id', postgresql.UUID(as_uuid=True),
+                  sa.ForeignKey('events.id', ondelete='CASCADE'), nullable=False),
         sa.Column('coordinator', sa.String(100), nullable=False,
                   comment="Nombre del coordinador en MAYÚSCULAS (match programmed_by)"),
         sa.Column('quota', sa.Integer(), nullable=False, comment="Cupo máximo"),
-        sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_event_coordinator_quotas_event_id', 'event_coordinator_quotas', ['event_id'])
     op.create_index(
