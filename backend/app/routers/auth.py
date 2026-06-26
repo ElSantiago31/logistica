@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.users import User
 from app.models.operators import Operator
+from app.models.roles import Role
 from app.models.audit import AuditLog
 from app.models.blocked_document import BlockedDocument
 from app.schemas.auth import (
@@ -140,6 +141,25 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
     # Process and save the mandatory photo (validates + normalizes)
     photo_name, thumb_name = save_operator_photo(body.photo_data, user.id)
 
+    # Security: filtrar roles event-only de experience_roles (aunque el frontend
+    # no los muestre, un usuario malicioso podría enviarlos por API).
+    filtered_role_ids = []
+    if body.experience_roles:
+        role_ids = [str(r) for r in body.experience_roles]
+        result = await db.execute(
+            select(Role.id).where(
+                Role.id.in_([uuid.UUID(r) for r in role_ids]),
+                Role.is_event_only == False,
+                Role.is_active == True,
+            )
+        )
+        filtered_role_ids = [str(r) for r in result.scalars().all()]
+        if len(filtered_role_ids) != len(role_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uno o más roles seleccionados no son válidos para registro",
+            )
+
     # Create operator profile
     operator = Operator(
         user_id=user.id,
@@ -159,7 +179,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         education_level=body.education_level,
         shirt_size=body.shirt_size,
         jacket_size=body.jacket_size,
-        experience_roles=json.dumps([str(r) for r in body.experience_roles]) if body.experience_roles else None,
+        experience_roles=json.dumps(filtered_role_ids) if filtered_role_ids else None,
         photo_path=photo_name,
         photo_thumbnail_path=thumb_name,
     )

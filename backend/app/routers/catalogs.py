@@ -38,6 +38,19 @@ async def list_arl(db: AsyncSession = Depends(get_db)):
     return [{"id": str(a.id), "name": a.name, "code": a.code} for a in result.scalars().all()]
 
 @router.get("/roles")
-async def list_roles(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Role).where(Role.is_active == True).order_by(Role.name))
+async def list_roles(
+    include_event_only: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista roles.
+
+    Por defecto (include_event_only=False) excluye los roles exclusivos de
+    eventos (is_event_only=true), de modo que el formulario de registro /
+    edición de operador nunca los muestre. Los flujos de creación/edición de
+    evento pasan include_event_only=true para ver todos los roles.
+    """
+    query = select(Role).where(Role.is_active == True)
+    if not include_event_only:
+        query = query.where(Role.is_event_only == False)
+    result = await db.execute(query.order_by(Role.name))
     return [{"id": str(r.id), "name": r.name, "slug": r.slug} for r in result.scalars().all()]

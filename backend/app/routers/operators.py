@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.users import User
 from app.models.operators import Operator
+from app.models.roles import Role
 from app.schemas.operators import OperatorResponse, OperatorListResponse, OperatorAdminUpdateRequest
 from app.services.operators import (
     get_operators, get_operator, update_operator, delete_operator, 
@@ -183,7 +184,21 @@ async def update_my_profile(
 
     if "experience_roles" in update_data and update_data["experience_roles"]:
         roles = update_data["experience_roles"]
-        operator.experience_roles = json.dumps([str(r) for r in roles])
+        # Security: filtrar roles event-only (no permitidos en perfil de operador).
+        valid_roles = await db.execute(
+            select(Role.id).where(
+                Role.id.in_([uuid.UUID(str(r)) for r in roles]),
+                Role.is_event_only == False,
+                Role.is_active == True,
+            )
+        )
+        valid_ids = [str(r) for r in valid_roles.scalars().all()]
+        if len(valid_ids) != len(roles):
+            raise HTTPException(
+                status_code=400,
+                detail="Uno o más roles seleccionados no son válidos",
+            )
+        operator.experience_roles = json.dumps(valid_ids)
 
     await db.commit()
     return {"message": "Perfil actualizado correctamente"}

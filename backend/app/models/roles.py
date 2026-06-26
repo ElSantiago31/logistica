@@ -1,6 +1,6 @@
 """Role model - defines operator roles with hierarchy levels."""
 import uuid
-from sqlalchemy import String, Text, Integer
+from sqlalchemy import String, Text, Integer, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -27,6 +27,10 @@ class Role(BaseModel):
     area: Mapped[str | None] = mapped_column(
         String(50), nullable=True, index=True,
         comment="Área: Emergencias, Logística, Seguridad, etc. (None para general)",
+    )
+    is_event_only: Mapped[bool] = mapped_column(
+        default=False, server_default=text("false"), nullable=False, index=True,
+        comment="True: rol exclusivo de eventos (no registrable por operadores)",
     )
 
     # Relationships

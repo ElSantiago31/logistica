@@ -99,7 +99,7 @@ let roles=[];
 let allStaffUsers=[];
 async function loadRoles(){
     const token=getToken();
-    const res=await fetch('/api/catalogs/roles',{headers:{'Authorization':'Bearer '+token}});
+    const res=await fetch('/api/catalogs/roles?include_event_only=true',{headers:{'Authorization':'Bearer '+token}});
     const data=await res.json();
     roles=data.items||data;
     addStaffRow();

@@ -22,26 +22,31 @@ from app.config import settings
 from app.services.auth import hash_password
 
 
-# Formato: (name, slug, description, base_rate, hierarchy_level, area)
+# Formato: (name, slug, description, base_rate, hierarchy_level, area, is_event_only)
 # hierarchy_level: 1=Coordinador General, 2=Coordinador de área, 3=Operador
 # area: categoría funcional (None para roles generales)
+# is_event_only: True = rol exclusivo de eventos (NO aparece en registro de operadores)
 ROLES = [
-    # Nivel 1 — Coordinador General
-    ("Coordinador General", "coordinador_general", "Coordinación general del evento", None, 1, None),
-    # Nivel 2 — Coordinadores de área
-    ("Coordinador Grupos Operadores", "coordinador_grupos", "Coordinación de grupos de operadores", None, 2, "Grupos"),
-    ("Coordinador de Emergencias", "coordinador_emergencias", "Coordinación de planes de emergencia", None, 2, "Emergencias"),
-    ("Líder Seguridad – Bouncer", "lider_seguridad", "Líder del equipo de seguridad", None, 2, "Seguridad"),
-    # Nivel 3 — Operadores
-    ("Operador Logístico", "operador_logistico", "Soporte logístico general", None, 3, "Logística"),
-    ("Brigadista de Emergencias", "brigadista", "Brigada de emergencias y primeros auxilios", None, 3, "Emergencias"),
-    ("Operador de Seguridad – Bouncer", "seguridad_bouncer", "Control de acceso y seguridad", None, 3, "Seguridad"),
-    ("Acomodador", "acomodador", "Acomodación y guía de asistentes", None, 3, None),
-    ("Protocolo", "protocolo", "Atención y protocolo institucional", None, 3, None),
-    ("PMT – Plan de Manejo de Tráfico", "pmt", "Plan de manejo de tráfico vehicular", None, 3, "Tráfico"),
-    ("Operador de Montaje", "montaje", "Montaje y desmontaje de infraestructura", None, 3, "Montaje"),
-    ("Operador de Aseo", "aseo", "Limpieza y mantenimiento del evento", None, 3, "Aseo"),
-    ("Universitario", "universitario", "Personal universitario cercano a artistas", None, 3, "Seguridad"),
+    # Nivel 1 — Coordinador General (event-only)
+    ("Coordinador General", "coordinador_general", "Coordinación general del evento", None, 1, None, True),
+    # Nivel 2 — Coordinadores de área (event-only)
+    ("Coordinador Grupos Operadores", "coordinador_grupos", "Coordinación de grupos de operadores", None, 2, "Grupos", True),
+    ("Coordinador de Emergencias", "coordinador_emergencias", "Coordinación de planes de emergencia", None, 2, "Emergencias", True),
+    ("Líder Seguridad – Bouncer", "lider_seguridad", "Líder del equipo de seguridad", None, 2, "Seguridad", True),
+    # Nivel 3 — Operadores (registrables)
+    ("Operador Logístico", "operador_logistico", "Soporte logístico general", None, 3, "Logística", False),
+    ("Brigadista de Emergencias", "brigadista", "Brigada de emergencias y primeros auxilios", None, 3, "Emergencias", False),
+    ("Operador de Seguridad – Bouncer", "seguridad_bouncer", "Control de acceso y seguridad", None, 3, "Seguridad", False),
+    ("Acomodador", "acomodador", "Acomodación y guía de asistentes", None, 3, None, False),
+    ("Protocolo", "protocolo", "Atención y protocolo institucional", None, 3, None, False),
+    ("PMT – Plan de Manejo de Tráfico", "pmt", "Plan de manejo de tráfico vehicular", None, 3, "Tráfico", False),
+    ("Operador de Montaje", "montaje", "Montaje y desmontaje de infraestructura", None, 3, "Montaje", False),
+    ("Operador de Aseo", "aseo", "Limpieza y mantenimiento del evento", None, 3, "Aseo", False),
+    ("Universitario", "universitario", "Personal universitario cercano a artistas", None, 3, "Seguridad", False),
+    # Nivel 3 — Roles event-only nuevos (reportan al Coordinador General)
+    ("Coordinadores Externos", "coordinadores_externos", "Coordinación externa (reporta al Coordinador General)", None, 3, "Externa", True),
+    ("Brigadista Externo", "brigadista_externo", "Brigada de emergencias externa (reporta al Coordinador General)", None, 3, "Externa", True),
+    ("Personal Oficina", "personal_oficina", "Personal de oficina (reporta al Coordinador General)", None, 3, "Oficina", True),
 ]
 
 ARLS = [
@@ -99,15 +104,15 @@ def get_engine():
 
 
 async def seed_roles(db: AsyncSession):
-    for name, slug, desc, rate, level, area in ROLES:
+    for name, slug, desc, rate, level, area, is_event_only in ROLES:
         await db.execute(text("""
-            INSERT INTO roles (id, name, slug, description, base_rate, hierarchy_level, area, is_active)
-            VALUES (gen_random_uuid(), :name, :slug, :desc, :rate, :level, :area, true)
+            INSERT INTO roles (id, name, slug, description, base_rate, hierarchy_level, area, is_event_only, is_active)
+            VALUES (gen_random_uuid(), :name, :slug, :desc, :rate, :level, :area, :is_event_only, true)
             ON CONFLICT (slug) DO UPDATE SET
                 name = :name, description = :desc,
-                hierarchy_level = :level, area = :area
-        """), {'name': name, 'slug': slug, 'desc': desc, 'rate': rate, 'level': level, 'area': area})
-    print(f'OK: {len(ROLES)} roles insertados/actualizados (con jerarquía y área)')
+                hierarchy_level = :level, area = :area, is_event_only = :is_event_only
+        """), {'name': name, 'slug': slug, 'desc': desc, 'rate': rate, 'level': level, 'area': area, 'is_event_only': is_event_only})
+    print(f'OK: {len(ROLES)} roles insertados/actualizados (con jerarquía, área y event-only)')
 
 
 async def seed_arls(db: AsyncSession):

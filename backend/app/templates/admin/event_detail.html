@@ -209,7 +209,7 @@ const STATUS_CONFIRM={published:{msg:'¿Publicar/reabrir este evento?',toast:'Ev
 async function changeEventStatus(ns){const cfg=STATUS_CONFIRM[ns];if(cfg&&!confirm(cfg.msg))return;const token=getToken();const res=await fetch(`/api/events/${EVENT_ID}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({status:ns})});if(res.ok){showToast(cfg?.toast||'Actualizado',cfg?.color||'bg-green-500');loadEvent()}else showToast('Error','bg-red-500')}
 
 async function loadRoles(){
-    const token=getToken();const res=await fetch('/api/catalogs/roles',{headers:{'Authorization':'Bearer '+token}});const data=await res.json();roles=data.items||data;
+    const token=getToken();const res=await fetch('/api/catalogs/roles?include_event_only=true',{headers:{'Authorization':'Bearer '+token}});const data=await res.json();roles=data.items||data;
     const sel=document.getElementById('assignRole');sel.innerHTML='<option value="">Sin rol específico</option>'+roles.map(r=>{const need=currentStaffNeeds.find(n=>n.role_id===r.id);const rs=need&&need.rate_per_shift?` ($${need.rate_per_shift.toLocaleString('es-CO')})`:'';return`<option value="${r.id}">${r.name}${rs}</option>`}).join('');
 }
 
