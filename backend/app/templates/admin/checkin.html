@@ -172,6 +172,14 @@
                         ❌ No Asistió
                     </button>
                 </div>
+
+                <!-- Acciones post-checkin (solo visibles tras ingreso registrado) -->
+                <div id="post-checkin-actions" class="space-y-2 hidden">
+                    <button id="btn-sin-acred" onclick="markSinAcreditacion()"
+                        class="w-full py-2 rounded-lg text-sm font-medium border border-amber-400 bg-amber-50 text-amber-700">
+                        ⚠️ Sin Acreditación
+                    </button>
+                </div>
             </div>
 
         </div>
@@ -423,7 +431,7 @@ async function searchOperator(query) {
 
     const q = query.toLowerCase();
     const results = eventAssignments.filter(a =>
-        ['confirmed', 'checked_in', 'standby'].includes(a.status) &&
+        ['confirmed', 'checked_in', 'standby', 'sin_acreditacion'].includes(a.status) &&
         ((a.full_name && a.full_name.toLowerCase().includes(q)) ||
         (a.document_number && a.document_number.includes(q)))
     );
@@ -525,10 +533,14 @@ async function showOperator(assignmentId) {
     const btnSaveUniform = document.getElementById('btn-save-uniform');
 
     const canUniform = _canManageUniform();
+    const postActions = document.getElementById('post-checkin-actions');
     if (operator.status === 'checked_in') {
         statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-green-50 text-green-700';
         statusText.textContent = '✅ Ya registrado';
         actions.classList.add('hidden');
+        // Acciones post-check-in (ej. Sin Acreditación si el establecimiento
+        // no dejó ingresar al operador pese a hacer check-in)
+        if (postActions) postActions.classList.remove('hidden');
         uniformSection.classList.toggle('hidden', !canUniform);
         document.getElementById('uniform-shirt').value = operator.shirt_number || '';
         document.getElementById('uniform-jacket').value = operator.jacket_number || '';
@@ -538,11 +550,35 @@ async function showOperator(assignmentId) {
         statusBox.className = 'rounded-lg p-3 mb-4 text-center bg-gray-50 text-gray-600';
         statusText.textContent = `Estado: ${operator.status}`;
         actions.classList.remove('hidden');
+        if (postActions) postActions.classList.add('hidden');
         uniformSection.classList.toggle('hidden', !canUniform);
         document.getElementById('uniform-shirt').value = operator.shirt_number || '';
         document.getElementById('uniform-jacket').value = operator.jacket_number || '';
         document.getElementById('uniform-cap').value = operator.cap_number || '';
         btnSaveUniform.classList.add('hidden');
+    }
+}
+
+// Marca al operador como "Sin Acreditación": el establecimiento NO lo dejó
+// ingresar a trabajar pese a hacer check-in. Se excluye de la nómina.
+async function markSinAcreditacion() {
+    if (!currentOperator) return;
+    if (!confirm(`¿Marcar "${currentOperator.full_name}" como Sin Acreditación?\n\nEsto ocurre cuando el establecimiento NO dejó ingresar al operador a trabajar. Se excluirá de la nómina.`)) return;
+    try {
+        const resp = await fetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=sin_acreditacion`, {
+            method: 'PATCH',
+            headers: authHeaders()
+        });
+        if (resp.ok) {
+            currentOperator.status = 'sin_acreditacion';
+            showCheckInResult('⚠️ Marcado como Sin Acreditación', false);
+            const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
+            updateStats(countRelevantForCheckin(eventAssignments), checked);
+        } else {
+            showCheckInResult('❌ Error al actualizar', false);
+        }
+    } catch(e) {
+        showCheckInResult('📴 Sin conexión: intenta de nuevo', false);
     }
 }
 
@@ -811,6 +847,10 @@ function showCheckInResult(msg, success) {
     box.className = `rounded-lg p-3 mb-4 text-center ${success ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`;
     document.getElementById('op-status-text').textContent = msg;
     document.getElementById('checkin-actions').classList.add('hidden');
+    // Mostrar acciones post-checkin (ej. Sin Acreditación) tras un check-in
+    // exitoso, por si el establecimiento finalmente no deja ingresar al operador
+    const postActions = document.getElementById('post-checkin-actions');
+    if (postActions) postActions.classList.toggle('hidden', !success);
 
     // Persistir en Dexie (IndexedDB) para que sobreviva recargas
     if (currentOperator) {

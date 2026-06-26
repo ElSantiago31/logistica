@@ -110,7 +110,7 @@ async def config_status(user=Depends(get_current_user)):
 @router.patch("/assignments/{assignment_id}/status")
 async def update_assignment_status(
     assignment_id: uuid.UUID,
-    new_status: str = Query(..., regex="^(confirmed|rejected|standby|no_show)$"),
+    new_status: str = Query(..., regex="^(confirmed|rejected|standby|no_show|sin_acreditacion)$"),
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):

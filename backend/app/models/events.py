@@ -137,8 +137,8 @@ class EventAssignment(BaseModel):
         ForeignKey("roles.id", ondelete="SET NULL"), nullable=True,
     )
     status: Mapped[str] = mapped_column(
-        String(20), default="invited", nullable=False, index=True,
-        comment="invited | confirmed | rejected | standby | no_show | checked_in",
+        String(30), default="invited", nullable=False, index=True,
+        comment="invited | confirmed | rejected | standby | no_show | checked_in | sin_acreditacion",
     )
     whatsapp_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     invited_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
