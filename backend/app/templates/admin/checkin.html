@@ -621,6 +621,9 @@ async function doCheckIn() {
                 if (errData.detail && typeof errData.detail === 'object' && errData.detail.error === 'QUOTA_FULL') {
                     const det = errData.detail;
                     showReassignModal(currentOperator.id, det.coordinator, det.suggestions || []);
+                    // Re-habilitar el boton por si el usuario cancela el modal
+                    btn.disabled = false;
+                    btn.textContent = '✅ Registrar Ingreso';
                     return;
                 }
                 if (errMsg.includes('ya está asignada')) {
@@ -1436,13 +1439,35 @@ async function confirmReassign(newCoordinator) {
         });
         if (resp.ok) {
             const result = await resp.json();
+            // Actualizar el selector de coordinador al nuevo (CRÍTICO: si no se
+            // hace, doCheckIn() reenviará el coordinador viejo y volverá a
+            // dar error de cupo lleno, reabriendo el modal en bucle).
+            const sel = document.getElementById('coordinator-select');
+            if (sel) {
+                let matched = false;
+                for (const opt of sel.options) {
+                    if (opt.value && opt.value.toUpperCase() === newCoordinator.toUpperCase()) {
+                        sel.value = opt.value;
+                        matched = true;
+                        break;
+                    }
+                }
+                // Si el coordinador no está en las opciones, agregarlo
+                if (!matched) {
+                    const opt = document.createElement('option');
+                    opt.value = newCoordinator;
+                    opt.textContent = newCoordinator;
+                    sel.appendChild(opt);
+                    sel.value = newCoordinator;
+                }
+            }
             // Actualizar el operador localmente
             if (currentOperator && currentOperator.id === _reassignAssignmentId) {
                 currentOperator.admitted_by = newCoordinator;
                 currentOperator.coordinator_name = newCoordinator;
                 document.getElementById('op-coordinator').textContent = '🎟️ Reasignado a: ' + newCoordinator;
             }
-            // Reintentar el check-in automáticamente
+            // Reintentar el check-in automáticamente (ahora con el coordinador nuevo)
             await doCheckIn();
             pollQuotas();
         } else {
