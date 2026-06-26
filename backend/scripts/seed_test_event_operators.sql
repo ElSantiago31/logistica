@@ -1,13 +1,13 @@
 -- ============================================================
 --  SEED: Asignar operadores de prueba al evento 49325566
 -- ============================================================
---  Toma 5 operadores del evento FutbolFest y los asigna al
---  evento de prueba (sin programmed_by, para probar el selector)
+--  Toma 5 operadores del evento FutbolFest CON su coordinador
+--  original (programmed_by) para probar el flujo real.
 -- ============================================================
 
 BEGIN;
 
--- Insertar 5 asignaciones SIN coordinador (para probar el fix del selector)
+-- Insertar 5 asignaciones CON su coordinador original del FutbolFest
 INSERT INTO event_assignments (id, event_id, operator_id, role_id, status, programmed_by, admitted_by, created_at, updated_at)
 SELECT
     gen_random_uuid(),
@@ -15,8 +15,8 @@ SELECT
     o.id,
     ea.role_id,
     'confirmed',
-    NULL,   -- sin coordinador para probar el selector
-    NULL,
+    ea.programmed_by,   -- conserva el coordinador original
+    ea.programmed_by,   -- admitted_by tambien (ya con backfill)
     NOW(),
     NOW()
 FROM event_assignments ea
@@ -38,7 +38,8 @@ SELECT
     o.document_number,
     o.first_name || ' ' || o.last_name AS nombre,
     ea.status,
-    ea.programmed_by
+    ea.programmed_by,
+    ea.admitted_by
 FROM event_assignments ea
 JOIN operators o ON o.id = ea.operator_id
 WHERE ea.event_id = '49325566-b746-4ce1-9783-3b4fee0536b6'::uuid
