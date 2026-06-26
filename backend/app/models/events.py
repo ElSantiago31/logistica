@@ -37,6 +37,7 @@ class Event(BaseModel):
     assignments = relationship("EventAssignment", back_populates="event", cascade="all, delete-orphan")
     staff_assignments = relationship("EventStaffAssignment", back_populates="event", cascade="all, delete-orphan")
     audit_logs = relationship("EventAuditLog", back_populates="event", cascade="all, delete-orphan", order_by="desc(EventAuditLog.created_at)")
+    coordinator_quotas = relationship("EventCoordinatorQuota", back_populates="event", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Event {self.name} ({self.status})>"
@@ -150,6 +151,13 @@ class EventAssignment(BaseModel):
         String(100), nullable=True,
         comment="Coordinador que programó al operador (del formulario de inyección)",
     )
+    # Coordinador que ADMITE al operador (el cupo se descuenta de acá).
+    # Por defecto es igual a programmed_by, pero puede cambiar si un
+    # coordinador se llena y el operador se reasigna a otro.
+    admitted_by: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="Coordinador que admitió al operador (cupo). Default = programmed_by",
+    )
     # Uniform assignment fields
     shirt_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de camisa asignada")
     jacket_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de chaqueta asignada")
@@ -189,3 +197,38 @@ class EventStaffAssignment(BaseModel):
 
     def __repr__(self):
         return f"<EventStaffAssignment event={self.event_id} user={self.user_id} role={self.staff_role}>"
+
+
+class EventCoordinatorQuota(BaseModel):
+    """Cupo máximo de operadores que un coordinador puede admitir en un evento.
+
+    Permite controlar cuántos operadores de cada coordinador ingresan al evento
+    (independientemente de cuántos programó). Si un coordinador se llena, los
+    operadores extra pueden reasignarse a otro coordinador (cambiando
+    event_assignments.admitted_by).
+    """
+    __tablename__ = "event_coordinator_quotas"
+    __table_args__ = (
+        Index(
+            "uq_event_coordinator",
+            "event_id", "coordinator",
+            unique=True,
+        ),
+    )
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    # Nombre del coordinador en MAYÚSCULAS (ej: XIMENA, CLAUDIA, SANDRA).
+    # Debe coincidir con event_assignments.programmed_by / admitted_by.
+    coordinator: Mapped[str] = mapped_column(
+        String(100), nullable=False,
+        comment="Nombre del coordinador en MAYÚSCULAS (match programmed_by)",
+    )
+    quota: Mapped[int] = mapped_column(Integer, nullable=False, comment="Cupo máximo")
+
+    # Relationships
+    event = relationship("Event", back_populates="coordinator_quotas")
+
+    def __repr__(self):
+        return f"<EventCoordinatorQuota event={self.event_id} coord={self.coordinator} quota={self.quota}>"

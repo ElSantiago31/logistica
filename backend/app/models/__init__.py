@@ -13,7 +13,7 @@ from app.models.users import User
 from app.models.operators import Operator
 
 # Events
-from app.models.events import Event, EventStaffNeed, EventAssignment, EventStaffAssignment
+from app.models.events import Event, EventStaffNeed, EventAssignment, EventStaffAssignment, EventAuditLog, EventCoordinatorQuota
 
 # WhatsApp
 from app.models.whatsapp import WhatsAppOutboundQueue
@@ -33,6 +33,7 @@ __all__ = [
     "Role", "EPS", "ARL",
     "User", "Operator",
     "Event", "EventStaffNeed", "EventAssignment", "EventStaffAssignment",
+    "EventAuditLog", "EventCoordinatorQuota",
     "WhatsAppOutboundQueue",
     "SyncSession", "AttendanceLog",
     "Evaluation", "PayrollRecord",
