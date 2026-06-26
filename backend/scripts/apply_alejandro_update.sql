@@ -2,8 +2,8 @@
 --  ALEJANDRO: Crear asignaciones faltantes + UPDATE programmed_by
 -- ============================================================
 --  Evento: 13e549bf-fe1b-4bb3-9887-5c48bf0a25c1 (Claro FutbolFest)
---  Total cédulas: 1 (única, sin duplicados)
---  Coordinador NUEVO (no existía en SQLs previos)
+--  Total cédulas: 20 (únicas, sin duplicados)
+--  Incluye la cédula 1012361960 que estaba en el SQL previo
 -- ============================================================
 
 BEGIN;
@@ -12,7 +12,11 @@ BEGIN;
 --  PASO 1: Crear event_assignments faltantes
 -- ============================================================
 WITH cedulas_alejandro (doc) AS (
-    VALUES ('1012361960')
+    VALUES
+        ('52822353'),('52907482'),('79447867'),('1001112927'),('1003913342'),
+        ('1007135424'),('1012361960'),('1016016641'),('1019147132'),('1022955030'),
+        ('1023007630'),('1025521788'),('1026582510'),('1033719466'),('1033737532'),
+        ('1034777237'),('1070326970'),('1072424978'),('1073688991'),('1152936800')
 ),
 target_operators AS (
     SELECT o.id AS operator_id
@@ -58,6 +62,11 @@ FROM operators o
 JOIN users u ON u.id = o.user_id
 WHERE ea.operator_id = o.id
   AND ea.event_id = '13e549bf-fe1b-4bb3-9887-5c48bf0a25c1'::uuid
-  AND u.document_number IN ('1012361960');
+  AND u.document_number IN (
+        '52822353','52907482','79447867','1001112927','1003913342',
+        '1007135424','1012361960','1016016641','1019147132','1022955030',
+        '1023007630','1025521788','1026582510','1033719466','1033737532',
+        '1034777237','1070326970','1072424978','1073688991','1152936800'
+  );
 
 COMMIT;
