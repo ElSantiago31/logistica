@@ -34,6 +34,7 @@ def upgrade() -> None:
         sa.Column('coordinator', sa.String(100), nullable=False,
                   comment="Nombre del coordinador en MAYÚSCULAS (match programmed_by)"),
         sa.Column('quota', sa.Integer(), nullable=False, comment="Cupo máximo"),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('true')),
     )
     op.create_index('ix_event_coordinator_quotas_event_id', 'event_coordinator_quotas', ['event_id'])
     op.create_index(
