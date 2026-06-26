@@ -19,6 +19,7 @@ INSERT INTO event_assignments (
     id, event_id, operator_id, role_id, status,
     programmed_by, admitted_by,
     reminder_sent, confirmed_at,
+    is_active,
     created_at, updated_at
 )
 SELECT
@@ -31,6 +32,7 @@ SELECT
     ea.programmed_by,
     false,
     NOW(),
+    true,                 -- is_active (NOT NULL, sin default a nivel DB)
     NOW(),
     NOW()
 FROM event_assignments ea
