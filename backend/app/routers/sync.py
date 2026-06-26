@@ -6,6 +6,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -274,8 +275,12 @@ async def sync_attendance(
                                 assignment.cap_number = str(cap)
 
                 synced += 1
+        except IntegrityError as exc:
+            # Race condition en batch: el constraint unico rechazo el insert
+            logger.warning("Record #%d duplicado (race condition): %s", idx, exc.orig)
+            failed += 1
         except Exception as exc:
-            logger.error("Error procesando record #%d: %s — %s", idx, exc, rec)
+            logger.error("Error procesando record #%d: %s - %s", idx, exc, rec)
             failed += 1
 
     # Actualizar sync_session
@@ -437,6 +442,11 @@ async def check_in(
 
     try:
         await db.commit()
+    except IntegrityError as exc:
+        # Race condition: dos check-in simultaneos del mismo operador
+        await db.rollback()
+        logger.warning("Check-in duplicado (race condition) op=%s: %s", operator_id, exc.orig)
+        raise HTTPException(409, "Operador ya registrado (concurrencia)")
     except Exception as exc:
         await db.rollback()
         logger.error("Error en check-in: %s", exc)
@@ -478,7 +488,16 @@ async def update_uniform(
     if "cap_number" in payload:
         assignment.cap_number = payload["cap_number"] or None
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        # Race condition: dos intendencia asignaron el mismo numero
+        await db.rollback()
+        logger.warning("Conflicto de uniform (race condition) assignment=%s: %s", assignment_id, exc.orig)
+        raise HTTPException(409, "Número de indumentaria ya asignado a otro operador (concurrencia)")
+
+    # Recargar para reflejar el estado final commiteado
+    await db.refresh(assignment)
 
     return {
         "status": "updated",

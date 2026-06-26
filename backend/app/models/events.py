@@ -1,7 +1,7 @@
 """Event models - events, staff needs, and assignments."""
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, ForeignKey, Integer, Float, DateTime
+from sqlalchemy import String, Text, ForeignKey, Integer, Float, DateTime, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -98,6 +98,33 @@ class EventAuditLog(BaseModel):
 class EventAssignment(BaseModel):
     """Asignación de un operador a un evento con estado de confirmación."""
     __tablename__ = "event_assignments"
+    # Constraints parciales únicos (un solo uniform por evento).
+    # Funciona en PostgreSQL (postgresql_where) y SQLite (sqlite_where).
+    # El constraint solo aplica cuando el número no es NULL, permitiendo
+    # múltiples filas sin indumentaria asignada.
+    __table_args__ = (
+        Index(
+            "uq_assignment_shirt_event",
+            "event_id", "shirt_number",
+            unique=True,
+            postgresql_where=text("shirt_number IS NOT NULL"),
+            sqlite_where=text("shirt_number IS NOT NULL"),
+        ),
+        Index(
+            "uq_assignment_jacket_event",
+            "event_id", "jacket_number",
+            unique=True,
+            postgresql_where=text("jacket_number IS NOT NULL"),
+            sqlite_where=text("jacket_number IS NOT NULL"),
+        ),
+        Index(
+            "uq_assignment_cap_event",
+            "event_id", "cap_number",
+            unique=True,
+            postgresql_where=text("cap_number IS NOT NULL"),
+            sqlite_where=text("cap_number IS NOT NULL"),
+        ),
+    )
 
     event_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,

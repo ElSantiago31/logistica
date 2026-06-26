@@ -1,7 +1,7 @@
 """Sync and attendance models for PWA offline operation."""
 import uuid
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, Integer, DateTime, Text
+from sqlalchemy import String, ForeignKey, Integer, DateTime, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -43,6 +43,11 @@ class SyncSession(BaseModel):
 class AttendanceLog(BaseModel):
     """Registro de asistencia/ingreso de operadores a eventos."""
     __tablename__ = "attendance_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id", "operator_id", name="uq_attendance_event_operator",
+        ),
+    )
 
     event_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,
