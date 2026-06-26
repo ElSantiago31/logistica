@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
-from app.models.events import Event, EventAssignment, EventStaffNeed
+from app.models.events import Event, EventAssignment, EventStaffNeed, EventCoordinatorQuota
 from app.models.operators import Operator
 from app.models.sync import SyncSession, AttendanceLog
 from app.models.users import User
@@ -94,6 +94,7 @@ async def get_offline_data(
             "cap_number": assignment.cap_number,
             "coordinator_name": coord_name,
             "coordinator_role_name": coord_role,
+            "admitted_by": assignment.admitted_by,
         })
 
     # Log sync session (non-critical)
@@ -113,6 +114,9 @@ async def get_offline_data(
     except Exception:
         await db.rollback()
 
+    # --- Cupos por coordinador (para tarjetas) ---
+    quotas = await _get_coordinator_quotas(db, event_id)
+
     return {
         "id": str(event.id),
         "name": event.name,
@@ -122,6 +126,117 @@ async def get_offline_data(
         "location": event.location,
         "description": event.description,
         "assignments": assignments,
+        "coordinator_quotas": quotas,
+    }
+
+
+async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
+    """Retorna cupos por coordinador con conteo en vivo.
+
+    Estructura por coordinador:
+      coordinator: nombre en MAYÚSCULAS
+      quota: cupo máximo
+      checked_in: cuántos ya hicieron check-in (admitted_by)
+      programmed: cuántos programó en total (programmed_by)
+      available: quota - checked_in
+      full: bool (available <= 0)
+    """
+    # Cupos configurados
+    result = await db.execute(
+        select(EventCoordinatorQuota)
+        .where(EventCoordinatorQuota.event_id == event_id)
+        .order_by(EventCoordinatorQuota.coordinator)
+    )
+    quotas = result.scalars().all()
+
+    # Conteo en vivo (checked_in por admitted_by)
+    counts_result = await db.execute(
+        select(
+            EventAssignment.admitted_by,
+            func.count(EventAssignment.id).label("cnt"),
+        )
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.status == "checked_in",
+            EventAssignment.admitted_by.isnot(None),
+        )
+        .group_by(EventAssignment.admitted_by)
+    )
+    checked_in_counts = {row.admitted_by: row.cnt for row in counts_result.all()}
+
+    # Conteo programmed (todos los que programó, sin importar check-in)
+    prog_result = await db.execute(
+        select(
+            EventAssignment.programmed_by,
+            func.count(EventAssignment.id).label("cnt"),
+        )
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.programmed_by.isnot(None),
+        )
+        .group_by(EventAssignment.programmed_by)
+    )
+    programmed_counts = {row.programmed_by: row.cnt for row in prog_result.all()}
+
+    out = []
+    for q in quotas:
+        ci = checked_in_counts.get(q.coordinator, 0)
+        pg = programmed_counts.get(q.coordinator, 0)
+        out.append({
+            "coordinator": q.coordinator,
+            "quota": q.quota,
+            "checked_in": ci,
+            "programmed": pg,
+            "available": q.quota - ci,
+            "full": ci >= q.quota,
+        })
+    return out
+
+
+async def _check_coordinator_quota(db: AsyncSession, event_id: uuid.UUID, coordinator: str):
+    """Verifica si un coordinador tiene cupo disponible.
+
+    Returns:
+        (ok: bool, message: str, quota_info: dict|None)
+    """
+    if not coordinator:
+        return True, "", None
+    # Normalizar a MAYÚSCULAS para comparación
+    coord = coordinator.strip().upper()
+    result = await db.execute(
+        select(EventCoordinatorQuota)
+        .where(
+            EventCoordinatorQuota.event_id == event_id,
+            func.upper(EventCoordinatorQuota.coordinator) == coord,
+        )
+    )
+    quota_row = result.scalar_one_or_none()
+    if not quota_row:
+        # No hay cupo configurado: no aplicar restricción
+        return True, "", None
+
+    count_result = await db.execute(
+        select(func.count(EventAssignment.id))
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.status == "checked_in",
+            func.upper(EventAssignment.admitted_by) == coord,
+        )
+    )
+    checked_in = count_result.scalar() or 0
+    available = quota_row.quota - checked_in
+    if available <= 0:
+        return False, f"Cupo lleno para {quota_row.coordinator} ({checked_in}/{quota_row.quota})", {
+            "coordinator": quota_row.coordinator,
+            "quota": quota_row.quota,
+            "checked_in": checked_in,
+            "available": available,
+        }
+    return True, "", {
+        "coordinator": quota_row.coordinator,
+        "quota": quota_row.quota,
+        "checked_in": checked_in,
+        "available": available,
     }
 
 
@@ -432,6 +547,27 @@ async def check_in(
     if assignment_id:
         assignment = await db.get(EventAssignment, assignment_id)
         if assignment:
+            # Asegurar admitted_by (default = programmed_by)
+            if not assignment.admitted_by:
+                assignment.admitted_by = assignment.programmed_by
+
+            # --- Validar cupo del coordinador (admitted_by) ---
+            target_coord = assignment.admitted_by or assignment.programmed_by
+            if target_coord:
+                ok, msg, info = await _check_coordinator_quota(db, event_id, target_coord)
+                if not ok:
+                    # Listar coordinadores con cupo disponible para sugerir
+                    suggestions = await _suggest_available_coordinators(db, event_id)
+                    raise HTTPException(
+                        409,
+                        detail={
+                            "error": "QUOTA_FULL",
+                            "message": msg,
+                            "coordinator": target_coord,
+                            "suggestions": suggestions,
+                        },
+                    )
+
             assignment.status = "checked_in"
             if shirt_number is not None:
                 assignment.shirt_number = shirt_number or None
@@ -453,6 +589,84 @@ async def check_in(
         raise HTTPException(500, f"Error al guardar check-in: {exc}")
 
     return {"status": "checked_in", "log_id": str(log.id)}
+
+
+async def _suggest_available_coordinators(db: AsyncSession, event_id: uuid.UUID):
+    """Lista coordinadores con cupo disponible para sugerir reasignación."""
+    quotas = await _get_coordinator_quotas(db, event_id)
+    return [
+        {"coordinator": q["coordinator"], "available": q["available"], "quota": q["quota"]}
+        for q in quotas
+        if q["available"] > 0
+    ]
+
+
+@router.get("/events/{event_id}/coordinator-quotas")
+async def get_coordinator_quotas_endpoint(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Endpoint público (autenticado) para obtener cupos + conteo en vivo.
+
+    Usado por las tarjetas UI de check-in para mostrar el estado de cada
+    coordinador en tiempo real.
+    """
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
+        raise HTTPException(403, "Sin permisos")
+
+    quotas = await _get_coordinator_quotas(db, event_id)
+    return {
+        "event_id": str(event_id),
+        "quotas": quotas,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+
+@router.patch("/assignments/{assignment_id}/reassign")
+async def reassign_coordinator(
+    assignment_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Reasigna un operador a otro coordinador (cambia admitted_by).
+
+    Permite mover un operador cuando su coordinador original está lleno.
+    Solo actualiza admitted_by; el programmed_by se conserva histórico.
+    """
+    if user.user_type not in ("admin", "superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+
+    new_coordinator = (payload.get("new_coordinator") or "").strip().upper()
+    if not new_coordinator:
+        raise HTTPException(400, "new_coordinator requerido")
+
+    assignment = await db.get(EventAssignment, assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+
+    # Verificar cupo del nuevo coordinador
+    ok, msg, info = await _check_coordinator_quota(db, assignment.event_id, new_coordinator)
+    if not ok:
+        raise HTTPException(409, detail={"error": "QUOTA_FULL", "message": msg})
+
+    old = assignment.admitted_by
+    assignment.admitted_by = new_coordinator
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.error("Error en reasignación: %s", exc)
+        raise HTTPException(500, f"Error al reasignar: {exc}")
+
+    return {
+        "status": "reassigned",
+        "assignment_id": str(assignment.id),
+        "old_coordinator": old,
+        "new_coordinator": new_coordinator,
+    }
 
 
 @router.patch("/assignments/{assignment_id}/uniform")
