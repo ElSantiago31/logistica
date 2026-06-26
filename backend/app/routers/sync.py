@@ -651,7 +651,7 @@ async def reassign_coordinator(
     Permite mover un operador cuando su coordinador original está lleno.
     Solo actualiza admitted_by; el programmed_by se conserva histórico.
     """
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     new_coordinator = (payload.get("new_coordinator") or "").strip().upper()
