@@ -378,6 +378,14 @@ async def sync_attendance(
                     assignment = await db.get(EventAssignment, assignment_id)
                     if assignment:
                         assignment.status = "checked_in"
+                        # Resolver coordinador desde record offline
+                        rec_coord = (rec.get("coordinator") or "").strip().upper() or None
+                        if rec_coord:
+                            assignment.admitted_by = rec_coord
+                            if not assignment.programmed_by:
+                                assignment.programmed_by = rec_coord
+                        elif not assignment.admitted_by:
+                            assignment.admitted_by = assignment.programmed_by
                         if can_set_uniform_batch:
                             shirt = rec.get("shirt_number")
                             jacket = rec.get("jacket_number")
@@ -505,6 +513,8 @@ async def check_in(
     assignment_id = _to_uuid(payload.get("assignment_id"))
     method = payload.get("method", "manual")
     code = payload.get("scanned_code")
+    # Coordinator que admite al operador (opcional, desde selector UI)
+    coordinator = (payload.get("coordinator") or "").strip().upper() or None
     # Optional uniform fields — solo intendencia/admin/coordinator pueden setearlos
     can_set_uniform = user.user_type in ("admin", "superadmin", "coordinator", "intendencia")
     shirt_number = payload.get("shirt_number") if can_set_uniform else None
@@ -547,8 +557,14 @@ async def check_in(
     if assignment_id:
         assignment = await db.get(EventAssignment, assignment_id)
         if assignment:
-            # Asegurar admitted_by (default = programmed_by)
-            if not assignment.admitted_by:
+            # --- Resolver coordinador (admitted_by) ---
+            # Prioridad: coordinator del payload > programmed_by > valor previo
+            if coordinator:
+                assignment.admitted_by = coordinator
+                # Backfill programmed_by si estaba vacío (para historico)
+                if not assignment.programmed_by:
+                    assignment.programmed_by = coordinator
+            elif not assignment.admitted_by:
                 assignment.admitted_by = assignment.programmed_by
 
             # --- Validar cupo del coordinador (admitted_by) ---
