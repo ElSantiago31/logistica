@@ -178,10 +178,40 @@ async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
     )
     programmed_counts = {row.programmed_by: row.cnt for row in prog_result.all()}
 
+    # --- Conteo de cesiones: operadores checked_in cuyo admitted_by !=
+    # programmed_by (fueron cedidos por otro coordinador). ---
+    # Estructura: {admitted_by: {programmed_by_original: count}}
+    ceded_result = await db.execute(
+        select(
+            EventAssignment.admitted_by,
+            EventAssignment.programmed_by,
+            func.count(EventAssignment.id).label("cnt"),
+        )
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.status == "checked_in",
+            EventAssignment.admitted_by.isnot(None),
+            EventAssignment.programmed_by.isnot(None),
+            func.upper(EventAssignment.admitted_by) != func.upper(EventAssignment.programmed_by),
+        )
+        .group_by(EventAssignment.admitted_by, EventAssignment.programmed_by)
+    )
+    ceded_map: dict[str, dict[str, int]] = {}
+    for row in ceded_result.all():
+        admitted = (row.admitted_by or "").strip().upper()
+        programmed = (row.programmed_by or "").strip().upper()
+        if not admitted or not programmed:
+            continue
+        ceded_map.setdefault(admitted, {})
+        ceded_map[admitted][programmed] = ceded_map[admitted].get(programmed, 0) + int(row.cnt)
+
     out = []
     for q in quotas:
         ci = checked_in_counts.get(q.coordinator, 0)
         pg = programmed_counts.get(q.coordinator, 0)
+        coord_key = (q.coordinator or "").strip().upper()
+        ceded_by = ceded_map.get(coord_key, {})
+        ceded_total = sum(ceded_by.values())
         out.append({
             "coordinator": q.coordinator,
             "quota": q.quota,
@@ -189,6 +219,8 @@ async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
             "programmed": pg,
             "available": q.quota - ci,
             "full": ci >= q.quota,
+            "ceded_by": ceded_by,        # {coordinador_origen: n}
+            "ceded_total": ceded_total,  # total cedidos recibidos
         })
     return out
 

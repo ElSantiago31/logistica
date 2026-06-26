@@ -1372,12 +1372,36 @@ function renderQuotaCards(quotas) {
         const cls = q.full ? 'full' : (pct >= 80 ? 'warning' : 'available');
         const barColor = q.full ? '#ef4444' : (pct >= 80 ? '#f59e0b' : '#22c55e');
         const icon = q.full ? '🚫' : (pct >= 80 ? '⚠️' : '✅');
+
+        // --- Bloque de cesiones (🎁): operadores que otros coordinadores le cedieron ---
+        const cededBy = q.ceded_by || {};
+        const cededTotal = q.ceded_total || 0;
+        let cededHtml = '';
+        if (cededTotal > 0) {
+            // Resumen: "🎁 +2 cedidos · 2 de XIMENA"
+            const lines = Object.entries(cededBy)
+                .sort((a, b) => b[1] - a[1])   // mayor cantidad primero
+                .map(([orig, n]) => `${n} de ${orig}`);
+            const tooltipCeded = lines.join(' · ');
+            cededHtml = `
+                <div class="mt-1 px-1 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] text-amber-700 leading-tight"
+                     title="Cedidos: ${tooltipCeded}">
+                    🎁 +${cededTotal} cedido${cededTotal === 1 ? '' : 's'} · ${lines.join(', ')}
+                </div>`;
+        }
+
+        // Tooltip completo con desglose
+        const tooltipParts = [`Programados: ${q.programmed || 0}`];
+        if (cededTotal > 0) tooltipParts.push(`Cedidos: ${cededTotal} (${Object.entries(cededBy).map(([k,v]) => `${v} de ${k}`).join(', ')})`);
+        const title = tooltipParts.join(' | ');
+
         return `
-        <div class="quota-card ${cls}" title="Programados: ${q.programmed || 0}">
+        <div class="quota-card ${cls}" title="${title}">
             <div class="qc-name">${icon} ${q.coordinator}</div>
             <div class="qc-count">${q.checked_in}/${q.quota}</div>
             <div class="text-[10px] text-gray-400">Cupo: ${q.available} disp.</div>
             <div class="qc-bar"><div class="qc-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
+            ${cededHtml}
         </div>`;
     }).join('');
     document.getElementById('quotas-updated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
