@@ -10,6 +10,19 @@
     .operator-card:hover { transform: translateY(-2px); }
     .operator-card.checked-in { border-left: 4px solid #22c55e; background: #f0fdf4; }
     .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
+    /* FASE 3: Tarjetas de cupos por coordinador */
+    #quotas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+    .quota-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; text-align:center; transition:all .2s; }
+    .quota-card.full { border-color:#ef4444; background:#fef2f2; }
+    .quota-card.warning { border-color:#f59e0b; background:#fffbeb; }
+    .quota-card.available { border-color:#22c55e; background:#f0fdf4; }
+    .quota-card .qc-name { font-size:.8rem; font-weight:600; color:#5d4224; }
+    .quota-card .qc-count { font-size:1.4rem; font-weight:700; }
+    .quota-card .qc-bar { height:4px; border-radius:2px; background:#e5e7eb; margin-top:6px; overflow:hidden; }
+    .quota-card .qc-bar-fill { height:100%; border-radius:2px; transition:width .3s; }
+    /* FASE 4: Modal de reasignación */
+    .reassign-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:50; }
+    .reassign-modal .box { background:#fff; border-radius:14px; padding:24px; max-width:400px; width:90%; }
 </style>
 {% endblock %}
 {% block content %}
@@ -27,6 +40,17 @@
             <span id="viewers-badge" class="status-badge bg-blue-50 text-blue-700 hidden" title="Personas viendo este check-in">👥 1</span>
             <span id="online-badge" class="status-badge bg-green-100 text-green-700">🟢 Online</span>
             <span id="offline-badge" class="status-badge bg-gray-100 text-gray-700 hidden">📴 Offline</span>
+        </div>
+    </div>
+
+    <!-- FASE 3: Tarjetas de cupos por coordinador -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold" style="color:#5d4224;">🎟️ Cupos por Coordinador</h3>
+            <span class="text-xs text-gray-400" id="quotas-updated"></span>
+        </div>
+        <div id="quotas-grid">
+            <p class="text-xs text-gray-400 col-span-full text-center py-3">Cargando cupos...</p>
         </div>
     </div>
 
@@ -141,6 +165,17 @@
         </div>
     </div>
 
+    <!-- FASE 4: Modal de reasignación -->
+    <div id="reassign-modal" class="reassign-modal hidden">
+        <div class="box">
+            <h3 id="reassign-title" class="text-lg font-bold mb-2" style="color:#5d4224;">Cupo lleno</h3>
+            <p class="text-sm text-gray-500 mb-4">Selecciona otro coordinador para reasignar al operador:</p>
+            <div id="reassign-options" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            <button onclick="document.getElementById('reassign-modal').classList.add('hidden')"
+                class="w-full mt-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600">Cancelar</button>
+        </div>
+    </div>
+
     <!-- Log de ingresos (sección propia, siempre visible) -->
     <div class="mt-6 bg-white rounded-xl border p-4">
         <div class="flex items-center justify-between mb-3">
@@ -160,6 +195,7 @@ const EVENT_ID = "{{ event_id }}";
 let currentOperator = null;
 let scannerActive = false;
 let eventAssignments = [];
+let coordinatorQuotas = [];  // FASE 3: cupos por coordinador
 
 // --- Auth helpers ---
 function getToken() { return localStorage.getItem('access_token'); }
@@ -262,6 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Fase 1: Polling tiempo real cada 4s ---
     startCheckinPolling();
+    // --- FASE 3/5: Polling de cupos cada 5s ---
+    pollQuotas();
+    setInterval(pollQuotas, 5000);
 });
 
 async function loadEventData() {
@@ -274,6 +313,8 @@ async function loadEventData() {
                 const data = await resp.json();
                 document.getElementById('event-name').textContent = data.name;
                 eventAssignments = data.assignments || [];
+                coordinatorQuotas = data.coordinator_quotas || [];  // FASE 3
+                renderQuotaCards(coordinatorQuotas);
                 const total = countRelevantForCheckin(eventAssignments);
                 const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
                 updateStats(total, checked);
@@ -538,9 +579,16 @@ async function doCheckIn() {
                 const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
                 updateStats(countRelevantForCheckin(eventAssignments), checked);
                 document.getElementById('btn-save-uniform').classList.toggle('hidden', !_canManageUniform());
+                pollQuotas();  // FASE 3: refrescar cupos tras check-in
             } else if (resp.status === 409) {
                 const errData = await resp.json().catch(() => ({}));
                 const errMsg = errData.detail || errData.message || '';
+                // FASE 4: ¿Es error de cupo lleno (QUOTA_FULL)?
+                if (errData.detail && typeof errData.detail === 'object' && errData.detail.error === 'QUOTA_FULL') {
+                    const det = errData.detail;
+                    showReassignModal(currentOperator.id, det.coordinator, det.suggestions || []);
+                    return;
+                }
                 if (errMsg.includes('ya está asignada')) {
                     // Conflicto de uniform: mostrar aviso SIN ocultar botones
                     const box = document.getElementById('op-status-box');
@@ -1242,6 +1290,107 @@ async function markNoShow() {
     } catch(e) {
         showCheckInResult('📴 Guardado offline', false);
     }
+}
+
+// ============================================================
+//  FASE 3: TARJETAS DE CUPOS POR COORDINADOR
+// ============================================================
+function renderQuotaCards(quotas) {
+    const grid = document.getElementById('quotas-grid');
+    if (!quotas || !quotas.length) {
+        grid.innerHTML = '<p class="text-xs text-gray-400 col-span-full text-center py-3">Sin cupos configurados</p>';
+        return;
+    }
+    grid.innerHTML = quotas.map(q => {
+        const pct = q.quota > 0 ? Math.min(100, (q.checked_in / q.quota) * 100) : 0;
+        const cls = q.full ? 'full' : (pct >= 80 ? 'warning' : 'available');
+        const barColor = q.full ? '#ef4444' : (pct >= 80 ? '#f59e0b' : '#22c55e');
+        const icon = q.full ? '🚫' : (pct >= 80 ? '⚠️' : '✅');
+        return `
+        <div class="quota-card ${cls}" title="Programados: ${q.programmed || 0}">
+            <div class="qc-name">${icon} ${q.coordinator}</div>
+            <div class="qc-count">${q.checked_in}/${q.quota}</div>
+            <div class="text-[10px] text-gray-400">Cupo: ${q.available} disp.</div>
+            <div class="qc-bar"><div class="qc-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
+        </div>`;
+    }).join('');
+    document.getElementById('quotas-updated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+}
+
+// FASE 5: Polling de cupos cada 5s
+async function pollQuotas() {
+    if (!_isOnline) return;
+    try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch(`/api/sync/events/${EVENT_ID}/coordinator-quotas`, {
+            headers: authHeaders(),
+            cache: 'no-store',
+            signal: controller.signal
+        });
+        clearTimeout(t);
+        if (resp.ok) {
+            const data = await resp.json();
+            coordinatorQuotas = data.quotas || [];
+            renderQuotaCards(coordinatorQuotas);
+        }
+    } catch(e) { /* silencioso */ }
+}
+
+// ============================================================
+//  FASE 4: REASIGNACIÓN DE COORDINADOR
+// ============================================================
+let _reassignAssignmentId = null;
+
+async function showReassignModal(assignmentId, coordinatorName, suggestions) {
+    _reassignAssignmentId = assignmentId;
+    const modal = document.getElementById('reassign-modal');
+    const list = document.getElementById('reassign-options');
+    document.getElementById('reassign-title').textContent = `Cupo lleno: ${coordinatorName}`;
+    if (!suggestions || !suggestions.length) {
+        list.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No hay coordinadores con cupo disponible.</p>';
+    } else {
+        list.innerHTML = suggestions.map(s => `
+            <button onclick="confirmReassign('${s.coordinator}')"
+                class="w-full text-left p-3 rounded-lg border hover:bg-amber-50 transition flex justify-between items-center">
+                <span class="font-medium">${s.coordinator}</span>
+                <span class="text-xs text-green-600">${s.available} cupos</span>
+            </button>
+        `).join('');
+    }
+    modal.classList.remove('hidden');
+}
+
+async function confirmReassign(newCoordinator) {
+    if (!_reassignAssignmentId) return;
+    const modal = document.getElementById('reassign-modal');
+    modal.classList.add('hidden');
+    try {
+        const resp = await fetch(`/api/sync/assignments/${_reassignAssignmentId}/reassign`, {
+            method: 'PATCH',
+            headers: authHeaders(),
+            body: JSON.stringify({ new_coordinator: newCoordinator })
+        });
+        if (resp.ok) {
+            const result = await resp.json();
+            // Actualizar el operador localmente
+            if (currentOperator && currentOperator.id === _reassignAssignmentId) {
+                currentOperator.admitted_by = newCoordinator;
+                currentOperator.coordinator_name = newCoordinator;
+                document.getElementById('op-coordinator').textContent = '🎟️ Reasignado a: ' + newCoordinator;
+            }
+            // Reintentar el check-in automáticamente
+            await doCheckIn();
+            pollQuotas();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            const errMsg = (err.detail && err.detail.message) ? err.detail.message : (err.detail || 'desconocido');
+            alert('Error al reasignar: ' + errMsg);
+        }
+    } catch(e) {
+        alert('Error de red al reasignar: ' + e.message);
+    }
+    _reassignAssignmentId = null;
 }
 </script>
 {% endblock %}
