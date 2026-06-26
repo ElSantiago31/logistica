@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Indumentaria - Evento</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
     <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
+    <style>
+        @keyframes highlight-row { 0% { background:#fef9c3; } 100% { background:transparent; } }
+        .row-updated { animation: highlight-row 2s ease-out; }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
 <nav style="background:linear-gradient(135deg,#5d4224,#785631)" class="text-white shadow-lg">
@@ -16,6 +21,9 @@
             <span id="roleBadge" class="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-600 text-white">Intendencia</span>
         </div>
         <div class="flex items-center gap-3">
+            <span id="viewers-badge" class="text-xs px-2 py-1 rounded-full bg-blue-500 text-white hidden" title="Otras personas editando">👥 1</span>
+            <span id="online-badge" class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">🟢 Online</span>
+            <span id="offline-badge" class="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700 hidden">📴 Offline</span>
             <a href="/staff" class="px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80" style="color:#f8d9b6;">← Mis eventos</a>
             <button onclick="localStorage.clear();location.href='/admin/login'" class="px-3 py-1.5 rounded-lg text-xs font-medium" style="background:#cf9b62;color:#1a1a1a">Salir</button>
         </div>
@@ -23,14 +31,47 @@
 </nav>
 
 <div class="max-w-5xl mx-auto px-4 py-6">
-    <div id="eventHeader" class="mb-4">
-        <h1 class="text-xl font-bold text-gray-800">👕 Asignación de Indumentaria</h1>
-        <p id="eventInfo" class="text-sm text-gray-500">Cargando...</p>
+    <div id="eventHeader" class="mb-4 flex justify-between items-start">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800">👕 Asignación de Indumentaria</h1>
+            <p id="eventInfo" class="text-sm text-gray-500">Cargando...</p>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+            <button id="btn-offline" onclick="downloadForOffline()" class="px-3 py-1.5 rounded-lg text-xs font-medium border-2" style="border-color:#cf9b62; color:#5d4224;">
+                📥 Descargar offline
+            </button>
+            <p class="text-[11px] text-gray-400" id="last-download"></p>
+        </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="grid grid-cols-4 gap-3 mb-4">
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-total" class="text-2xl font-bold" style="color:#cf9b62;">0</div>
+            <div class="text-xs text-gray-500">Total</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-assigned" class="text-2xl font-bold text-green-600">0</div>
+            <div class="text-xs text-gray-500">Con indumentaria</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center border">
+            <div id="stat-pending-uniform" class="text-2xl font-bold text-yellow-600">0</div>
+            <div class="text-xs text-gray-500">Sin asignar</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center border cursor-pointer hover:bg-blue-50" onclick="syncPendingRecords()" title="Clic para sincronizar">
+            <div id="stat-sync" class="text-2xl font-bold text-blue-600">0</div>
+            <div class="text-xs text-gray-500">Pend. Sync 🔄</div>
+        </div>
     </div>
 
     <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-col sm:flex-row gap-3">
         <input type="text" id="searchInput" placeholder="🔍 Buscar por nombre o documento..." class="flex-1 border rounded-lg px-3 py-2 text-sm" oninput="filterAssignments()">
         <select id="filterRole" class="border rounded-lg px-3 py-2 text-sm" onchange="filterAssignments()"><option value="">Todos los roles</option></select>
+        <select id="filterUniform" class="border rounded-lg px-3 py-2 text-sm" onchange="filterAssignments()">
+            <option value="">Toda indumentaria</option>
+            <option value="assigned">Con indumentaria</option>
+            <option value="pending">Sin indumentaria</option>
+        </select>
     </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -41,58 +82,227 @@
 <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
 
 <script>
-(function(){
-    const t = localStorage.getItem('access_token');
-    const u = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!t || !['intendencia', 'superadmin'].includes(u.user_type)) {
-        location.href = '/admin/login';
-        return;
-    }
-})();
 const EVENT_ID = '{{ event_id }}';
 let allAssignments = [];
+let pollingTimer = null;
+let _pollingInFlight = false; // evita apilar requests si el servidor va lento
+let isEditing = {}; // {assignmentId: true} mientras el usuario edita una fila
+let lastUniformSnapshot = {}; // {assignmentId: 'status|shirt|jacket|cap'} para detectar cambios remotos
 
-function authH() { return {'Authorization': 'Bearer ' + localStorage.getItem('access_token')}; }
+// --- Auth helpers ---
+const t = localStorage.getItem('access_token');
+const u = JSON.parse(localStorage.getItem('user') || '{}');
+if (!t || !['intendencia', 'superadmin'].includes(u.user_type)) {
+    location.href = '/admin/login';
+}
+function authH() {
+    const h = {'Content-Type': 'application/json'};
+    const tok = localStorage.getItem('access_token');
+    if (tok) h['Authorization'] = 'Bearer ' + tok;
+    return h;
+}
 function showToast(msg, cls) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white ${cls}`;
-    setTimeout(() => t.className = 'hidden', 3000);
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white ${cls}`;
+    setTimeout(() => el.className = 'hidden', 3000);
 }
 
-async function loadAssignments() {
-    const container = document.getElementById('assignmentsTable');
+// --- Estado de conexión (doble verificación) ---
+let _isOnline = navigator.onLine;
+
+async function checkInternetAvailable() {
+    return new Promise((resolve) => {
+        const img = new Image();
+        let resolved = false;
+        const timeout = setTimeout(() => { if (!resolved) { resolved = true; resolve(false); } }, 3000);
+        img.onload = () => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(true); } };
+        img.onerror = () => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); } };
+        img.src = 'https://www.google.com/favicon.ico?_=' + Date.now();
+    });
+}
+
+async function checkServerReachable() {
     try {
-        const res = await fetch(`/api/events/${EVENT_ID}/assignments`, {headers: authH()});
-        if (!res.ok) { container.innerHTML = '<p class="text-red-500">Error</p>'; return; }
-        allAssignments = await res.json();
-        renderTable();
-    } catch (e) {
-        container.innerHTML = '<p class="text-red-500">Error de conexión</p>';
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 3000);
+        const resp = await fetch('/api/sync/status', { method: 'GET', headers: authH(), cache: 'no-store', signal: controller.signal });
+        clearTimeout(t);
+        return resp.status < 500;
+    } catch(e) { return false; }
+}
+
+async function refreshConnectionStatus() {
+    const wasOnline = _isOnline;
+    const hasInternet = await checkInternetAvailable();
+    const serverUp = hasInternet && await checkServerReachable();
+    _isOnline = serverUp;
+    document.getElementById('online-badge').classList.toggle('hidden', !_isOnline);
+    document.getElementById('offline-badge').classList.toggle('hidden', _isOnline);
+    if (_isOnline && !wasOnline) { await syncPendingRecords(); }
+}
+
+// --- Dexie (IndexedDB) para offline ---
+let _cacheDB = null;
+function _getCacheDB() {
+    if (_cacheDB) return _cacheDB;
+    if (typeof Dexie === 'undefined') return null;
+    const database = new Dexie('ayc_events');
+    database.version(1).stores({
+        events: 'id, name, status, start_date, location',
+        operators: 'id, event_id, full_name, document_number, role_name, status',
+        attendance: '++local_id, event_id, operator_id, sync_status',
+        sync_meta: 'key'
+    });
+    database.version(2).stores({
+        uniform_pending: '++local_id, assignment_id, event_id, sync_status'
+    });
+    database.version(3).stores({
+        checkin_log: '++local_id, event_id, assignment_id, created_at'
+    });
+    database.version(4).stores({});
+    database.open().catch(err => {
+        if (err && (err.name === 'VersionError' || err.name === 'DatabaseClosedError')) {
+            console.warn('IndexedDB version mismatch, wiping...', err.message);
+            _cacheDB = null;
+            Dexie.delete('ayc_events').then(() => { console.log('IndexedDB reconstruida'); });
+        }
+    });
+    _cacheDB = database;
+    return _cacheDB;
+}
+
+async function _cacheEventData(eventId, data) {
+    const db = _getCacheDB();
+    if (!db) return;
+    await db.events.put({
+        id: data.id, name: data.name, status: data.status,
+        start_date: data.start_date, end_date: data.end_date,
+        location: data.location, description: data.description,
+        downloaded_at: new Date().toISOString()
+    });
+    await db.operators.where('event_id').equals(eventId).delete();
+    if (data.assignments) {
+        for (const a of data.assignments) {
+            await db.operators.put({
+                id: a.id, event_id: eventId,
+                operator_id: a.operator_id,
+                full_name: a.full_name, document_number: a.document_number,
+                role_name: a.role_name, status: a.status,
+                shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number,
+            });
+        }
     }
 }
 
-function renderTable() {
+async function _getCachedAssignments(eventId) {
+    const db = _getCacheDB();
+    if (!db) return [];
+    return db.operators.where('event_id').equals(eventId).toArray();
+}
+
+// --- Cargar datos del evento ---
+async function loadAssignments() {
+    const container = document.getElementById('assignmentsTable');
+    if (_isOnline || navigator.onLine) {
+        try {
+            const res = await fetch(`/api/events/${EVENT_ID}/assignments`, {headers: authH()});
+            if (res.ok) {
+                const data = await res.json();
+                allAssignments = data.map(a => ({
+                    ...a,
+                    full_name: `${a.operator_first_name || ''} ${a.operator_last_name || ''}`.trim(),
+                    document_number: a.operator_document_number || '',
+                }));
+                // Cachear para offline
+                try {
+                    const db = _getCacheDB();
+                    if (db) {
+                        await db.events.put({
+                            id: EVENT_ID, name: document.getElementById('eventInfo').textContent.split('·')[0].trim(),
+                            status: '', start_date: null, end_date: null, location: '', description: '',
+                            downloaded_at: new Date().toISOString()
+                        });
+                        await db.operators.where('event_id').equals(EVENT_ID).delete();
+                        for (const a of allAssignments) {
+                            await db.operators.put({
+                                id: a.id, event_id: EVENT_ID,
+                                operator_id: a.operator_id,
+                                full_name: a.full_name, document_number: a.document_number,
+                                role_name: a.role_name, status: a.status,
+                                shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number,
+                            });
+                        }
+                    }
+                } catch(e) {}
+                buildSnapshot();
+                renderTable();
+                updateStats();
+                return;
+            } else if (res.status === 401) {
+                location.href = '/admin/login';
+                return;
+            }
+        } catch (e) {}
+    }
+    // Fallback offline
+    try {
+        const cached = await _getCachedAssignments(EVENT_ID);
+        if (cached.length) {
+            allAssignments = cached;
+            buildSnapshot();
+            renderTable();
+            updateStats();
+            showToast('Datos cargados desde cache offline', 'bg-gray-500');
+        } else {
+            container.innerHTML = '<p class="text-gray-400 py-8">Sin datos. Descarga los datos offline primero.</p>';
+        }
+    } catch(e) {
+        container.innerHTML = '<p class="text-red-500">Error al cargar</p>';
+    }
+}
+
+function buildSnapshot() {
+    lastUniformSnapshot = {};
+    for (const a of allAssignments) {
+        lastUniformSnapshot[a.id] = `${a.status || ''}|${a.shirt_number || ''}|${a.jacket_number || ''}|${a.cap_number || ''}`;
+    }
+}
+
+function updateStats() {
+    const total = allAssignments.length;
+    const assigned = allAssignments.filter(a => a.shirt_number || a.jacket_number || a.cap_number).length;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-assigned').textContent = assigned;
+    document.getElementById('stat-pending-uniform').textContent = total - assigned;
+}
+
+function renderTable(changedIds) {
     const container = document.getElementById('assignmentsTable');
     const search = document.getElementById('searchInput').value.toLowerCase();
     const roleFilter = document.getElementById('filterRole').value;
+    const uniformFilter = document.getElementById('filterUniform').value;
 
     let filtered = allAssignments.filter(a => {
-        const name = (a.operator_first_name + ' ' + a.operator_last_name).toLowerCase();
-        const doc = (a.operator_document_number || '').toLowerCase();
+        const name = (a.full_name || '').toLowerCase();
+        const doc = (a.document_number || '').toLowerCase();
         const matchesSearch = !search || name.includes(search) || doc.includes(search);
         const matchesRole = !roleFilter || a.role_name === roleFilter;
-        return matchesSearch && matchesRole;
+        const hasUniform = a.shirt_number || a.jacket_number || a.cap_number;
+        const matchesUniform = !uniformFilter
+            || (uniformFilter === 'assigned' && hasUniform)
+            || (uniformFilter === 'pending' && !hasUniform);
+        return matchesSearch && matchesRole && matchesUniform;
     });
 
-    // Populate role filter options
+    // Populate role filter
     const roles = [...new Set(allAssignments.map(a => a.role_name).filter(Boolean))];
     const roleSelect = document.getElementById('filterRole');
     const currentVal = roleSelect.value;
     roleSelect.innerHTML = '<option value="">Todos los roles</option>' + roles.map(r => `<option value="${r}" ${r === currentVal ? 'selected' : ''}>${r}</option>`).join('');
 
     if (!filtered.length) {
-        container.innerHTML = '<p class="text-gray-400 py-8">No hay operadores asignados</p>';
+        container.innerHTML = '<p class="text-gray-400 py-8">No hay operadores que coincidan</p>';
         return;
     }
 
@@ -107,47 +317,300 @@ function renderTable() {
         '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Acción</th>' +
         '</tr></thead><tbody class="divide-y">' + filtered.map(a => {
             const st = statusMap[a.status] || a.status;
-            return `<tr class="hover:bg-gray-50">
+            const changed = changedIds && changedIds.includes(a.id) ? 'row-updated' : '';
+            const editing = isEditing[a.id] ? 'border-amber-400 bg-amber-50' : '';
+            return `<tr class="hover:bg-gray-50 ${changed}" id="row-${a.id}">
                 <td class="px-3 py-2 text-sm">
-                    <div class="font-medium">${a.operator_first_name} ${a.operator_last_name}</div>
-                    <div class="text-xs text-gray-400">${a.operator_document_number || ''}</div>
+                    <div class="font-medium">${a.full_name || (a.operator_first_name||'') + ' ' + (a.operator_last_name||'')}</div>
+                    <div class="text-xs text-gray-400">${a.document_number || ''}</div>
                 </td>
                 <td class="px-3 py-2 text-sm text-gray-600">${a.role_name || '-'}</td>
                 <td class="px-3 py-2 text-xs"><span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">${st}</span></td>
-                <td class="px-3 py-2 text-center"><input type="text" value="${a.shirt_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm" data-field="shirt_number" data-id="${a.id}"></td>
-                <td class="px-3 py-2 text-center"><input type="text" value="${a.jacket_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm" data-field="jacket_number" data-id="${a.id}"></td>
-                <td class="px-3 py-2 text-center"><input type="text" value="${a.cap_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm" data-field="cap_number" data-id="${a.id}"></td>
+                <td class="px-3 py-2 text-center"><input type="text" value="${a.shirt_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm ${editing}" data-field="shirt_number" data-id="${a.id}" onfocus="markEditing('${a.id}')" onblur="unmarkEditing('${a.id}')"></td>
+                <td class="px-3 py-2 text-center"><input type="text" value="${a.jacket_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm ${editing}" data-field="jacket_number" data-id="${a.id}" onfocus="markEditing('${a.id}')" onblur="unmarkEditing('${a.id}')"></td>
+                <td class="px-3 py-2 text-center"><input type="text" value="${a.cap_number || ''}" placeholder="-" class="w-14 border rounded px-1 py-0.5 text-center text-sm ${editing}" data-field="cap_number" data-id="${a.id}" onfocus="markEditing('${a.id}')" onblur="unmarkEditing('${a.id}')"></td>
                 <td class="px-3 py-2 text-center"><button onclick="saveUniform('${a.id}')" class="bg-amber-600 text-white px-2 py-1 rounded text-xs hover:bg-amber-700">💾</button></td>
             </tr>`;
         }).join('') + '</tbody></table>';
 }
 
+function markEditing(id) { isEditing[id] = true; }
+function unmarkEditing(id) { setTimeout(() => { delete isEditing[id]; }, 2000); }
+
 function filterAssignments() { renderTable(); }
 
+// --- Guardar indumentaria ---
 async function saveUniform(assignmentId) {
-    const row = document.querySelector(`[data-id="${assignmentId}"]`).closest('tr');
-    const shirt = row.querySelector('[data-field="shirt_number"]').value.trim() || null;
-    const jacket = row.querySelector('[data-field="jacket_number"]').value.trim() || null;
-    const cap = row.querySelector('[data-field="cap_number"]').value.trim() || null;
+    const inputs = document.querySelectorAll(`[data-id="${assignmentId}"]`);
+    const data = {};
+    inputs.forEach(i => { data[i.dataset.field] = i.value.trim() || null; });
 
-    try {
-        const res = await fetch(`/api/events/assignments/${assignmentId}/uniform`, {
-            method: 'PATCH',
-            headers: {'Content-Type': 'application/json', ...authH()},
-            body: JSON.stringify({shirt_number: shirt, jacket_number: jacket, cap_number: cap})
-        });
-        if (res.ok) {
-            showToast('Indumentaria guardada', 'bg-green-500');
+    const shirt = data.shirt_number;
+    const jacket = data.jacket_number;
+    const cap = data.cap_number;
+
+    // Validación local de conflictos
+    const conflict = checkUniformConflict(assignmentId, shirt, jacket, cap);
+    if (conflict) {
+        showToast(conflict, 'bg-red-500');
+        return;
+    }
+
+    // Offline: encolar en Dexie
+    if (!_isOnline) {
+        try {
+            const db = _getCacheDB();
+            if (!db) throw new Error('Sin BD local');
+            await db.uniform_pending.add({
+                assignment_id: assignmentId,
+                event_id: EVENT_ID,
+                shirt_number: shirt, jacket_number: jacket, cap_number: cap,
+                created_at: new Date().toISOString(),
+                sync_status: 'pending'
+            });
+            // Actualizar array local
             const a = allAssignments.find(x => x.id === assignmentId);
             if (a) { a.shirt_number = shirt; a.jacket_number = jacket; a.cap_number = cap; }
+            lastUniformSnapshot[assignmentId] = `${(a && a.status) || ''}|${shirt||''}|${jacket||''}|${cap||''}`;
+            renderTable();
+            updateStats();
+            await updateSyncCount();
+            showToast('📴 Guardado offline — se sincronizará después', 'bg-gray-500');
+        } catch(e) {
+            showToast('Error al guardar offline: ' + e.message, 'bg-red-500');
+        }
+        return;
+    }
+
+    // Online: enviar al endpoint que valida conflictos
+    try {
+        const res = await fetch(`/api/sync/assignments/${assignmentId}/uniform`, {
+            method: 'PATCH',
+            headers: authH(),
+            body: JSON.stringify({ shirt_number: shirt, jacket_number: jacket, cap_number: cap })
+        });
+        if (res.ok) {
+            const a = allAssignments.find(x => x.id === assignmentId);
+            if (a) { a.shirt_number = shirt; a.jacket_number = jacket; a.cap_number = cap; }
+            lastUniformSnapshot[assignmentId] = `${(a && a.status) || ''}|${shirt||''}|${jacket||''}|${cap||''}`;
+            renderTable();
+            updateStats();
+            showToast('Indumentaria guardada', 'bg-green-500');
+        } else if (res.status === 409) {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || 'Conflicto de indumentaria', 'bg-red-500');
         } else {
             showToast('Error al guardar', 'bg-red-500');
         }
-    } catch (e) {
-        showToast('Error de conexión', 'bg-red-500');
+    } catch(e) {
+        // Fallback: guardar offline si falla la red
+        try {
+            const db = _getCacheDB();
+            if (db) {
+                await db.uniform_pending.add({
+                    assignment_id: assignmentId, event_id: EVENT_ID,
+                    shirt_number: shirt, jacket_number: jacket, cap_number: cap,
+                    created_at: new Date().toISOString(), sync_status: 'pending'
+                });
+                const a = allAssignments.find(x => x.id === assignmentId);
+                if (a) { a.shirt_number = shirt; a.jacket_number = jacket; a.cap_number = cap; }
+                lastUniformSnapshot[assignmentId] = `${(a && a.status) || ''}|${shirt||''}|${jacket||''}|${cap||''}`;
+                renderTable(); updateStats(); await updateSyncCount();
+                showToast('📴 Sin conexión — guardado offline', 'bg-gray-500');
+            } else {
+                showToast('Error de conexión', 'bg-red-500');
+            }
+        } catch(e2) {
+            showToast('Error: ' + e2.message, 'bg-red-500');
+        }
     }
 }
 
+function checkUniformConflict(myId, shirt, jacket, cap) {
+    for (const a of allAssignments) {
+        if (a.id === myId) continue;
+        if (shirt && a.shirt_number && String(a.shirt_number).trim() === String(shirt).trim()) {
+            return `⚠️ La camisa #${shirt} ya está asignada a ${a.full_name}`;
+        }
+        if (jacket && a.jacket_number && String(a.jacket_number).trim() === String(jacket).trim()) {
+            return `⚠️ La chaqueta #${jacket} ya está asignada a ${a.full_name}`;
+        }
+        if (cap && a.cap_number && String(a.cap_number).trim() === String(cap).trim()) {
+            return `⚠️ La gorra #${cap} ya está asignada a ${a.full_name}`;
+        }
+    }
+    return null;
+}
+
+// --- device_id persistente (generado UNA sola vez por navegador) ---
+function _getDeviceId() {
+    let did = localStorage.getItem('intendencia_device_id');
+    if (!did) {
+        did = 'int_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+        localStorage.setItem('intendencia_device_id', did);
+    }
+    return did;
+}
+
+// --- Polling tiempo real (cada 4s) ---
+function startPolling() {
+    if (pollingTimer) clearInterval(pollingTimer);
+    pollingTimer = setInterval(pollCheckinStatus, 4000);
+}
+
+async function pollCheckinStatus() {
+    // No pollar si: offline, o ya hay un poll en vuelo
+    if (!_isOnline || _pollingInFlight || !allAssignments.length) return;
+    _pollingInFlight = true;
+    try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
+        const did = _getDeviceId();
+        const res = await fetch(`/api/sync/events/${EVENT_ID}/checkin-status?device_id=${encodeURIComponent(did)}`, {
+            headers: authH(), cache: 'no-store', signal: controller.signal
+        });
+        clearTimeout(t);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Badge de viewers activos
+        const viewers = data.active_viewers || 0;
+        const badge = document.getElementById('viewers-badge');
+        if (viewers > 1) {
+            badge.textContent = `👥 ${viewers}`;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+
+        // Detectar cambios comparando con snapshot (status + uniform)
+        const changedIds = [];
+        const remoteMap = {};
+        for (const a of data.assignments) { remoteMap[a.id] = a; }
+
+        for (const a of allAssignments) {
+            const remote = remoteMap[a.id];
+            if (!remote) continue;
+            const remoteKey = `${remote.status || ''}|${remote.shirt_number || ''}|${remote.jacket_number || ''}|${remote.cap_number || ''}`;
+            const localKey = lastUniformSnapshot[a.id] || '';
+            if (remoteKey !== localKey) {
+                // Hubo cambio remoto — pero no sobrescribir si el usuario está editando esta fila
+                if (!isEditing[a.id]) {
+                    a.status = remote.status;
+                    a.shirt_number = remote.shirt_number;
+                    a.jacket_number = remote.jacket_number;
+                    a.cap_number = remote.cap_number;
+                    lastUniformSnapshot[a.id] = remoteKey;
+                    changedIds.push(a.id);
+                }
+            }
+        }
+
+        if (changedIds.length) {
+            renderTable(changedIds);
+            updateStats();
+        }
+    } catch(e) {
+        // Silencioso — no romper el polling por un error de red
+    } finally {
+        _pollingInFlight = false;
+    }
+}
+
+// --- Descargar datos offline ---
+async function downloadForOffline() {
+    const btn = document.getElementById('btn-offline');
+    btn.textContent = '⏳ Descargando...';
+    btn.disabled = true;
+    const logEl = document.getElementById('last-download');
+    try {
+        logEl.textContent = 'Conectando...';
+        const res = await fetch(`/api/events/${EVENT_ID}/assignments`, {headers: authH()});
+        if (!res.ok) throw new Error(`Servidor respondió ${res.status}`);
+        const data = await res.json();
+        const assignments = data.map(a => ({
+            ...a,
+            full_name: `${a.operator_first_name || ''} ${a.operator_last_name || ''}`.trim(),
+            document_number: a.operator_document_number || '',
+        }));
+        // Cachear
+        const db = _getCacheDB();
+        if (db) {
+            const evRes = await fetch(`/api/events/${EVENT_ID}`, {headers: authH()});
+            const evData = evRes.ok ? await evRes.json() : {};
+            await db.events.put({
+                id: EVENT_ID, name: evData.name || 'Evento', status: evData.status || '',
+                start_date: evData.start_date, end_date: evData.end_date,
+                location: evData.location || '', description: evData.description || '',
+                downloaded_at: new Date().toISOString()
+            });
+            await db.operators.where('event_id').equals(EVENT_ID).delete();
+            for (const a of assignments) {
+                await db.operators.put({
+                    id: a.id, event_id: EVENT_ID, operator_id: a.operator_id,
+                    full_name: a.full_name, document_number: a.document_number,
+                    role_name: a.role_name, status: a.status,
+                    shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number,
+                });
+            }
+        }
+        allAssignments = assignments;
+        buildSnapshot();
+        renderTable();
+        updateStats();
+        btn.textContent = `✅ ${assignments.length} guardados`;
+        logEl.textContent = `✅ ${new Date().toLocaleTimeString()}`;
+    } catch(e) {
+        btn.textContent = '❌ Error';
+        logEl.textContent = `❌ ${e.message}`;
+    }
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = '📥 Descargar offline'; }, 5000);
+}
+
+// --- Sincronizar pendientes offline ---
+async function updateSyncCount() {
+    try {
+        const db = _getCacheDB();
+        if (!db) return;
+        const all = await db.uniform_pending.where('sync_status').equals('pending').toArray();
+        const count = all.filter(r => r.event_id === EVENT_ID).length;
+        document.getElementById('stat-sync').textContent = count;
+    } catch(e) {}
+}
+
+async function syncPendingRecords() {
+    const db = _getCacheDB();
+    if (!db || !_isOnline) return;
+    let synced = 0;
+    try {
+        const pending = await db.uniform_pending.where('sync_status').equals('pending').toArray();
+        for (const u of pending) {
+            try {
+                const res = await fetch(`/api/sync/assignments/${u.assignment_id}/uniform`, {
+                    method: 'PATCH',
+                    headers: authH(),
+                    body: JSON.stringify({
+                        shirt_number: u.shirt_number || null,
+                        jacket_number: u.jacket_number || null,
+                        cap_number: u.cap_number || null
+                    })
+                });
+                if (res.ok || res.status === 409) {
+                    await db.uniform_pending.delete(u.local_id);
+                    synced++;
+                } else { break; }
+            } catch(e) { break; }
+        }
+        if (synced) {
+            showToast(`✅ ${synced} registro(s) sincronizado(s)`, 'bg-green-500');
+            await updateSyncCount();
+            await loadAssignments();
+        }
+    } catch(e) {}
+}
+
+// --- Cargar info del evento ---
 async function loadEventInfo() {
     try {
         const res = await fetch(`/api/events/${EVENT_ID}`, {headers: authH()});
@@ -159,7 +622,24 @@ async function loadEventInfo() {
     } catch (e) {}
 }
 
-loadEventInfo();
-loadAssignments();
+// --- Init ---
+document.addEventListener('DOMContentLoaded', async () => {
+    _getCacheDB();
+    await loadEventInfo();
+    await loadAssignments();
+    await updateSyncCount();
+
+    window.addEventListener('online', () => { _isOnline = true; refreshConnectionStatus(); });
+    window.addEventListener('offline', () => { _isOnline = false; refreshConnectionStatus(); });
+
+    await refreshConnectionStatus();
+    setInterval(async () => {
+        await refreshConnectionStatus();
+        if (_isOnline) await syncPendingRecords();
+    }, 15000);
+
+    // Polling cada 4s para detectar cambios de otros usuarios
+    startPolling();
+});
 </script>
 </body>

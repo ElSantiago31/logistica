@@ -305,7 +305,7 @@ async def sync_status(
     user=Depends(get_current_user),
 ):
     """Get sync status for dashboard."""
-    if user.user_type not in ("admin", "superadmin"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
 
     query = select(SyncSession)
