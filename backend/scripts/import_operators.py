@@ -450,8 +450,8 @@ async def _assign_to_event(
         return
 
     await db.execute(text("""
-        INSERT INTO event_assignments (id, event_id, operator_id, role_id, status, confirmed_at, is_active)
-        VALUES (gen_random_uuid(), :eid, :oid, :rid, :status, NOW(), true)
+        INSERT INTO event_assignments (id, event_id, operator_id, role_id, status, confirmed_at, is_active, reminder_sent)
+        VALUES (gen_random_uuid(), :eid, :oid, :rid, :status, NOW(), true, false)
         ON CONFLICT DO NOTHING
     """), {"eid": event_id, "oid": operator_id, "rid": role_id, "status": status})
 
