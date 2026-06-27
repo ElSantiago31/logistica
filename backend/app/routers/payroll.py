@@ -234,6 +234,11 @@ async def get_payable_operators(
             "invoice_number": record.invoice_number if record else None,
             "has_signature": bool(record and record.signature_data),
             "coordinator_name": coord_name,  # [NÓMINA-V2]
+            # Uniformes asignados por intendencia
+            "shirt_number": assignment.shirt_number or None,
+            "jacket_number": assignment.jacket_number or None,
+            "cap_number": assignment.cap_number or None,
+            "uniform_returned_at": assignment.uniform_returned_at,  # NULL = pendiente
         })
 
     total = sum(o["payment_amount"] for o in operators)

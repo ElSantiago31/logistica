@@ -162,6 +162,11 @@ class EventAssignment(BaseModel):
     shirt_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de camisa asignada")
     jacket_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de chaqueta asignada")
     cap_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de gorra asignada")
+    # Fecha de devolución de uniforme (NULL = pendiente de devolución)
+    uniform_returned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Fecha/hora de devolución de uniforme. NULL = pendiente.",
+    )
 
     # Relationships
     event = relationship("Event", back_populates="assignments")
