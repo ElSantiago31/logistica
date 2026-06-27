@@ -344,6 +344,40 @@ async def sign_payroll(
     }
 
 
+@router.patch("/assignments/{assignment_id}/uniform-return")
+async def toggle_uniform_return(
+    assignment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Marcar/desmarcar uniforme como devuelto por intendencia (toggle).
+
+    Si uniform_returned_at es NULL → marca con fecha actual (devuelto).
+    Si tiene fecha → NULL (pendiente de devolución).
+    """
+    if user.user_type not in _PERMITTED:
+        raise HTTPException(403, "Sin permisos")
+
+    assignment = await db.get(EventAssignment, assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+
+    # Toggle: si tiene fecha, quítala; si no, ponla
+    if assignment.uniform_returned_at:
+        assignment.uniform_returned_at = None
+    else:
+        assignment.uniform_returned_at = _now_bogota()
+
+    await db.commit()
+    await db.refresh(assignment)
+
+    return {
+        "assignment_id": str(assignment.id),
+        "uniform_returned_at": _to_bogota_iso(assignment.uniform_returned_at),
+        "returned": assignment.uniform_returned_at is not None,
+    }
+
+
 # ============================================================
 # PAYROLL — PAGAR + GENERAR FACTURA
 # ============================================================
