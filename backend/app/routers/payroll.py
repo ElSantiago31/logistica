@@ -212,10 +212,13 @@ async def get_payable_operators(
 
         record = records_by_op.get(op_id_str)
 
-        # [NÓMINA-V2] Determinar coordinador del operador según su área
-        coord_name = general_coord[0] if general_coord else "Sin asignar"
-        if role and role.area and role.area in area_to_coord:
-            coord_name = area_to_coord[role.area][0]
+        # [NÓMINA-V2] Determinar coordinador: quien lo programó (programmed_by)
+        # tiene prioridad. Fallback: admitted_by → mapping por área → "Sin asignar".
+        coord_name = assignment.programmed_by or assignment.admitted_by
+        if not coord_name:
+            coord_name = general_coord[0] if general_coord else "Sin asignar"
+            if role and role.area and role.area in area_to_coord:
+                coord_name = area_to_coord[role.area][0]
 
         operators.append({
             "assignment_id": str(assignment.id),
@@ -770,10 +773,13 @@ async def download_planilla_coordinador(
     # Agrupar operadores por coordinador
     operators_by_coordinator: dict[str, list[dict]] = {}
     for assignment, operator, op_user, role in rows:
-        # Determinar coordinador según el área del rol
-        coord_name = general_coord[0] if general_coord else "Sin asignar"
-        if role and role.area and role.area in area_to_coord:
-            coord_name = area_to_coord[role.area][0]
+        # Determinar coordinador: quien lo programó (programmed_by) tiene
+        # prioridad. Fallback: admitted_by → mapping por área → "Sin asignar".
+        coord_name = assignment.programmed_by or assignment.admitted_by
+        if not coord_name:
+            coord_name = general_coord[0] if general_coord else "Sin asignar"
+            if role and role.area and role.area in area_to_coord:
+                coord_name = area_to_coord[role.area][0]
 
         operators_by_coordinator.setdefault(coord_name, []).append({
             "full_name": f"{op_user.first_name} {op_user.last_name}",
