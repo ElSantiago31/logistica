@@ -200,7 +200,7 @@ def generate_planilla_xlsx(
             new_ws = _copy_sheet_with_images(template_wb, template_ws, sheet_title)
             _fill_header(
                 new_ws,
-                coordinator=coord_name,
+                coordinator="",  # "Coordinador General" (D5) se deja vacío
                 event_name=event_name,
                 event_date=event_date,
                 event_location=event_location,
