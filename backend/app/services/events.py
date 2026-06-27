@@ -425,39 +425,29 @@ async def assign_operators(
 
 
 async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
-    """Get all assignments for an event."""
+    """Get all assignments for an event.
+
+    Usa un solo query con JOINs (evita el problema N+1: antes ejecutaba
+    3 queries por asignacion; ahora 1 query total).
+    """
     result = await db.execute(
-        select(EventAssignment)
+        select(EventAssignment, Operator, User, Role)
+        .join(Operator, Operator.id == EventAssignment.operator_id)
+        .join(User, User.id == Operator.user_id)
+        .outerjoin(Role, Role.id == EventAssignment.role_id)
         .where(EventAssignment.event_id == event_id)
         .order_by(EventAssignment.status, EventAssignment.invited_at)
     )
-    assignments = result.scalars().all()
 
     items = []
-    for a in assignments:
-        # Get operator info
-        op_result = await db.execute(
-            select(Operator).where(Operator.id == a.operator_id)
-        )
-        op = op_result.scalar_one_or_none()
-        user = None
-        if op:
-            user_result = await db.execute(select(User).where(User.id == op.user_id))
-            user = user_result.scalar_one_or_none()
-
-        role_name = None
-        if a.role_id:
-            role_result = await db.execute(select(Role).where(Role.id == a.role_id))
-            role = role_result.scalar_one_or_none()
-            role_name = role.name if role else None
-
+    for a, op, user, role in result.all():
         items.append({
             "id": a.id,
             "event_id": a.event_id,
             "operator_id": a.operator_id,
             "operator_user_id": str(op.user_id) if op else None,
             "role_id": a.role_id,
-            "role_name": role_name,
+            "role_name": role.name if role else None,
             "operator_name": f"{user.first_name} {user.last_name}" if user else "N/A",
             "operator_phone": user.phone if user else None,
             "status": a.status,
