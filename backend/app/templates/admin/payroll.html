@@ -565,6 +565,7 @@ function updateStatsFromOps() {
 // BUSCADOR EN VIVO
 // ============================================================
 function filterOperators(query) {
+    payrollPage = 0;
     if (!query || query.length < 2) {
         renderTable(allOperators);
         return;
@@ -578,19 +579,32 @@ function filterOperators(query) {
 }
 
 // ============================================================
-// RENDER TABLA
+// RENDER TABLA (con paginación client-side)
 // ============================================================
+let payrollPage = 0;
+const PAYROLL_PER_PAGE = 25;
+let _currentPayrollList = [];
+
 function renderTable(operators) {
+    _currentPayrollList = operators;
     const tbody = document.getElementById('payroll-body');
     if (!operators.length) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">Sin operadores</td></tr>';
         return;
     }
 
+    // Paginación
+    const totalPages = Math.max(1, Math.ceil(operators.length / PAYROLL_PER_PAGE));
+    if (payrollPage >= totalPages) payrollPage = 0;
+    if (payrollPage < 0) payrollPage = 0;
+    const start = payrollPage * PAYROLL_PER_PAGE;
+    const pageOps = operators.slice(start, start + PAYROLL_PER_PAGE);
+    const endIdx = Math.min(start + PAYROLL_PER_PAGE, operators.length);
+
     const statusClass = { pending: 'status-pending', signed: 'status-signed', paid: 'status-paid' };
     const statusLabel = { pending: 'Sin Pago', signed: 'Firmado', paid: 'Pago Confirmado' };
 
-    tbody.innerHTML = operators.map(op => {
+    tbody.innerHTML = pageOps.map(op => {
         const st = op.payroll_status || 'pending';
         const sc = statusClass[st] || 'status-pending';
         const sl = statusLabel[st] || st;
@@ -625,7 +639,24 @@ function renderTable(operators) {
             <td class="px-4 py-3 text-center whitespace-nowrap">${actions}</td>
         </tr>`;
     }).join('');
+
+    // Controles de paginación
+    if (totalPages > 1) {
+        tbody.innerHTML += `<tr><td colspan="5" class="px-4 py-3 bg-gray-50">
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-gray-500">Mostrando ${start + 1}-${endIdx} de ${operators.length}</span>
+                <div class="flex gap-1 items-center">
+                    <button onclick="payrollPrevPage()" ${payrollPage === 0 ? 'disabled' : ''} class="px-2 py-1 text-xs border rounded bg-white ${payrollPage === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}">← Anterior</button>
+                    <span class="px-2 py-1 text-xs font-medium">${payrollPage + 1}/${totalPages}</span>
+                    <button onclick="payrollNextPage(${totalPages})" ${payrollPage >= totalPages - 1 ? 'disabled' : ''} class="px-2 py-1 text-xs border rounded bg-white ${payrollPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}">Siguiente →</button>
+                </div>
+            </div>
+        </td></tr>`;
+    }
 }
+
+function payrollNextPage(totalPages) { if (payrollPage < totalPages - 1) { payrollPage++; renderTable(_currentPayrollList); } }
+function payrollPrevPage() { if (payrollPage > 0) { payrollPage--; renderTable(_currentPayrollList); } }
 
 // ============================================================
 // FIRMA — MODAL CON PAD TOPAZ (default) o CANVAS
