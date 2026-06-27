@@ -37,6 +37,9 @@ docker-compose*.yml
 data/photos/
 !data/photos/.gitkeep
 
+# NOTA: La plantilla de planilla (app/templates/Planilla_Logistica_Eventos.xlsx)
+# NO se excluye aquí; es necesaria en runtime para generar las planillas de pago.
+
 # --- Git ---
 .git/
 .gitignore
