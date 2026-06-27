@@ -30,6 +30,8 @@ Thumbs.db
 gen_palette.py
 temp.py
 *.xlsx
+# Excepción: plantilla de planilla de pago (necesaria en runtime)
+!backend/app/templates/Planilla_Logistica_Eventos.xlsx
 
 # Data
 data/

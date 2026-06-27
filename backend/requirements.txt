@@ -32,3 +32,6 @@ pytest-cov==5.0.0
 
 # Utilities
 python-multipart==0.0.9
+
+# Excel generation (planilla de pago por coordinador)
+openpyxl==3.1.5

@@ -7,6 +7,7 @@ import unicodedata
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -720,3 +721,93 @@ async def get_payroll_status(
     }
 # ============================================================
 # [NÓMINA-V2 - fin]
+
+
+# ============================================================
+# PLANILLA DE PAGO POR COORDINADOR (Excel .xlsx)
+# ============================================================
+# Genera un Excel a partir de la plantilla
+# ``Planilla_Logistica_Eventos.xlsx`` (con logo y formato). Se crea una hoja
+# por cada coordinador, paginada a 20 operadores por hoja.
+# Solo se incluyen operadores con status='checked_in'.
+
+@router.get("/events/{event_id}/planilla-coordinador")
+async def download_planilla_coordinador(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Descarga la planilla de pago en Excel (.xlsx), una hoja por coordinador.
+
+    Solo incluye operadores con ``status='checked_in'``. Si un coordinador
+    tiene más de 20 operadores, se generan hojas adicionales paginadas.
+
+    Requiere permisos admin/superadmin/coordinator.
+    """
+    if user.user_type not in _PERMITTED:
+        raise HTTPException(403, "Sin permisos")
+
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
+    # Operadores checked_in del evento, con datos para la planilla
+    result = await db.execute(
+        select(EventAssignment, Operator, User, Role)
+        .join(Operator, Operator.id == EventAssignment.operator_id)
+        .join(User, User.id == Operator.user_id)
+        .outerjoin(Role, Role.id == EventAssignment.role_id)
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.status == "checked_in",
+        )
+    )
+    rows = result.all()
+
+    # Mapear áreas a coordinadores del evento
+    area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
+
+    # Agrupar operadores por coordinador
+    operators_by_coordinator: dict[str, list[dict]] = {}
+    for assignment, operator, op_user, role in rows:
+        # Determinar coordinador según el área del rol
+        coord_name = general_coord[0] if general_coord else "Sin asignar"
+        if role and role.area and role.area in area_to_coord:
+            coord_name = area_to_coord[role.area][0]
+
+        operators_by_coordinator.setdefault(coord_name, []).append({
+            "full_name": f"{op_user.first_name} {op_user.last_name}",
+            "document_number": op_user.document_number or "",
+            "address": operator.address or "",
+            "phone": op_user.phone or "",
+            "coordinator_name": coord_name,
+            "jacket_number": assignment.jacket_number or "",
+            "cap_number": assignment.cap_number or "",
+        })
+
+    # Generar el Excel
+    from app.services.planilla_excel import generate_planilla_xlsx
+
+    try:
+        xlsx_bytes = generate_planilla_xlsx(
+            event_name=event.name,
+            event_date=event.start_date,
+            event_location=event.location,
+            operators_by_coordinator=operators_by_coordinator,
+        )
+    except FileNotFoundError as exc:
+        logger.error("Plantilla no encontrada: %s", exc)
+        raise HTTPException(500, "Plantilla de planilla no encontrada en el servidor")
+    except Exception as exc:
+        logger.error("Error generando planilla: %s", exc)
+        raise HTTPException(500, f"Error al generar la planilla: {exc}")
+
+    # Sanitizar nombre del evento para el filename
+    safe_name = _sanitize_event_name(event.name)
+    filename = f"Planilla_{safe_name}.xlsx"
+
+    return StreamingResponse(
+        iter([xlsx_bytes]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

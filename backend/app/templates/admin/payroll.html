@@ -206,6 +206,9 @@
             <p id="event-name" class="text-gray-500 text-sm ml-1">Cargando...</p>
         </div>
         <div class="flex gap-2 items-center no-print">
+            <button onclick="downloadPlanillaCoordinador()" class="btn btn-outline" title="Descargar Excel con una hoja por coordinador (solo checked_in)">
+                📄 Planilla
+            </button>
             <span id="viewers-badge" class="status-pill status-signed hidden" title="Personas viendo esta nómina">👥 1</span>
             <span id="online-badge" class="status-pill status-signed">🟢 Online</span>
             <span id="offline-badge" class="status-pill status-pending hidden">📴 Offline</span>
@@ -482,6 +485,37 @@ function _getDeviceId() {
         localStorage.setItem('payroll_device_id', did);
     }
     return did;
+}
+
+// ============================================================
+// DESCARGAR PLANILLA EXCEL POR COORDINADOR
+// ============================================================
+async function downloadPlanillaCoordinador() {
+    try {
+        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/planilla-coordinador`, {
+            headers: authHeaders()
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert('❌ Error al generar planilla: ' + (err.detail || resp.status));
+            return;
+        }
+        // Crear blob y disparar descarga
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const disposition = resp.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : `Planilla_${EVENT_ID}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch(e) {
+        console.error('downloadPlanillaCoordinador error:', e);
+        alert('❌ Error de red: ' + e.message);
+    }
 }
 
 // ============================================================
