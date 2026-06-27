@@ -15,13 +15,10 @@ async def test_health_endpoint(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_root_endpoint(client: AsyncClient):
-    """Test that the root endpoint returns app info."""
+    """Test that the root endpoint returns the landing home page."""
     response = await client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert "message" in data
-    assert "docs" in data
-    assert data["docs"] == "/docs"
+    assert "text/html" in response.headers.get("content-type", "").lower()
 
 
 @pytest.mark.asyncio

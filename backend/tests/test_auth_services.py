@@ -93,14 +93,14 @@ class TestJWTTokens:
 class TestSchemas:
     def test_login_request_validation(self):
         from app.schemas.auth import LoginRequest
-        req = LoginRequest(email="test@test.com", password="123456")
-        assert req.email == "test@test.com"
+        req = LoginRequest(document_number="12345678", password="123456")
+        assert req.document_number == "12345678"
 
-    def test_login_request_invalid_email(self):
+    def test_login_request_invalid_document_number(self):
         from pydantic import ValidationError
         from app.schemas.auth import LoginRequest
         with pytest.raises(ValidationError):
-            LoginRequest(email="not-an-email", password="123456")
+            LoginRequest(document_number="123", password="123456")
 
     def test_register_request_password_too_short(self):
         from pydantic import ValidationError

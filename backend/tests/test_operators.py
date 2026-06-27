@@ -21,7 +21,9 @@ async def sample_operator(db: AsyncSession):
         last_name="Operator",
         user_type="operator",
         is_verified=True,
-        is_approved=True
+        is_approved=True,
+        document_type="CC",
+        document_number="12345678"
     )
     db.add(user)
     await db.flush()
@@ -45,7 +47,9 @@ async def sample_admin(db: AsyncSession):
         last_name="User",
         user_type="superadmin",
         is_verified=True,
-        is_approved=True
+        is_approved=True,
+        document_type="CC",
+        document_number="87654321"
     )
     db.add(user)
     await db.commit()
@@ -54,7 +58,7 @@ async def sample_admin(db: AsyncSession):
 @pytest.fixture
 async def operator_token(client: AsyncClient, sample_operator: User):
     response = await client.post("/api/auth/login", json={
-        "email": sample_operator.email,
+        "document_number": sample_operator.document_number,
         "password": "password"
     })
     return response.json()["access_token"]
@@ -62,7 +66,7 @@ async def operator_token(client: AsyncClient, sample_operator: User):
 @pytest.fixture
 async def admin_token(client: AsyncClient, sample_admin: User):
     response = await client.post("/api/auth/login", json={
-        "email": sample_admin.email,
+        "document_number": sample_admin.document_number,
         "password": "password"
     })
     return response.json()["access_token"]

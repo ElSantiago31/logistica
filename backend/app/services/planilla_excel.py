@@ -92,6 +92,10 @@ def _copy_sheet_with_images(wb: openpyxl.Workbook, src_sheet: openpyxl.worksheet
 
     ``openpyxl.Workbook.copy_worksheet`` NO copia imágenes, así que las
     re-agregamos manualmente tras la copia.
+
+    Nota: Se usa ``deepcopy`` en vez de ``copy`` para evitar que múltiples
+    hojas compartan el mismo ``BytesIO`` de la imagen, lo cual causa
+    ``ValueError: I/O operation on closed file`` al serializar.
     """
     new_ws = wb.copy_worksheet(src_sheet)
     new_ws.title = new_title
@@ -99,7 +103,7 @@ def _copy_sheet_with_images(wb: openpyxl.Workbook, src_sheet: openpyxl.worksheet
     # Re-agregar imágenes (logo) — copy_worksheet no las copia
     if src_sheet._images:
         for img in src_sheet._images:
-            new_img = _copy.copy(img)
+            new_img = _copy.deepcopy(img)
             new_ws._images.append(new_img)
 
     return new_ws
