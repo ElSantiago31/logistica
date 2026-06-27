@@ -162,17 +162,76 @@ function renderStaffNeeds(needs){
     </div>`;
 }
 
-async function loadAssignments(){
-    const token=getToken();const res=await fetch(`/api/events/${EVENT_ID}/assignments`,{headers:{'Authorization':'Bearer '+token}});const assignments=await res.json();
-    const div=document.getElementById('assignmentsTable');
-    assignedOps.clear();
-    if(!assignments.length){div.innerHTML='<p class="text-gray-500 text-sm">No hay operadores asignados</p>';return}
-    const SL={invited:'Invitado',confirmed:'Confirmado',rejected:'Rechazado',standby:'En espera',no_show:'No asistió',checked_in:'Check-in',sin_acreditacion:'Sin Acreditación'};
-    const SC={invited:'bg-yellow-100 text-yellow-800',confirmed:'bg-green-100 text-green-800',rejected:'bg-red-100 text-red-800',standby:'bg-gray-100 text-gray-800',no_show:'bg-red-100 text-red-800',checked_in:'bg-blue-100 text-blue-800',sin_acreditacion:'bg-amber-100 text-amber-800'};
-    // Populate assignedOps with user_id (matching what /api/operators/ returns as id)
-    assignments.forEach(a=>{if(a.operator_user_id)assignedOps.add(String(a.operator_user_id))});
+// --- Paginación de asignaciones (client-side) ---
+let allAssignments=[];
+let assignmentsPage=0;
+let assignmentsFilter='';
+const ASSIGNMENTS_PER_PAGE=25;
+const _SL={invited:'Invitado',confirmed:'Confirmado',rejected:'Rechazado',standby:'En espera',no_show:'No asistió',checked_in:'Check-in',sin_acreditacion:'Sin Acreditación'};
+const _SC={invited:'bg-yellow-100 text-yellow-800',confirmed:'bg-green-100 text-green-800',rejected:'bg-red-100 text-red-800',standby:'bg-gray-100 text-gray-800',no_show:'bg-red-100 text-red-800',checked_in:'bg-blue-100 text-blue-800',sin_acreditacion:'bg-amber-100 text-amber-800'};
 
-    div.innerHTML=`
+async function loadAssignments(){
+    const token=getToken();const res=await fetch(`/api/events/${EVENT_ID}/assignments`,{headers:{'Authorization':'Bearer '+token}});
+    allAssignments=await res.json();
+    assignedOps.clear();
+    allAssignments.forEach(a=>{if(a.operator_user_id)assignedOps.add(String(a.operator_user_id))});
+    assignmentsPage=0;
+    renderAssignments();
+}
+
+function _assignmentRowHtml(a){
+    return `<tr>
+        <td class="px-4 py-2 font-medium">${a.operator_name}</td>
+        <td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td>
+        <td class="px-4 py-2 text-sm">${a.role_name||'-'}</td>
+        <td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs font-medium ${_SC[a.status]||'bg-gray-100'}">${_SL[a.status]||a.status}</span></td>
+        <td class="px-4 py-2 text-sm">${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</td>
+        <td class="px-4 py-2"><select onchange="changeAssignmentStatus('${a.id}',this.value)" class="text-xs border rounded px-2 py-1 bg-white"><option value="">Cambiar...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="sin_acreditacion" ${a.status==='sin_acreditacion'?'disabled':''}>⚠️ Sin Acreditación</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option><option value="remove" class="text-red-600 font-medium">🗑️ Eliminar</option></select></td>
+    </tr>`;
+}
+
+function _assignmentCardHtml(a){
+    return `<div class="border rounded-lg p-3 space-y-2">
+        <div class="flex justify-between items-start">
+            <div><div class="font-medium text-sm">${a.operator_name}</div><div class="text-xs text-gray-500">${a.operator_phone||'-'}</div></div>
+            <span class="px-2 py-1 rounded-full text-xs font-medium ${_SC[a.status]||'bg-gray-100'}">${_SL[a.status]||a.status}</span>
+        </div>
+        <div class="flex justify-between text-xs text-gray-600"><span>Rol: ${a.role_name||'-'}</span><span>${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</span></div>
+        <select onchange="changeAssignmentStatus('${a.id}',this.value)" class="w-full text-xs border rounded px-2 py-1.5 bg-white"><option value="">Cambiar estado...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="sin_acreditacion" ${a.status==='sin_acreditacion'?'disabled':''}>⚠️ Sin Acreditación</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option><option value="remove" class="text-red-600 font-medium">🗑️ Eliminar</option></select>
+    </div>`;
+}
+
+function renderAssignments(){
+    const div=document.getElementById('assignmentsTable');
+    let filtered=allAssignments;
+    if(assignmentsFilter) filtered=allAssignments.filter(a=>a.status===assignmentsFilter);
+    if(!filtered.length){div.innerHTML='<p class="text-gray-500 text-sm">No hay operadores asignados</p>';return}
+    const totalPages=Math.max(1,Math.ceil(filtered.length/ASSIGNMENTS_PER_PAGE));
+    if(assignmentsPage>=totalPages) assignmentsPage=0;
+    if(assignmentsPage<0) assignmentsPage=0;
+    const start=assignmentsPage*ASSIGNMENTS_PER_PAGE;
+    const pageItems=filtered.slice(start,start+ASSIGNMENTS_PER_PAGE);
+    const endIdx=Math.min(start+ASSIGNMENTS_PER_PAGE,filtered.length);
+
+    // Barra de filtro
+    const filterBar=`<div class="flex items-center gap-2 mb-3 flex-wrap">
+        <select onchange="assignmentsFilterChange(this.value)" class="text-xs border rounded px-2 py-1 bg-white">
+            <option value="">Todos (${allAssignments.length})</option>
+            ${Object.entries(_SL).map(([k,v])=>{const c=allAssignments.filter(a=>a.status===k).length;return c?`<option value="${k}" ${assignmentsFilter===k?'selected':''}>${v} (${c})</option>`:'';}).join('')}
+        </select>
+    </div>`;
+
+    // Controles de paginación
+    const pager=totalPages>1?`<div class="flex items-center justify-between mt-3 px-1">
+        <span class="text-xs text-gray-500">Mostrando ${start+1}-${endIdx} de ${filtered.length}</span>
+        <div class="flex gap-1 items-center">
+            <button onclick="assignmentsPrevPage()" ${assignmentsPage===0?'disabled':''} class="px-2 py-1 text-xs border rounded ${assignmentsPage===0?'opacity-50 cursor-not-allowed':'hover:bg-gray-100'}">← Anterior</button>
+            <span class="px-2 py-1 text-xs font-medium">${assignmentsPage+1}/${totalPages}</span>
+            <button onclick="assignmentsNextPage(${totalPages})" ${assignmentsPage>=totalPages-1?'disabled':''} class="px-2 py-1 text-xs border rounded ${assignmentsPage>=totalPages-1?'opacity-50 cursor-not-allowed':'hover:bg-gray-100'}">Siguiente →</button>
+        </div>
+    </div>`:'';
+
+    div.innerHTML=filterBar+`
     <div class="hidden sm:block">
         <table class="w-full text-sm">
             <thead class="bg-gray-50"><tr>
@@ -183,27 +242,17 @@ async function loadAssignments(){
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Costo/turno</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
             </tr></thead>
-            <tbody class="divide-y">${assignments.map(a=>`<tr>
-                <td class="px-4 py-2 font-medium">${a.operator_name}</td>
-                <td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td>
-                <td class="px-4 py-2 text-sm">${a.role_name||'-'}</td>
-                <td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs font-medium ${SC[a.status]||'bg-gray-100'}">${SL[a.status]||a.status}</span></td>
-                <td class="px-4 py-2 text-sm">${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</td>
-                <td class="px-4 py-2"><select onchange="changeAssignmentStatus('${a.id}',this.value)" class="text-xs border rounded px-2 py-1 bg-white"><option value="">Cambiar...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="sin_acreditacion" ${a.status==='sin_acreditacion'?'disabled':''}>⚠️ Sin Acreditación</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option><option value="remove" class="text-red-600 font-medium">🗑️ Eliminar</option></select></td>
-            </tr>`).join('')}</tbody>
+            <tbody class="divide-y">${pageItems.map(_assignmentRowHtml).join('')}</tbody>
         </table>
     </div>
     <div class="sm:hidden space-y-3">
-        ${assignments.map(a=>`<div class="border rounded-lg p-3 space-y-2">
-            <div class="flex justify-between items-start">
-                <div><div class="font-medium text-sm">${a.operator_name}</div><div class="text-xs text-gray-500">${a.operator_phone||'-'}</div></div>
-                <span class="px-2 py-1 rounded-full text-xs font-medium ${SC[a.status]||'bg-gray-100'}">${SL[a.status]||a.status}</span>
-            </div>
-            <div class="flex justify-between text-xs text-gray-600"><span>Rol: ${a.role_name||'-'}</span><span>${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</span></div>
-            <select onchange="changeAssignmentStatus('${a.id}',this.value)" class="w-full text-xs border rounded px-2 py-1.5 bg-white"><option value="">Cambiar estado...</option><option value="confirmed" ${a.status==='confirmed'?'disabled':''}>✅ Confirmar</option><option value="rejected" ${a.status==='rejected'?'disabled':''}>❌ Rechazar</option><option value="standby" ${a.status==='standby'?'disabled':''}>⏳ En espera</option><option value="no_show" ${a.status==='no_show'?'disabled':''}>🚫 No asistió</option><option value="sin_acreditacion" ${a.status==='sin_acreditacion'?'disabled':''}>⚠️ Sin Acreditación</option><option value="invited" ${a.status==='invited'?'disabled':''}>📩 Invitado</option><option value="remove" class="text-red-600 font-medium">🗑️ Eliminar</option></select>
-        </div>`).join('')}
-    </div>`;
+        ${pageItems.map(_assignmentCardHtml).join('')}
+    </div>`+pager;
 }
+
+function assignmentsNextPage(totalPages){ if(assignmentsPage<totalPages-1){assignmentsPage++;renderAssignments();} }
+function assignmentsPrevPage(){ if(assignmentsPage>0){assignmentsPage--;renderAssignments();} }
+function assignmentsFilterChange(val){ assignmentsFilter=val; assignmentsPage=0; renderAssignments(); }
 
 const STATUS_CONFIRM={published:{msg:'¿Publicar/reabrir este evento?',toast:'Evento publicado',color:'bg-blue-500'},in_progress:{msg:'¿Iniciar este evento?',toast:'Evento en progreso',color:'bg-yellow-500'},completed:{msg:'¿Marcar como completado?',toast:'Evento completado',color:'bg-green-500'},cancelled:{msg:'¿Cancelar este evento?',toast:'Evento cancelado',color:'bg-red-500'}};
 async function changeEventStatus(ns){const cfg=STATUS_CONFIRM[ns];if(cfg&&!confirm(cfg.msg))return;const token=getToken();const res=await fetch(`/api/events/${EVENT_ID}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({status:ns})});if(res.ok){showToast(cfg?.toast||'Actualizado',cfg?.color||'bg-green-500');loadEvent()}else showToast('Error','bg-red-500')}
