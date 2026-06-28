@@ -563,8 +563,30 @@ async def check_in(
             AttendanceLog.operator_id == operator_id,
         )
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(409, "Operador ya registrado")
+    existing_log = existing.scalar_one_or_none()
+    if existing_log:
+        # El operador ya tiene un log de asistencia. Pero si el assignment
+        # NO está en checked_in, hay un estado inconsistente (deadlock):
+        # el frontend recarga desde el servidor y ve status='confirmed',
+        # así que el botón "Registrar Ingreso" vuelve a aparecer, pero al
+        # clickear devuelve 409 de nuevo. Reconciliamos forzando checked_in.
+        if assignment_id:
+            assignment = await db.get(EventAssignment, assignment_id)
+            if assignment and assignment.status != "checked_in":
+                assignment.status = "checked_in"
+                # Resolver coordinador (misma lógica del flujo normal)
+                if coordinator:
+                    assignment.admitted_by = coordinator
+                    if not assignment.programmed_by:
+                        assignment.programmed_by = coordinator
+                elif not assignment.admitted_by:
+                    assignment.admitted_by = assignment.programmed_by
+                try:
+                    await db.commit()
+                except Exception as exc:
+                    await db.rollback()
+                    logger.error("Error reconciliando check-in: %s", exc)
+        return {"status": "checked_in", "log_id": str(existing_log.id), "reconciled": True}
 
     # Validar conflictos de uniform ANTES de guardar
     conflict = await _check_uniform_conflicts(

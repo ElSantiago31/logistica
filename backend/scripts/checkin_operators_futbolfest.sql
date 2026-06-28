@@ -74,12 +74,13 @@ ON CONFLICT (event_id, operator_id) DO NOTHING;
 
 -- ------------------------------------------------------------
 --  3) HACER CHECK-IN (status -> 'checked_in')
+--     Nota: event_assignments NO tiene columna checked_in_at; el
+--     timestamp del ingreso se guarda en attendance_log.check_in_time.
 -- ------------------------------------------------------------
 UPDATE event_assignments ea
 SET
-    status        = 'checked_in',
-    checked_in_at = NOW(),
-    updated_at    = NOW()
+    status     = 'checked_in',
+    updated_at = NOW()
 FROM operators o
 JOIN users u ON u.id = o.user_id
 WHERE ea.operator_id = o.id
@@ -99,7 +100,7 @@ SELECT
     ea.status,
     ea.programmed_by,
     ea.admitted_by,
-    ea.checked_in_at,
+    al.check_in_time,
     CASE WHEN al.id IS NOT NULL THEN 'SI' ELSE 'NO' END AS tiene_attendance_log
 FROM event_assignments ea
 JOIN operators o ON o.id = ea.operator_id
