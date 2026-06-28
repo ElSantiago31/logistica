@@ -21,6 +21,7 @@ Estructura de la plantilla (1 hoja "Planilla"):
 import io
 import copy as _copy
 import logging
+import unicodedata
 from pathlib import Path
 from datetime import datetime
 
@@ -71,6 +72,34 @@ def _split_name(full_name: str) -> tuple[str, str]:
     if len(parts) == 1:
         return (parts[0], "")
     return (parts[0], parts[1])
+
+
+def _sort_key_by_lastname(full_name: str) -> tuple[str, str]:
+    """Clave de ordenamiento por APELLIDO (case-insensitive, sin acentos).
+
+    Usa la MISMA lógica que ``_split_name`` para extraer el apellido:
+    todo después del primer token se considera apellido.
+
+    Ej: "JUAN CARLOS PEREZ GOMEZ" → clave ("PEREZ GOMEZ", "JUAN CARLOS")
+
+    Operadores sin apellido (un solo token) se ordenan por ese token como
+    apellido.
+
+    Returns:
+        Tuple (apellido_norm, nombre_norm) para usar en ``sorted(key=...)``.
+    """
+    nombres, apellidos = _split_name(full_name)
+
+    def _norm(text: str) -> str:
+        """Normaliza: quita acentos y pasa a mayúsculas para orden estable."""
+        if not text:
+            return ""
+        nfkd = unicodedata.normalize("NFKD", text)
+        return nfkd.encode("ascii", "ignore").decode("ascii").upper().strip()
+
+    # Si no hay apellido (un solo token), usar el nombre como apellido
+    # para que se ubique alfabéticamente en lugar de quedar agrupado al final.
+    return (_norm(apellidos) or _norm(nombres), _norm(nombres))
 
 
 def _fmt_date(dt: datetime | None) -> str:
@@ -184,6 +213,11 @@ def generate_planilla_xlsx(
     # Crear una hoja por cada (coordinador + página de 20 operadores)
     sheets_created = []
     for coord_name, operators in operators_by_coordinator.items():
+        # Ordenar operadores por APELLIDO (alfabético, case-insensitive, sin acentos)
+        operators = sorted(
+            operators,
+            key=lambda op: _sort_key_by_lastname(op.get("full_name", "")),
+        )
         # Paginar en bloques de ROWS_PER_PAGE
         total_pages = max(1, (len(operators) + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE)
         for page_num in range(total_pages):
