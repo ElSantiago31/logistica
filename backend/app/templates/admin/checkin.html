@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Check-in — A&C Eventos{% endblock %}
 {% block head %}
+<script src="/static/js/auth.js"></script>
 <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
 <script src="/static/js/scanner.js"></script>
 <style>
@@ -272,7 +273,7 @@ async function checkServerReachable() {
     try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 3000);
-        const resp = await fetch('/api/sync/status', {
+        const resp = await Auth.apiFetch('/api/sync/status', {
             method: 'GET',
             headers: authHeaders(),
             cache: 'no-store',
@@ -326,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadEventData() {
     if (navigator.onLine) {
         try {
-            const resp = await fetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
+            const resp = await Auth.apiFetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
                 headers: authHeaders()
             });
             if (resp.ok) {
@@ -565,7 +566,7 @@ async function markSinAcreditacion() {
     if (!currentOperator) return;
     if (!confirm(`¿Marcar "${currentOperator.full_name}" como Sin Acreditación?\n\nEsto ocurre cuando el establecimiento NO dejó ingresar al operador a trabajar. Se excluirá de la nómina.`)) return;
     try {
-        const resp = await fetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=sin_acreditacion`, {
+        const resp = await Auth.apiFetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=sin_acreditacion`, {
             method: 'PATCH',
             headers: authHeaders()
         });
@@ -626,7 +627,7 @@ async function doCheckIn() {
 
     if (_isOnline) {
         try {
-            const resp = await fetch(`/api/sync/events/${EVENT_ID}/check-in`, {
+            const resp = await Auth.apiFetch(`/api/sync/events/${EVENT_ID}/check-in`, {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify({
@@ -781,7 +782,7 @@ async function saveUniform() {
 
     // Con internet: enviar directo
     try {
-        const resp = await fetch(`/api/sync/assignments/${currentOperator.id}/uniform`, {
+        const resp = await Auth.apiFetch(`/api/sync/assignments/${currentOperator.id}/uniform`, {
             method: 'PATCH',
             headers: authHeaders(),
             body: JSON.stringify({
@@ -1039,7 +1040,7 @@ async function downloadForOffline() {
 
     try {
         logEl.textContent = 'Conectando al servidor...';
-        const resp = await fetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
+        const resp = await Auth.apiFetch(`/api/sync/events/${EVENT_ID}/offline-data`, {
             headers: authHeaders()
         });
 
@@ -1098,7 +1099,7 @@ async function syncPendingRecords() {
                 jacket_number: r.jacket_number,
                 cap_number: r.cap_number,
             }));
-            const resp = await fetch('/api/sync/attendance', {
+            const resp = await Auth.apiFetch('/api/sync/attendance', {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify({ records })
@@ -1128,7 +1129,7 @@ async function syncPendingRecords() {
 
             for (const u of uniPending) {
                 try {
-                    const resp = await fetch(`/api/sync/assignments/${u.assignment_id}/uniform`, {
+                    const resp = await Auth.apiFetch(`/api/sync/assignments/${u.assignment_id}/uniform`, {
                         method: 'PATCH',
                         headers: authHeaders(),
                         body: JSON.stringify({
@@ -1206,7 +1207,7 @@ async function pollCheckinStatus() {
         const t = setTimeout(() => controller.abort(), 5000);
         // Fase 3: enviar device_id para tracking de presencia
         const did = _getDeviceId();
-        const resp = await fetch(`/api/sync/events/${EVENT_ID}/checkin-status?device_id=${encodeURIComponent(did)}`, {
+        const resp = await Auth.apiFetch(`/api/sync/events/${EVENT_ID}/checkin-status?device_id=${encodeURIComponent(did)}`, {
             headers: authHeaders(), cache: 'no-store', signal: controller.signal
         });
         clearTimeout(t);
@@ -1362,7 +1363,7 @@ async function markNoShow() {
     if (!confirm(`¿Marcar "${currentOperator.full_name}" como No Asistió?`)) return;
 
     try {
-        const resp = await fetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=no_show`, {
+        const resp = await Auth.apiFetch(`/api/whatsapp/assignments/${currentOperator.id}/status?new_status=no_show`, {
             method: 'PATCH',
             headers: authHeaders()
         });
@@ -1453,7 +1454,7 @@ async function pollQuotas() {
     try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch(`/api/sync/events/${EVENT_ID}/coordinator-quotas`, {
+        const resp = await Auth.apiFetch(`/api/sync/events/${EVENT_ID}/coordinator-quotas`, {
             headers: authHeaders(),
             cache: 'no-store',
             signal: controller.signal
@@ -1522,7 +1523,7 @@ async function confirmReassign(newCoordinator) {
     const modal = document.getElementById('reassign-modal');
     modal.classList.add('hidden');
     try {
-        const resp = await fetch(`/api/sync/assignments/${_reassignAssignmentId}/reassign`, {
+        const resp = await Auth.apiFetch(`/api/sync/assignments/${_reassignAssignmentId}/reassign`, {
             method: 'PATCH',
             headers: authHeaders(),
             body: JSON.stringify({ new_coordinator: newCoordinator })

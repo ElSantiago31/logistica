@@ -12,6 +12,10 @@
     <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
     <title>{% block title %}AyC Eventos{% endblock %}</title>
 
+    <!-- Auth interceptor: parchea window.fetch para refresh automático de token.
+         Debe cargarse PRIMERO, antes que cualquier script que use fetch. -->
+    <script src="/static/js/auth.js"></script>
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 

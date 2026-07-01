@@ -124,6 +124,7 @@ async function login() {
     if (resp.ok) {
       const data = await resp.json();
       localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
       localStorage.setItem('user', JSON.stringify(data.user));
       window.location.href = '/enrolamiento/perfil';
     } else if (resp.status === 429) {
