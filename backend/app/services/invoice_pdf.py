@@ -241,7 +241,11 @@ class _ThermalRenderer:
             self.y -= self._lh(size)
         self.y -= gap
 
-    def divider(self, solid=False, gap_before=1.0, gap_after=2.0):
+    def divider(self, solid=False, gap_before=5.0, gap_after=11.0):
+        # IMPORTANTE: en PDF el texto se dibuja por su *baseline* (parte inferior),
+        # y las letras se extienden HACIA ARRIBA. Si gap_after es muy chico, el
+        # título siguiente se solapa con la línea (la cruza). gap_after debe ser
+        # ~ font_size + margen para que el ascender del texto no toque la línea.
         self.y -= gap_before
         self.c.setStrokeColor(BLACK)
         if solid:
