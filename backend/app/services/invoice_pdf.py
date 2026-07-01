@@ -356,7 +356,12 @@ def generate_invoices_zip(invoices_data: list[dict], event_name: str = "Evento")
                 # Nombre: Factura_Nombre_Operador_001.pdf
                 op_name = _sanitize(inv.get("operator_name", "operador"))
                 inv_no = _sanitize(inv.get("invoice_number", ""))
-                fname = f"Factura_{op_name}_{inv_no or idx:03d}.pdf"
+                # FIX: separar el formato :03d del string inv_no.
+                # Antes: f"{inv_no or idx:03d}" aplicaba :03d (solo int)
+                # al resultado del `or`, que cuando hay invoice_number es un
+                # str → "Unknown format code 'd' for object of type 'str'".
+                suffix = inv_no if inv_no else f"{idx:03d}"
+                fname = f"Factura_{op_name}_{suffix}.pdf"
                 zf.writestr(fname, pdf)
             except Exception as exc:
                 logger.error("Error generando PDF #%d (%s): %s",
