@@ -129,7 +129,7 @@ def _grupo(n: int) -> str:
     return " ".join(partes)
 
 
-def numero_a_leras(num) -> str:
+def numero_a_letras(num) -> str:
     """Ej: 150000 -> 'CIENTO CINCUENTA MIL PESOS M/CTE'."""
     num = int(round(abs(float(num or 0))))
     if num == 0:
