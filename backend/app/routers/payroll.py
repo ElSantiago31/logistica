@@ -856,3 +856,84 @@ async def download_planilla_coordinador(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ============================================================
+# FACTURAS PDF MASIVAS (ZIP)
+# ============================================================
+# Genera un ZIP con un PDF por cada operador pagado con firma.
+# Cada PDF tiene el diseño carta (no térmico) con la firma embebida.
+
+@router.get("/events/{event_id}/invoices-bulk")
+async def download_invoices_bulk(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Descarga un ZIP con todas las facturas PDF del evento.
+
+    Filtro: status='paid' AND signature_data IS NOT NULL.
+    Requiere permisos admin/superadmin/coordinator.
+    """
+    if user.user_type not in _PERMITTED:
+        raise HTTPException(403, "Sin permisos")
+
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
+    # Consultar facturas pagadas con firma
+    result = await db.execute(
+        select(PayrollRecord, Operator, User)
+        .join(Operator, Operator.id == PayrollRecord.operator_id)
+        .join(User, User.id == Operator.user_id)
+        .where(
+            PayrollRecord.event_id == event_id,
+            PayrollRecord.status == "paid",
+            PayrollRecord.signature_data.is_not(None),
+        )
+        .order_by(User.first_name, User.last_name)
+    )
+
+    invoices_data = []
+    for rec, op, op_user in result.all():
+        invoices_data.append({
+            "invoice_number": rec.invoice_number,
+            "paid_at": _to_bogota_iso(rec.paid_at),
+            "payment_amount": float(rec.payment_amount or 0),
+            "role_name": rec.role_name_snapshot,
+            "signature_data": rec.signature_data,
+            "operator_name": f"{op_user.first_name} {op_user.last_name}",
+            "operator_document": op_user.document_number or "",
+            "operator_phone": op_user.phone or "",
+            "event_name": event.name,
+            "event_location": event.location or "",
+            "event_date": _to_bogota_iso(event.start_date) if event.start_date else None,
+            "company": "A&C Eventos",
+        })
+
+    if not invoices_data:
+        raise HTTPException(
+            404,
+            "No hay facturas pagadas con firma para este evento",
+        )
+
+    # Generar ZIP
+    from app.services.invoice_pdf import generate_invoices_zip
+
+    try:
+        zip_bytes = generate_invoices_zip(
+            invoices_data, event_name=event.name,
+        )
+    except Exception as exc:
+        logger.error("Error generando ZIP de facturas: %s", exc)
+        raise HTTPException(500, f"Error al generar las facturas: {exc}")
+
+    safe_name = _sanitize_event_name(event.name)
+    filename = f"Facturas_{safe_name}.zip"
+
+    return StreamingResponse(
+        iter([zip_bytes]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -209,6 +209,9 @@
             <button onclick="downloadPlanillaCoordinador()" class="btn btn-outline" title="Descargar Excel con una hoja por coordinador (solo checked_in)">
                 📄 Planilla
             </button>
+            <button onclick="downloadInvoicesBulk()" class="btn btn-primary" title="Descargar ZIP con todas las facturas PDF (operadores pagados con firma)">
+                🗄️ Facturas PDF
+            </button>
             <span id="viewers-badge" class="status-pill status-signed hidden" title="Personas viendo esta nómina">👥 1</span>
             <span id="online-badge" class="status-pill status-signed">🟢 Online</span>
             <span id="offline-badge" class="status-pill status-pending hidden">📴 Offline</span>
@@ -516,6 +519,49 @@ async function downloadPlanillaCoordinador() {
     } catch(e) {
         console.error('downloadPlanillaCoordinador error:', e);
         alert('❌ Error de red: ' + e.message);
+    }
+}
+
+// ============================================================
+// DESCARGAR FACTURAS PDF MASIVAS (ZIP)
+// ============================================================
+async function downloadInvoicesBulk(btn) {
+    const button = btn || (event && event.target) || null;
+    const originalText = button ? button.textContent : '';
+    try {
+        if (button) {
+            button.disabled = true;
+            button.textContent = '⏳ Generando...';
+        }
+
+        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/invoices-bulk`, {
+            headers: authHeaders()
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert('❌ Error al generar facturas: ' + (err.detail || resp.status));
+            return;
+        }
+        // Crear blob y disparar descarga del ZIP
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const disposition = resp.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : `Facturas_${EVENT_ID}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch(e) {
+        console.error('downloadInvoicesBulk error:', e);
+        alert('❌ Error de red: ' + e.message);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText || '🗄️ Facturas PDF';
+        }
     }
 }
 

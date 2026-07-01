@@ -35,3 +35,6 @@ python-multipart==0.0.9
 
 # Excel generation (planilla de pago por coordinador)
 openpyxl==3.1.5
+
+# PDF generation (facturas individuales y masivas)
+reportlab==4.1.0
