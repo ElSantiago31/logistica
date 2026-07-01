@@ -324,8 +324,8 @@ class _ThermalRenderer:
 
         self.divider()
 
-        # 2. RECIBO
-        self.section_title("Recibo de Pago de Servicios")
+        # 2. CUENTA DE COBRO
+        self.section_title("Cuenta de Cobro")
         self.row("Consecutivo:", inv_no)
         self.row("Fecha:", paid_date)
 
