@@ -266,6 +266,9 @@
         </table>
     </div>
 
+    <!-- Toast (notificaciones flotantes, mismo patrón que intendencia.html) -->
+    <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50"></div>
+
     <!-- Pagos recientes (live desde polling) -->
     <div class="mt-6 bg-white rounded-xl border p-4 no-print">
         <div class="flex items-center justify-between mb-3">
@@ -479,6 +482,15 @@ function authHeaders() {
     const h = { 'Content-Type': 'application/json' };
     if (t) h['Authorization'] = 'Bearer ' + t;
     return h;
+}
+
+// --- Toast de notificaciones (fix: faltaba y toggleUniformReturn fallaba) ---
+function showToast(msg, cls) {
+    const el = document.getElementById('toast');
+    if (!el) { console.log('[toast]', msg); return; }
+    el.textContent = msg;
+    el.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${cls || 'bg-gray-700'}`;
+    setTimeout(() => { el.className = 'hidden'; }, 3000);
 }
 
 // --- Device ID para presencia (mismo patrón que checkin) ---
