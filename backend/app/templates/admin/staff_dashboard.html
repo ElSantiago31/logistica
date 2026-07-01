@@ -36,7 +36,8 @@
 (function(){
     const t = localStorage.getItem('access_token');
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!t || !['checkin', 'intendencia', 'superadmin'].includes(u.user_type)) {
+    // Operadores asignados como checkin/intendencia también pueden acceder
+    if (!t || !['checkin', 'intendencia', 'superadmin', 'operator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
@@ -46,6 +47,7 @@
         checkin: {text: 'Check-in', bg: 'bg-green-600'},
         intendencia: {text: 'Intendencia', bg: 'bg-amber-600'},
         superadmin: {text: 'Superadmin', bg: 'bg-purple-600'},
+        operator: {text: 'Operador', bg: 'bg-blue-600'},
     };
     const r = roleMap[u.user_type] || roleMap.checkin;
     badge.textContent = r.text;

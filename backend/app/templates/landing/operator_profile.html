@@ -52,6 +52,7 @@
     </div>
     <div class="flex gap-2">
       <a href="/coordinador" id="events-link" class="hidden text-sm px-4 py-2 rounded-lg transition font-semibold" style="background:rgba(207,155,98,0.15);border:1px solid rgba(207,155,98,0.4);color:#cf9b62;">📅 Eventos</a>
+      <a href="/staff" id="staff-link" class="hidden text-sm px-4 py-2 rounded-lg transition font-semibold" style="background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#4ade80;">🎫 Mis Eventos (Staff)</a>
       <button onclick="logout()" class="text-sm px-4 py-2 rounded-lg transition font-semibold" style="background:rgba(207,155,98,0.15);border:1px solid rgba(207,155,98,0.4);color:#cf9b62;">Cerrar Sesión</button>
     </div>
   </div>
@@ -401,6 +402,16 @@ async function loadProfile() {
     try {
       const evResp = await fetch('/api/coordinator/my-events', { headers: { 'Authorization': 'Bearer ' + token } });
       if (evResp.ok) { const evData = await evResp.json(); if (evData.events && evData.events.length > 0) document.getElementById('events-link').classList.remove('hidden'); }
+    } catch(e) {}
+    // Verificar si está asignado como staff (checkin/intendencia) en algún evento → mostrar link "Mis Eventos (Staff)"
+    try {
+      const staffResp = await fetch('/api/events/my-events/staff', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (staffResp.ok) {
+        const staffData = await staffResp.json();
+        if (Array.isArray(staffData) && staffData.length > 0) {
+          document.getElementById('staff-link').classList.remove('hidden');
+        }
+      }
     } catch(e) {}
     const [epsResp, pensionResp, rolesResp] = await Promise.all([fetch('/api/catalogs/eps'), fetch('/api/catalogs/pension-fund'), fetch('/api/catalogs/roles')]);
     if (epsResp.ok) { const eps = await epsResp.json(); const sel = document.getElementById('eps_id'); eps.forEach(e => { const op = document.createElement('option'); op.value=e.id; op.text=e.name; sel.add(op); }); if (o.eps_id) sel.value = o.eps_id; }
