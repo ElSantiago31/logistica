@@ -420,12 +420,11 @@ def generate_invoice_pdf(data: dict) -> bytes:
 
     # --- Pasada 2: render real con altura exacta ---
     buf = io.BytesIO()
-    c = canvas.Canvas(
-        buf,
-        pagesize=(PAGE_WIDTH, used_height),
-        title=f"Factura {data.get('invoice_number') or ''}",
-        author=data.get("company") or "A&C Eventos",
-    )
+    # Nota: Canvas() NO acepta title/author como kwargs en reportlab 4.x.
+    # Se setean después con setTitle()/setAuthor().
+    c = canvas.Canvas(buf, pagesize=(PAGE_WIDTH, used_height))
+    c.setTitle(f"Factura {data.get('invoice_number') or ''}")
+    c.setAuthor(data.get("company") or "A&C Eventos")
     _ThermalRenderer(c, data).render(top_y=used_height - MARGIN)
     c.showPage()
     c.save()
