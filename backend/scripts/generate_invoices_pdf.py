@@ -5,8 +5,8 @@ Filtro: status='paid' AND signature_data IS NOT NULL.
 
 USO:
     python -m scripts.generate_invoices_pdf --event-id <UUID>
-    python -m scripts.generate_invoices_pdf --event-id <UUID> --output ./facturas.zip
-    python -m scripts.generate_invoices_pdf --event-id <UUID> --output-dir ./facturas
+    python -m scripts.generate_invoices_pdf --event-id <UUID> --output ./recibos.zip
+    python -m scripts.generate_invoices_pdf --event-id <UUID> --output-dir ./recibos
 """
 import argparse
 import asyncio
@@ -98,7 +98,7 @@ async def main():
     parser.add_argument(
         "--output",
         default=None,
-        help="Ruta del archivo .zip de salida (default: ./Facturas_<Evento>.zip)",
+        help="Ruta del archivo .zip de salida (default: ./Recibos_de_Caja_<Evento>.zip)",
     )
     args = parser.parse_args()
 
@@ -147,7 +147,7 @@ async def main():
             t = t.encode("ascii", "ignore").decode("ascii")
             t = re.sub(r"[^A-Za-z0-9_\-]", "_", t.strip().replace(" ", "_"))
             return re.sub(r"_+", "_", t).strip("_") or "Evento"
-        out_path = f"Facturas_{_sanitize(event_name)}.zip"
+        out_path = f"Recibos_de_Caja_{_sanitize(event_name)}.zip"
 
     with open(out_path, "wb") as f:
         f.write(zip_bytes)

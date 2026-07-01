@@ -930,7 +930,7 @@ async def download_invoices_bulk(
         raise HTTPException(500, f"Error al generar las facturas: {exc}")
 
     safe_name = _sanitize_event_name(event.name)
-    filename = f"Facturas_{safe_name}.zip"
+    filename = f"Recibos_de_Caja_{safe_name}.zip"
 
     return StreamingResponse(
         iter([zip_bytes]),

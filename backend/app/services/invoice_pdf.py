@@ -427,7 +427,7 @@ def generate_invoice_pdf(data: dict) -> bytes:
     # Nota: Canvas() NO acepta title/author como kwargs en reportlab 4.x.
     # Se setean después con setTitle()/setAuthor().
     c = canvas.Canvas(buf, pagesize=(PAGE_WIDTH, used_height))
-    c.setTitle(f"Factura {data.get('invoice_number') or ''}")
+    c.setTitle(f"Recibo de Caja {data.get('invoice_number') or ''}")
     c.setAuthor(data.get("company") or "A&C Eventos")
     _ThermalRenderer(c, data).render(top_y=used_height - MARGIN)
     c.showPage()
@@ -470,7 +470,7 @@ def generate_invoices_zip(invoices_data: list[dict], event_name: str = "Evento")
                 inv_no = _sanitize(inv.get("invoice_number", ""))
                 # El formato :03d solo aplica al índice (int), nunca al string.
                 suffix = inv_no if inv_no else f"{idx:03d}"
-                fname = f"Factura_{op_name}_{suffix}.pdf"
+                fname = f"Recibo_de_Caja_{op_name}_{suffix}.pdf"
                 zf.writestr(fname, pdf)
                 generated += 1
             except Exception as exc:

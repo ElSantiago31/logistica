@@ -549,7 +549,7 @@ async function downloadInvoicesBulk(btn) {
         a.href = url;
         const disposition = resp.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename="?([^"]+)"?/);
-        a.download = match ? match[1] : `Facturas_${EVENT_ID}.zip`;
+        a.download = match ? match[1] : `Recibos_de_Caja_${EVENT_ID}.zip`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
