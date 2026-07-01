@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.eps import EPS
-from app.models.arl import ARL
+from app.models.pension_fund import PensionFund
 from app.models.roles import Role
 
 router = APIRouter(prefix="/api/catalogs", tags=["Catalogs"])
@@ -32,10 +32,12 @@ async def list_eps(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(EPS).where(EPS.is_active == True).order_by(EPS.name))
     return [{"id": str(e.id), "name": e.name, "code": e.code} for e in result.scalars().all()]
 
-@router.get("/arl")
-async def list_arl(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(ARL).where(ARL.is_active == True).order_by(ARL.name))
-    return [{"id": str(a.id), "name": a.name, "code": a.code} for a in result.scalars().all()]
+@router.get("/pension-fund")
+async def list_pension_funds(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(PensionFund).where(PensionFund.is_active == True).order_by(PensionFund.name)
+    )
+    return [{"id": str(p.id), "name": p.name, "code": p.code} for p in result.scalars().all()]
 
 @router.get("/roles")
 async def list_roles(

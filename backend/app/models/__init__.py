@@ -6,7 +6,7 @@ from app.models.base import BaseModel
 # Catalogs
 from app.models.roles import Role
 from app.models.eps import EPS
-from app.models.arl import ARL
+from app.models.pension_fund import PensionFund
 
 # Core
 from app.models.users import User
@@ -30,7 +30,7 @@ from app.models.blocked_document import BlockedDocument
 
 __all__ = [
     "BaseModel",
-    "Role", "EPS", "ARL",
+    "Role", "EPS", "PensionFund",
     "User", "Operator",
     "Event", "EventStaffNeed", "EventAssignment", "EventStaffAssignment",
     "EventAuditLog", "EventCoordinatorQuota",

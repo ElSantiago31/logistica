@@ -83,7 +83,7 @@ class OperatorRegisterRequest(BaseModel):
     # Foto obligatoria — Data URL (data:image/jpeg;base64,...) o base64 puro
     photo_data: str = Field(..., min_length=100, description="Foto del operador en base64 (data URL)")
     eps_id: Optional[uuid.UUID] = None
-    arl_id: Optional[uuid.UUID] = None
+    pension_fund_id: Optional[uuid.UUID] = None
     birth_date: Optional[date] = None
     gender: Optional[str] = Field(None, max_length=20, description="Género: Femenino, Masculino")
     address: Optional[str] = None

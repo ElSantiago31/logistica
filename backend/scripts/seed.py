@@ -1,11 +1,11 @@
-"""Seed inicial unificado: roles, ARLs, EPS y superadmin.
+"""Seed inicial unificado: roles, Fondos de Pensión, EPS y superadmin.
 
 Uso:
-    python -m scripts.seed            # todo
-    python -m scripts.seed roles      # solo roles
-    python -m scripts.seed arls       # solo ARLs
-    python -m scripts.seed eps        # solo EPS
-    python -m scripts.seed admin      # solo superadmin
+    python -m scripts.seed                  # todo
+    python -m scripts.seed roles            # solo roles
+    python -m scripts.seed pension-funds    # solo Fondos de Pensión
+    python -m scripts.seed eps              # solo EPS
+    python -m scripts.seed admin            # solo superadmin
 """
 import asyncio
 import sys
@@ -42,24 +42,21 @@ ROLES = [
     ("PMT – Plan de Manejo de Tráfico", "pmt", "Plan de manejo de tráfico vehicular", None, 3, "Tráfico", False),
     ("Operador de Montaje", "montaje", "Montaje y desmontaje de infraestructura", None, 3, "Montaje", False),
     ("Operador de Aseo", "aseo", "Limpieza y mantenimiento del evento", None, 3, "Aseo", False),
-    ("Universitario", "universitario", "Personal universitario cercano a artistas", None, 3, "Seguridad", False),
+    ("Universitario", "universitario", "Personal universitario cercanos a artistas", None, 3, "Seguridad", False),
     # Nivel 3 — Roles event-only nuevos (reportan al Coordinador General)
     ("Coordinadores Externos", "coordinadores_externos", "Coordinación externa (reporta al Coordinador General)", None, 3, "Externa", True),
     ("Brigadista Externo", "brigadista_externo", "Brigada de emergencias externa (reporta al Coordinador General)", None, 3, "Externa", True),
     ("Personal Oficina", "personal_oficina", "Personal de oficina (reporta al Coordinador General)", None, 3, "Oficina", True),
 ]
 
-ARLS = [
-    ("ARL SURA", "ARL-SURA"),
-    ("Positiva Compañía de Seguros", "POSITIVA"),
-    ("ARL Colmena", "ARL-COLMENA"),
-    ("AXA Colpatria", "AXA-COLPATRIA"),
-    ("Seguros Bolívar", "SEGUROS-BOLIVAR"),
-    ("MAPFRE", "MAPFRE"),
-    ("Seguros Alfa", "SEGUROS-ALFA"),
-    ("La Equidad Seguros", "EQUIDAD"),
-    ("Aurora Seguros", "AURORA"),
-    ("Colsanitas Seguros", "COLSANITAS"),
+# Catálogo oficial de Fondos de Pensión (Colombia)
+PENSION_FUNDS = [
+    ("Colpensiones", "COLPENSIONES"),
+    ("Porvenir", "PORVENIR"),
+    ("Protección", "PROTECCION"),
+    ("Colfondos", "COLFONDOS"),
+    ("Skandia Pensiones y Cesantías", "SKANDIA"),
+    ("No Suministra", "NO-SUMINISTRA"),
 ]
 
 # Lista oficial EPS vigentes en el Sistema de Seguridad Social en Salud (Colombia)
@@ -115,15 +112,16 @@ async def seed_roles(db: AsyncSession):
     print(f'OK: {len(ROLES)} roles insertados/actualizados (con jerarquía, área y event-only)')
 
 
-async def seed_arls(db: AsyncSession):
-    await db.execute(text("UPDATE arl SET is_active = false"))
-    for name, code in ARLS:
+async def seed_pension_funds(db: AsyncSession):
+    """Siembra/actualiza el catálogo de Fondos de Pensión."""
+    await db.execute(text("UPDATE pension_fund SET is_active = false"))
+    for name, code in PENSION_FUNDS:
         await db.execute(text("""
-            INSERT INTO arl (id, name, code, is_active)
+            INSERT INTO pension_fund (id, name, code, is_active)
             VALUES (gen_random_uuid(), :name, :code, true)
             ON CONFLICT (code) DO UPDATE SET name = :name, is_active = true
         """), {'name': name, 'code': code})
-    print(f'OK: {len(ARLS)} ARLs insertadas/actualizadas')
+    print(f'OK: {len(PENSION_FUNDS)} Fondos de Pensión insertados/actualizados')
 
 
 async def seed_eps(db: AsyncSession):
@@ -158,8 +156,8 @@ async def main():
     async with S() as db:
         if only in ("all", "roles"):
             await seed_roles(db)
-        if only in ("all", "arls"):
-            await seed_arls(db)
+        if only in ("all", "arls", "pension-funds", "pension_funds", "pension-fund"):
+            await seed_pension_funds(db)
         if only in ("all", "eps"):
             await seed_eps(db)
         if only in ("all", "admin"):

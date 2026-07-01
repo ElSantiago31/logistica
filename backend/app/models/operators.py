@@ -16,8 +16,8 @@ class Operator(BaseModel):
     eps_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("eps.id", ondelete="SET NULL"), nullable=True,
     )
-    arl_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("arl.id", ondelete="SET NULL"), nullable=True,
+    pension_fund_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pension_fund.id", ondelete="SET NULL"), nullable=True,
     )
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     photo_thumbnail_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -49,7 +49,7 @@ class Operator(BaseModel):
     # Relationships
     user = relationship("User", back_populates="operator_profile")
     eps = relationship("EPS", back_populates="operators")
-    arl = relationship("ARL", back_populates="operators")
+    pension_fund = relationship("PensionFund", back_populates="operators")
     event_assignments = relationship("EventAssignment", back_populates="operator")
 
     def __repr__(self):

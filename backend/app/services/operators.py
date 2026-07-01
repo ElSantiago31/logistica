@@ -62,7 +62,7 @@ async def get_operators(
         User.is_active == is_active
     ).options(
         selectinload(User.operator_profile).joinedload(Operator.eps),
-        selectinload(User.operator_profile).joinedload(Operator.arl),
+        selectinload(User.operator_profile).joinedload(Operator.pension_fund),
     )
 
     # Base count
@@ -155,7 +155,7 @@ async def get_operator(db: AsyncSession, user_id: uuid.UUID, include_inactive: b
         query = query.where(User.is_active == True)
     query = query.options(
         selectinload(User.operator_profile).joinedload(Operator.eps),
-        selectinload(User.operator_profile).joinedload(Operator.arl),
+        selectinload(User.operator_profile).joinedload(Operator.pension_fund),
     )
     
     result = await db.execute(query)
@@ -207,7 +207,7 @@ async def update_operator(
     if hasattr(user, "operator_profile") and user.operator_profile:
         operator_fields = [
             "city", "address", "locality", "blood_type", "emergency_contact_name", 
-            "emergency_contact_phone", "eps_id", "arl_id", "birth_date", "gender",
+            "emergency_contact_phone", "eps_id", "pension_fund_id", "birth_date", "gender",
             "whatsapp", "has_protocol_experience", "event_size_experience",
             "shirt_size", "jacket_size"
         ]

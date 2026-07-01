@@ -16,7 +16,7 @@ class OperatorBase(BaseModel):
     emergency_contact_phone: Optional[str] = Field(None, max_length=20)
     whatsapp: Optional[str] = Field(None, max_length=20)
     eps_id: Optional[uuid.UUID] = None
-    arl_id: Optional[uuid.UUID] = None
+    pension_fund_id: Optional[uuid.UUID] = None
     has_protocol_experience: Optional[bool] = None
     event_size_experience: Optional[str] = Field(None, max_length=50)
     education_level: Optional[str] = Field(None, max_length=50)
@@ -64,9 +64,9 @@ class OperatorResponse(BaseModel):
 
     # Operator fields
     eps_id: Optional[uuid.UUID]
-    arl_id: Optional[uuid.UUID]
+    pension_fund_id: Optional[uuid.UUID]
     eps_name: Optional[str] = None
-    arl_name: Optional[str] = None
+    pension_fund_name: Optional[str] = None
     photo_path: Optional[str]
     photo_thumbnail_path: Optional[str]
     birth_date: Optional[date]
@@ -114,12 +114,12 @@ class OperatorResponse(BaseModel):
             }
             if profile:
                 eps_name = profile.eps.name if profile.eps else None
-                arl_name = profile.arl.name if profile.arl else None
+                pension_fund_name = profile.pension_fund.name if profile.pension_fund else None
                 values.update({
                     'eps_id': profile.eps_id,
-                    'arl_id': profile.arl_id,
+                    'pension_fund_id': profile.pension_fund_id,
                     'eps_name': eps_name,
-                    'arl_name': arl_name,
+                    'pension_fund_name': pension_fund_name,
                     'photo_path': profile.photo_path,
                     'photo_thumbnail_path': profile.photo_thumbnail_path,
                     'birth_date': profile.birth_date,
@@ -144,7 +144,7 @@ class OperatorResponse(BaseModel):
                 })
             else:
                 values.update({
-                    'eps_id': None, 'arl_id': None, 'eps_name': None, 'arl_name': None, 'photo_path': None,
+                    'eps_id': None, 'pension_fund_id': None, 'eps_name': None, 'pension_fund_name': None, 'photo_path': None,
                     'photo_thumbnail_path': None, 'birth_date': None, 'gender': None,
                     'address': None, 'city': None, 'blood_type': None,
                     'emergency_contact_name': None, 'emergency_contact_phone': None,

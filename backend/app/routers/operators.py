@@ -129,7 +129,7 @@ async def get_my_profile(
         },
         "operator": {
             "eps_id": str(operator.eps_id) if operator and operator.eps_id else None,
-            "arl_id": str(operator.arl_id) if operator and operator.arl_id else None,
+            "pension_fund_id": str(operator.pension_fund_id) if operator and operator.pension_fund_id else None,
             "city": operator.city if operator else None,
             "address": operator.address if operator else None,
             "locality": operator.locality if operator else None,
@@ -168,7 +168,7 @@ async def update_my_profile(
         await db.flush()
 
     field_map = [
-        "eps_id", "arl_id", "city", "address", "locality", "whatsapp",
+        "eps_id", "pension_fund_id", "city", "address", "locality", "whatsapp",
         "blood_type", "emergency_contact_name", "emergency_contact_phone",
         "has_protocol_experience", "event_size_experience",
         "shirt_size", "jacket_size",
@@ -176,7 +176,7 @@ async def update_my_profile(
     for field in field_map:
         if field in update_data and update_data[field] is not None:
             val = update_data[field]
-            if field in ("eps_id", "arl_id") and val:
+            if field in ("eps_id", "pension_fund_id") and val:
                 val = uuid.UUID(val)
             if field == "has_protocol_experience":
                 val = val == "true" if isinstance(val, str) else bool(val)
