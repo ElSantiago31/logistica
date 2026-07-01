@@ -217,6 +217,51 @@ async def search_blocked(
     return {"items": results, "total": len(results)}
 
 
+@router.get("/search")
+async def search_operators_for_staff(
+    q: str = Query(..., min_length=2, description="Buscar por nombre o cédula"),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Busca operadores por nombre o cédula.
+
+    Pensado para el buscador de la sección 'Personal del Sistema' al crear/editar
+    eventos: permite asignar operadores como checkin/intendencia de un evento.
+    Devuelve {user_id, full_name, document_number, photo}.
+    """
+    from sqlalchemy import or_, func as sql_func
+
+    term = f"%{q.strip().lower()}%"
+    result = await db.execute(
+        select(User, Operator)
+        .outerjoin(Operator, Operator.user_id == User.id)
+        .where(
+            User.user_type == "operator",
+            User.is_active == True,
+            or_(
+                sql_func.lower(User.first_name).like(term),
+                sql_func.lower(User.last_name).like(term),
+                User.document_number.ilike(term),
+            ),
+        )
+        .limit(limit)
+    )
+    rows = result.all()
+    return {
+        "items": [
+            {
+                "user_id": str(u.id),
+                "full_name": f"{u.first_name} {u.last_name}",
+                "document_number": u.document_number,
+                "photo": op.photo_thumbnail_path if op else None,
+            }
+            for u, op in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @router.get("/", response_model=OperatorListResponse)
 async def list_operators(
     skip: int = Query(0, ge=0),

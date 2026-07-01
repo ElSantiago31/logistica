@@ -57,7 +57,12 @@
             <!-- Staff System Assignments (checkin / intendencia) -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <h2 class="text-lg font-semibold text-gray-800">Personal del Sistema</h2>
-                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in e Intendencia pueden ver este evento.</p>
+                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in e Intendencia pueden ver este evento. También puedes buscar y agregar operadores.</p>
+                <div class="relative mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">🔍 Buscar operador para asignar como staff</label>
+                    <input type="text" id="opSearchInput" placeholder="Escribe nombre o cédula (mín. 2 caracteres)..." class="w-full border rounded-lg px-3 py-2 text-sm" autocomplete="off">
+                    <div id="opSearchResults" class="hidden absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-72 overflow-y-auto"></div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">🟢 Check-in</label>
@@ -97,6 +102,9 @@ function updateEndDateMin(){
 }
 let roles=[];
 let allStaffUsers=[];
+let addedOperators=[]; // operadores asignados vía buscador: {user_id, full_name, document_number, staffRole}
+let lastSearchItems=[];
+let searchTimer=null;
 async function loadRoles(){
     const token=getToken();
     const res=await fetch('/api/catalogs/roles?include_event_only=true',{headers:{'Authorization':'Bearer '+token}});
@@ -115,17 +123,86 @@ function renderStaffLists(){
     const render=(containerId,role)=>{
         const container=document.getElementById(containerId);
         const users=allStaffUsers.filter(u=>u.user_type===role);
-        if(!users.length){container.innerHTML='<p class="text-xs text-gray-400">No hay usuarios '+role+'. Créalos en Superadmin.</p>';return}
-        container.innerHTML=users.map(u=>
-            `<label class="flex items-center gap-2 text-sm hover:bg-gray-50 px-2 py-1 rounded">
+        const ops=addedOperators.filter(o=>o.staffRole===role);
+        let html='';
+        users.forEach(u=>{
+            html+=`<label class="flex items-center gap-2 text-sm hover:bg-gray-50 px-2 py-1 rounded">
                 <input type="checkbox" value="${u.id}" class="staff-cb rounded">
                 <span>${u.first_name} ${u.last_name}</span>
                 <span class="text-xs text-gray-400">${u.document_number}</span>
-            </label>`
-        ).join('');
+            </label>`;
+        });
+        ops.forEach(o=>{
+            html+=`<label class="flex items-center gap-2 text-sm px-2 py-1 rounded border border-amber-200 bg-amber-50">
+                <input type="checkbox" value="${o.user_id}" class="staff-cb rounded" checked>
+                <span>${o.full_name}</span>
+                <span class="text-xs text-gray-400">${o.document_number}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 font-medium">👤 Operador</span>
+                <button type="button" onclick="removeOperator('${o.user_id}','${role}')" class="text-red-500 hover:text-red-700 ml-auto font-bold">✕</button>
+            </label>`;
+        });
+        if(!users.length && !ops.length){
+            html='<p class="text-xs text-gray-400">No hay usuarios '+role+'. Créalos en Superadmin o busca un operador arriba.</p>';
+        }
+        container.innerHTML=html;
     };
     render('checkinList','checkin');
     render('intendenciaList','intendencia');
+}
+
+async function searchOperator(){
+    const q=document.getElementById('opSearchInput').value.trim();
+    const box=document.getElementById('opSearchResults');
+    if(q.length<2){box.classList.add('hidden');box.innerHTML='';lastSearchItems=[];return}
+    const token=getToken();
+    try{
+        const res=await fetch('/api/operators/search?q='+encodeURIComponent(q)+'&limit=10',{headers:{'Authorization':'Bearer '+token}});
+        if(!res.ok){box.classList.add('hidden');return}
+        const data=await res.json();
+        lastSearchItems=data.items||[];
+        renderSearchDropdown();
+    }catch(e){box.classList.add('hidden');}
+}
+
+function renderSearchDropdown(){
+    const box=document.getElementById('opSearchResults');
+    if(!lastSearchItems.length){box.innerHTML='<p class="px-3 py-2 text-xs text-gray-400">Sin resultados</p>';box.classList.remove('hidden');return}
+    box.innerHTML=lastSearchItems.map(o=>{
+        const inCheckin=addedOperators.find(a=>a.user_id===o.user_id&&a.staffRole==='checkin');
+        const inIntendencia=addedOperators.find(a=>a.user_id===o.user_id&&a.staffRole==='intendencia');
+        const safeName=o.full_name.replace(/'/g,"\\'");
+        const photoHtml=o.photo?`<img src="${o.photo}" class="w-6 h-6 rounded-full object-cover">`:'<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">👤</div>';
+        return `<div class="px-3 py-2 border-b last:border-0">
+            <div class="flex items-center gap-2 mb-1">
+                ${photoHtml}
+                <span class="text-sm font-medium">${o.full_name}</span>
+                <span class="text-xs text-gray-400">${o.document_number}</span>
+            </div>
+            <div class="flex gap-2 ml-8">
+                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','checkin')" class="text-xs px-2 py-1 rounded ${inCheckin?'bg-green-100 text-green-700 border border-green-300':'bg-gray-100 hover:bg-gray-200'}">🟢 Check-in ${inCheckin?'✓':''}</button>
+                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','intendencia')" class="text-xs px-2 py-1 rounded ${inIntendencia?'bg-green-100 text-green-700 border border-green-300':'bg-gray-100 hover:bg-gray-200'}">🟠 Intendencia ${inIntendencia?'✓':''}</button>
+            </div>
+        </div>`;
+    }).join('');
+    box.classList.remove('hidden');
+}
+
+function toggleOperator(user_id,full_name,document_number,staffRole){
+    const existing=addedOperators.find(a=>a.user_id===user_id&&a.staffRole===staffRole);
+    if(existing){
+        addedOperators=addedOperators.filter(a=>!(a.user_id===user_id&&a.staffRole===staffRole));
+    }else{
+        addedOperators.push({user_id,full_name,document_number,staffRole});
+        showToast(`Operador agregado a ${staffRole==='checkin'?'Check-in':'Intendencia'}`,'bg-green-500');
+    }
+    renderStaffLists();
+    renderSearchDropdown();
+}
+
+function removeOperator(user_id,role){
+    addedOperators=addedOperators.filter(o=>!(o.user_id===user_id&&o.staffRole===role));
+    renderStaffLists();
+    renderSearchDropdown();
 }
 async function saveStaffAssignments(eventId){
     const token=getToken();
@@ -200,6 +277,16 @@ async function loadCities(){
     sel.innerHTML='<option value="">Seleccionar ciudad</option>'+data.map(d=>`<optgroup label="${d.departamento}">${d.ciudades.map(c=>`<option value="${c}">${c}</option>`).join('')}</optgroup>`).join('');
     }catch(e){console.error('Error cargando ciudades',e)}
 }
+// Buscador de operadores: debounce + cerrar al hacer click fuera
+document.getElementById('opSearchInput').addEventListener('input',()=>{
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(searchOperator,300);
+});
+document.addEventListener('click',(e)=>{
+    if(!e.target.closest('#opSearchInput')&&!e.target.closest('#opSearchResults')){
+        document.getElementById('opSearchResults').classList.add('hidden');
+    }
+});
 loadRoles();loadCities();loadStaffUsers();
 </script>
 </body>
