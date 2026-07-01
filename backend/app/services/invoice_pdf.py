@@ -1,73 +1,87 @@
-"""Servicio para generar facturas individuales en PDF.
+"""Servicio para generar facturas individuales en PDF — formato TÉRMICO 80mm.
 
-Usa ``reportlab`` (platypus) para construir un PDF tamaño carta con:
-- Encabezado: A&C Eventos (empresa)
-- Datos del evento y del operador
-- Número de factura, fecha de pago
-- Monto pagado (formato moneda COP)
-- Imagen de la firma embebida (base64 PNG decodificado con Pillow)
+Replica fielmente el recibo térmico monocromático que aparece en
+``payroll.html`` (#invoice-print-area), pensado para impresoras térmicas
+EPSON / Xprinter / SAT de papel de 80mm.
 
-La función ``generate_invoice_pdf(data)`` devuelve ``bytes`` listos para
-usar en ``StreamingResponse`` o empaquetar en un ZIP.
+- Tamaño de página: 80mm de ancho × alto variable (calculado en 2 pasadas).
+- Tipografía monoespaciada (Courier / Courier-Bold), monocromática.
+- Incluye firma del operador embebida (PNG/JPG desde base64).
+- La función ``generate_invoice_pdf(data)`` devuelve ``bytes``.
 """
 import base64
 import io
 import logging
-from datetime import datetime
-from typing import Optional
+import re
+import unicodedata
+import zipfile
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, mm
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable,
-)
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
 
 logger = logging.getLogger(__name__)
 
-# Colores corporativos (marrón/dorado del tema del proyecto)
-COLOR_PRIMARY = colors.HexColor("#5d4224")   # marrón oscuro
-COLOR_ACCENT = colors.HexColor("#8b6f3f")    # dorado/marrón medio
-COLOR_LIGHT = colors.HexColor("#f5f0e8")     # beige claro
-COLOR_TEXT = colors.HexColor("#2c2c2c")      # gris oscuro
-COLOR_MUTED = colors.HexColor("#6b6b6b")     # gris medio
+# --- Constantes de página (80mm térmico) ---
+PAGE_WIDTH = 80 * mm
+MARGIN = 3 * mm
+
+BLACK = colors.HexColor("#000000")
+
+# Zona horaria Bogotá (UTC-5) para fechas/horas del recibo
+BOGOTA_TZ = timezone(timedelta(hours=-5))
 
 
+# ============================================================
+# HELPERS DE FORMATO
+# ============================================================
 def _format_cop(amount) -> str:
     """Formatea un número como moneda colombiana: $100.000."""
     try:
         n = float(amount or 0)
     except (TypeError, ValueError):
         n = 0.0
-    # Formato: punto como separador de miles (convención CO)
     return f"${n:,.0f}".replace(",", ".")
 
 
-def _format_date(dt_str: Optional[str]) -> str:
-    """Convierte un ISO string (con o sin tz) a DD/MM/YYYY."""
-    if not dt_str:
-        return "—"
-    try:
-        # Manejar el formato ISO con offset Bogotá (....-05:00)
-        dt = datetime.fromisoformat(str(dt_str).replace("Z", "+00:00"))
-        return dt.strftime("%d/%m/%Y")
-    except (ValueError, TypeError):
-        return str(dt_str)[:10] if dt_str else "—"
+def _parse_bogota(dt_str: Optional[str]) -> Optional[datetime]:
+    """Convierte un ISO string a datetime en zona Bogotá.
 
-
-def _decode_signature(signature_data: str) -> Optional[bytes]:
-    """Decodifica base64 PNG/JPG de la firma a bytes crudos.
-
-    El frontend guarda la firma como data URL o base64 puro.
-    Retorna None si no se puede decodificar.
+    El backend guarda ``utcnow()`` naive → lo asumimos UTC y convertimos.
     """
+    if not dt_str:
+        return None
+    s = str(dt_str).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(BOGOTA_TZ)
+
+
+def _fmt_date(dt_str: Optional[str]) -> str:
+    dt = _parse_bogota(dt_str)
+    return dt.strftime("%d/%m/%Y") if dt else "—"
+
+
+def _fmt_time(dt_str: Optional[str]) -> str:
+    dt = _parse_bogota(dt_str)
+    if not dt:
+        return "—"
+    return dt.strftime("%I:%M %p").lstrip("0")
+
+
+def _decode_signature(signature_data: Optional[str]) -> Optional[bytes]:
+    """Decodifica base64 PNG/JPG de la firma a bytes crudos."""
     if not signature_data:
         return None
     try:
         raw = signature_data.strip()
-        # Quitar prefijo data:image/png;base64, si existe
         if "," in raw and raw.startswith("data:image"):
             raw = raw.split(",", 1)[1]
         return base64.b64decode(raw)
@@ -76,273 +90,356 @@ def _decode_signature(signature_data: str) -> Optional[bytes]:
         return None
 
 
-def _build_signature_image(sig_bytes: bytes, max_width: float = 3.0 * inch,
-                           max_height: float = 1.2 * inch) -> Optional[Image]:
-    """Convierte bytes de imagen en un Image de reportlab con tamaño ajustado.
-
-    Usa Pillow para dimensionar correctamente sin distorsionar (aspect ratio).
-    """
-    try:
-        from PIL import Image as PILImage
-
-        pil_img = PILImage.open(io.BytesIO(sig_bytes))
-        orig_w, orig_h = pil_img.size
-        if orig_w == 0 or orig_h == 0:
-            return None
-
-        aspect = orig_w / orig_h
-        w = max_width
-        h = w / aspect
-        if h > max_height:
-            h = max_height
-            w = h * aspect
-
-        return Image(io.BytesIO(sig_bytes), width=w, height=h)
-    except Exception as exc:
-        logger.warning("No se pudo procesar imagen de firma: %s", exc)
-        return None
+# ============================================================
+# NÚMERO A LETRAS (formato colombiano)
+# ============================================================
+_UNIDADES = [
+    "", "UNO", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE",
+    "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISEIS", "DIECISIETE",
+    "DIECIOCHO", "DIECINUEVE", "VEINTE", "VEINTIUNO", "VEINTIDOS", "VEINTITRES",
+    "VEINTICUATRO", "VEINTICINCO", "VEINTISEIS", "VEINTISIETE", "VEINTIOCHO", "VEINTINUEVE",
+]
+_DECENAS = ["", "", "", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"]
+_CENTENAS = [
+    "", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS",
+    "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS",
+]
 
 
+def _grupo(n: int) -> str:
+    if n == 100:
+        return "CIEN"
+    if n == 0:
+        return ""
+    partes: List[str] = []
+    h = n // 100
+    resto = n % 100
+    if h > 0:
+        partes.append(_CENTENAS[h])
+    if resto > 0:
+        if resto < 30:
+            partes.append(_UNIDADES[resto])
+        else:
+            d = resto // 10
+            u = resto % 10
+            if u == 0:
+                partes.append(_DECENAS[d])
+            else:
+                partes.append(f"{_DECENAS[d]} Y {_UNIDADES[u]}")
+    return " ".join(partes)
+
+
+def numero_a_leras(num) -> str:
+    """Ej: 150000 -> 'CIENTO CINCUENTA MIL PESOS M/CTE'."""
+    num = int(round(abs(float(num or 0))))
+    if num == 0:
+        return "CERO PESOS M/CTE"
+    if num == 1:
+        return "UN PESO M/CTE"
+
+    millones = num // 1_000_000
+    miles = (num % 1_000_000) // 1000
+    resto = num % 1000
+
+    partes: List[str] = []
+    if millones > 0:
+        partes.append("UN MILLON" if millones == 1 else f"{_grupo(millones)} MILLONES")
+    if miles > 0:
+        partes.append("MIL" if miles == 1 else f"{_grupo(miles)} MIL")
+    if resto > 0:
+        partes.append(_grupo(resto))
+
+    return " ".join(p for p in partes if p).strip() + " PESOS M/CTE"
+
+
+# ============================================================
+# RENDERIZADOR TÉRMICO (canvas directo, alto variable)
+# ============================================================
+class _ThermalRenderer:
+    """Dibuja el recibo térmico sobre un canvas de reportlab."""
+
+    def __init__(self, c: canvas.Canvas, data: dict):
+        self.c = c
+        self.data = data
+        self.width = PAGE_WIDTH
+        self.inner = PAGE_WIDTH - 2 * MARGIN
+        self.y = 0.0  # cursor vertical (en puntos); se decrementa
+
+    # --- primitivas ---
+    def _wrap(self, text: str, font: str, size: float, max_w: Optional[float] = None) -> List[str]:
+        max_w = self.inner if max_w is None else max_w
+        text = str(text) if text is not None else ""
+        words = re.split(r"\s+", text.strip())
+        if not words or words == [""]:
+            return [""]
+        lines: List[str] = []
+        cur = ""
+        for w in words:
+            trial = w if not cur else f"{cur} {w}"
+            if self.c.stringWidth(trial, font, size) <= max_w:
+                cur = trial
+            else:
+                if cur:
+                    lines.append(cur)
+                # palabra más larga que el ancho: partir por caracteres
+                while self.c.stringWidth(w, font, size) > max_w and len(w) > 1:
+                    cut = len(w)
+                    while cut > 1 and self.c.stringWidth(w[:cut], font, size) > max_w:
+                        cut -= 1
+                    lines.append(w[:cut])
+                    w = w[cut:]
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines or [""]
+
+    def _lh(self, size: float) -> float:
+        return size * 1.35
+
+    def center(self, text, font="Courier", size=8, gap=None):
+        self.c.setFont(font, size)
+        self.c.setFillColor(BLACK)
+        self.c.drawCentredString(self.width / 2, self.y, str(text))
+        self.y -= self._lh(size) + (gap or 0.5)
+
+    def left(self, text, font="Courier", size=8, indent=0.0, gap=None):
+        self.c.setFont(font, size)
+        self.c.setFillColor(BLACK)
+        self.c.drawString(MARGIN + indent, self.y, str(text))
+        self.y -= self._lh(size) + (gap or 0.3)
+
+    def paragraph(self, text, font="Courier", size=7.5, gap=1.0):
+        for ln in self._wrap(text, font, size):
+            self.c.setFont(font, size)
+            self.c.setFillColor(BLACK)
+            self.c.drawString(MARGIN, self.y, ln)
+            self.y -= self._lh(size)
+        self.y -= gap
+
+    def bullet(self, text, font="Courier", size=7.5, gap=0.8):
+        bullet_w = self.c.stringWidth("- ", font, size)
+        for i, ln in enumerate(self._wrap(text, font, size, max_w=self.inner - bullet_w)):
+            self.c.setFont(font, size)
+            self.c.setFillColor(BLACK)
+            self.c.drawString(MARGIN, self.y, ("- " + ln) if i == 0 else ("  " + ln))
+            self.y -= self._lh(size)
+        self.y -= gap
+
+    def row(self, label, value, size=8, gap=0.3):
+        """Fila label (izq) + value (der, envuelve si es necesario)."""
+        self.c.setFont("Courier", size)
+        self.c.setFillColor(BLACK)
+        label = str(label)
+        label_w = self.c.stringWidth(label, "Courier", size)
+        val_w_max = self.inner - label_w - 2.0
+        lines = self._wrap(value, "Courier", size, max_w=val_w_max)
+        for i, ln in enumerate(lines):
+            self.c.setFont("Courier", size)
+            if i == 0:
+                self.c.drawString(MARGIN, self.y, label)
+            self.c.drawRightString(self.width - MARGIN, self.y, ln)
+            self.y -= self._lh(size)
+        self.y -= gap
+
+    def divider(self, solid=False, gap_before=1.0, gap_after=2.0):
+        self.y -= gap_before
+        self.c.setStrokeColor(BLACK)
+        if solid:
+            self.c.setLineWidth(0.8)
+            self.c.setDash()
+            self.c.line(MARGIN, self.y, self.width - MARGIN, self.y)
+        else:
+            self.c.setLineWidth(0.5)
+            self.c.setDash(1.2, 1.2)
+            self.c.line(MARGIN, self.y, self.width - MARGIN, self.y)
+            self.c.setDash()  # reset
+        self.y -= gap_after
+
+    def section_title(self, title, size=8.5):
+        self.center(title.upper(), font="Courier-Bold", size=size, gap=1.0)
+
+    def signature_block(self, sig_bytes: Optional[bytes]):
+        # espacio reservado + imagen centrada
+        if sig_bytes:
+            try:
+                from PIL import Image as PILImage
+
+                pil = PILImage.open(io.BytesIO(sig_bytes))
+                ow, oh = pil.size
+                if ow and oh:
+                    max_w = 48 * mm
+                    max_h = 18 * mm
+                    scale = min(max_w / ow, max_h / oh)
+                    w = ow * scale
+                    h = oh * scale
+                    x = (self.width - w) / 2
+                    self.c.drawImage(
+                        ImageReader(io.BytesIO(sig_bytes)),
+                        x, self.y - h, width=w, height=h, mask="auto",
+                    )
+                    self.y -= h + 1.0
+                    return
+            except Exception as exc:
+                logger.warning("No se pudo dibujar la firma: %s", exc)
+        # sin firma → espacio en blanco
+        self.y -= 16 * mm
+
+    def sign_line(self):
+        self.c.setStrokeColor(BLACK)
+        self.c.setLineWidth(0.6)
+        self.c.setDash()
+        self.c.line(self.width * 0.15, self.y, self.width * 0.85, self.y)
+        self.y -= self._lh(8) + 1.0
+
+    # --- render completo ---
+    def render(self, top_y: float) -> float:
+        """Dibuja todo el recibo. Devuelve la Y final (inferior)."""
+        self.y = top_y
+        d = self.data
+
+        inv_no = str(d.get("invoice_number") or "—")
+        op_name = str(d.get("operator_name") or "—")
+        op_doc = str(d.get("operator_document") or "—")
+        role = str(d.get("role_name") or "Operador")
+        amount = _format_cop(d.get("payment_amount"))
+        event_name = str(d.get("event_name") or "—")
+        event_loc = str(d.get("event_location") or "—")
+        paid_date = _fmt_date(d.get("paid_at"))
+        event_date = _fmt_date(d.get("event_date"))
+        sign_date = _fmt_date(d.get("paid_at"))
+        sign_time = _fmt_time(d.get("paid_at"))
+
+        # 1. ENCABEZADO EMPRESA
+        self.center("A&C LOGISTICA & PRODUCCION", "Courier-Bold", 9)
+        self.center("DE EVENTOS LTDA", "Courier-Bold", 9)
+        for line in ("NIT: 900.227.354", "Direccion: KR 59 D # 131 - 72",
+                     "Bogota - Suba", "Tel: [TELEFONO]",
+                     "Email: Facturacion@ayceventos.com.co"):
+            self.center(line, "Courier", 7.5)
+        self.y -= 1.0
+
+        self.divider()
+
+        # 2. RECIBO
+        self.section_title("Recibo de Pago de Servicios")
+        self.row("Consecutivo:", inv_no)
+        self.row("Fecha:", paid_date)
+
+        self.divider()
+
+        # 3. DATOS DEL EVENTO
+        self.section_title("Datos del Evento")
+        self.row("Evento:", event_name)
+        self.row("Lugar:", event_loc)
+        self.row("Fecha Evento:", event_date)
+
+        self.divider()
+
+        # 4. DATOS DEL OPERADOR
+        self.section_title("Datos del Operador")
+        self.row("Nombre:", op_name)
+        self.row("Cedula:", op_doc)
+        self.row("Cargo:", role)
+
+        self.divider()
+
+        # 5. VALOR CANCELADO
+        self.section_title("Valor Cancelado")
+        self.center("TOTAL PAGADO", "Courier-Bold", 10, gap=0.5)
+        self.center(amount, "Courier-Bold", 11, gap=0.5)
+        self.center(f"({numero_a_letras(d.get('payment_amount'))})",
+                    "Courier-Oblique", 7, gap=1.0)
+
+        self.divider()
+
+        # 6. DECLARACIÓN
+        self.section_title("Declaracion del Operador")
+        self.paragraph(
+            '"Declaro haber recibido a satisfaccion de A&C LOGISTICA & '
+            'PRODUCCION DE EVENTOS LTDA la suma anteriormente indicada, '
+            "correspondiente a los servicios prestados durante el evento "
+            'relacionado en este documento.'
+        )
+        self.paragraph(
+            '"Manifiesto que el valor recibido corresponde a la totalidad de '
+            "los honorarios pactados por mis servicios y otorgo paz y salvo por "
+            'todo concepto relacionado con esta actividad."'
+        )
+
+        self.divider()
+
+        # 7. FIRMA DEL OPERADOR
+        self.section_title("Firma del Operador")
+        sig_bytes = _decode_signature(d.get("signature_data", ""))
+        self.signature_block(sig_bytes)
+        self.sign_line()
+        self.row("Nombre:", op_name)
+        self.row("C.C.:", op_doc)
+        self.row("Fecha firma:", sign_date)
+        self.row("Hora firma:", sign_time)
+
+        self.divider()
+
+        # 8. NOTAS LEGALES
+        self.section_title("Notas Legales")
+        self.bullet("Este documento constituye soporte interno de pago por prestacion de servicios ocasionales.")
+        self.bullet("La firma plasmada en este documento constituye aceptacion expresa del pago recibido.")
+        self.bullet("El operador declara haber prestado efectivamente los servicios relacionados.")
+        self.bullet("Este comprobante podra ser utilizado como soporte documental ante procesos administrativos, contables y legales.")
+
+        self.divider()
+
+        # 9. PIE
+        self.center("Documento generado electronicamente", "Courier", 7, gap=0.3)
+        self.center("por el sistema de gestion de", "Courier", 7, gap=0.3)
+        self.center("personal eventual.", "Courier", 7, gap=1.0)
+
+        self.divider(solid=True, gap_after=0)
+
+        return self.y
+
+
+# ============================================================
+# API PÚBLICA
+# ============================================================
 def generate_invoice_pdf(data: dict) -> bytes:
-    """Genera una factura PDF individual.
+    """Genera una factura PDF individual en formato TÉRMICO 80mm.
 
-    Args:
-        data: dict con las claves (mismo formato que /api/payroll/invoices/{id}):
-            - invoice_number: str | None
-            - paid_at: ISO str | None
-            - payment_amount: float
-            - role_name: str | None
-            - signature_data: str (base64 PNG)
-            - operator_name: str
-            - operator_document: str
-            - operator_phone: str
-            - event_name: str
-            - event_location: str
-            - event_date: ISO str | None
-            - company: str (default "A&C Eventos")
-
-    Returns:
-        bytes con el contenido del PDF.
+    El alto de página se calcula dinámicamente en dos pasadas para que el
+    PDF mida exactamente lo que ocupa el contenido (sin espacio en blanco
+    sobrante), ideal para impresión en papel térmico EPSON/Xprinter/SAT.
     """
+    TALL = 4000.0  # canvas de medición (suficientemente alto)
+
+    # --- Pasada 1: medir altura usada ---
+    probe = io.BytesIO()
+    c_probe = canvas.Canvas(probe, pagesize=(PAGE_WIDTH, TALL))
+    final_y = _ThermalRenderer(c_probe, data).render(top_y=TALL - MARGIN)
+    used_height = (TALL - MARGIN) - final_y + MARGIN
+    used_height = max(used_height, 60 * mm)  # mínimo razonable
+
+    # --- Pasada 2: render real con altura exacta ---
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
+    c = canvas.Canvas(
         buf,
-        pagesize=letter,
-        leftMargin=0.7 * inch,
-        rightMargin=0.7 * inch,
-        topMargin=0.6 * inch,
-        bottomMargin=0.6 * inch,
+        pagesize=(PAGE_WIDTH, used_height),
         title=f"Factura {data.get('invoice_number') or ''}",
-        author=data.get("company", "A&C Eventos"),
+        author=data.get("company") or "A&C Eventos",
     )
-
-    # --- Estilos ---
-    styles = getSampleStyleSheet()
-    style_company = ParagraphStyle(
-        "Company", parent=styles["Title"],
-        fontName="Helvetica-Bold", fontSize=22,
-        textColor=COLOR_PRIMARY, alignment=TA_LEFT, spaceAfter=2,
-    )
-    style_subtitle = ParagraphStyle(
-        "Subtitle", parent=styles["Normal"],
-        fontName="Helvetica", fontSize=9,
-        textColor=COLOR_MUTED, alignment=TA_LEFT, spaceAfter=0,
-    )
-    style_h2 = ParagraphStyle(
-        "H2", parent=styles["Heading2"],
-        fontName="Helvetica-Bold", fontSize=12,
-        textColor=COLOR_PRIMARY, spaceBefore=10, spaceAfter=6,
-    )
-    style_label = ParagraphStyle(
-        "Label", parent=styles["Normal"],
-        fontName="Helvetica-Bold", fontSize=9,
-        textColor=COLOR_MUTED, spaceAfter=1,
-    )
-    style_value = ParagraphStyle(
-        "Value", parent=styles["Normal"],
-        fontName="Helvetica", fontSize=10,
-        textColor=COLOR_TEXT, spaceAfter=6,
-    )
-    style_amount = ParagraphStyle(
-        "Amount", parent=styles["Normal"],
-        fontName="Helvetica-Bold", fontSize=16,
-        textColor=COLOR_PRIMARY, alignment=TA_RIGHT,
-    )
-    style_invoice_no = ParagraphStyle(
-        "InvNo", parent=styles["Normal"],
-        fontName="Helvetica-Bold", fontSize=11,
-        textColor=COLOR_ACCENT, alignment=TA_RIGHT,
-    )
-    style_footer = ParagraphStyle(
-        "Footer", parent=styles["Normal"],
-        fontName="Helvetica-Oblique", fontSize=8,
-        textColor=COLOR_MUTED, alignment=TA_CENTER,
-    )
-
-    story = []
-
-    # --- Encabezado: empresa a la izquierda, factura # a la derecha ---
-    company = data.get("company") or "A&C Eventos"
-    invoice_no = data.get("invoice_number") or "SIN NÚMERO"
-
-    header_left = [
-        Paragraph(company, style_company),
-        Paragraph("Servicios de Logística y Personal", style_subtitle),
-        Paragraph("NIT: En proceso · Bogotá, Colombia", style_subtitle),
-    ]
-    header_right = [
-        Paragraph("FACTURA", style_invoice_no),
-        Paragraph(f"<b>No. {invoice_no}</b>", style_invoice_no),
-    ]
-
-    header_table = Table(
-        [[header_left, header_right]],
-        colWidths=[3.8 * inch, 3.3 * inch],
-    )
-    header_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(header_table)
-    story.append(Spacer(1, 4))
-    story.append(HRFlowable(width="100%", thickness=2, color=COLOR_PRIMARY))
-    story.append(Spacer(1, 10))
-
-    # --- Datos del evento ---
-    story.append(Paragraph("Información del Evento", style_h2))
-
-    event_date = _format_date(data.get("event_date"))
-    paid_date = _format_date(data.get("paid_at"))
-
-    event_rows = [
-        [Paragraph("Evento:", style_label),
-         Paragraph(str(data.get("event_name") or "—"), style_value)],
-        [Paragraph("Lugar:", style_label),
-         Paragraph(str(data.get("event_location") or "—"), style_value)],
-        [Paragraph("Fecha del evento:", style_label),
-         Paragraph(event_date, style_value)],
-        [Paragraph("Fecha de pago:", style_label),
-         Paragraph(paid_date, style_value)],
-    ]
-    event_table = Table(event_rows, colWidths=[1.5 * inch, 5.6 * inch])
-    event_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-    ]))
-    story.append(event_table)
-    story.append(Spacer(1, 8))
-
-    # --- Datos del operador ---
-    story.append(Paragraph("Datos del Operador", style_h2))
-
-    op_rows = [
-        [Paragraph("Nombre:", style_label),
-         Paragraph(str(data.get("operator_name") or "—"), style_value),
-         Paragraph("Cédula:", style_label),
-         Paragraph(str(data.get("operator_document") or "—"), style_value)],
-        [Paragraph("Cargo:", style_label),
-         Paragraph(str(data.get("role_name") or "Operador"), style_value),
-         Paragraph("Teléfono:", style_label),
-         Paragraph(str(data.get("operator_phone") or "—"), style_value)],
-    ]
-    op_table = Table(op_rows, colWidths=[0.9 * inch, 2.6 * inch, 0.9 * inch, 2.0 * inch])
-    op_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(op_table)
-    story.append(Spacer(1, 14))
-
-    # --- Monto pagado (destacado) ---
-    amount_str = _format_cop(data.get("payment_amount"))
-
-    amount_box = Table(
-        [[Paragraph("VALOR PAGADO", style_label),
-          Paragraph(amount_str, style_amount)]],
-        colWidths=[2.5 * inch, 4.6 * inch],
-    )
-    amount_box.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), COLOR_LIGHT),
-        ("BOX", (0, 0), (-1, -1), 1, COLOR_ACCENT),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (0, 0), 12),
-        ("RIGHTPADDING", (1, 0), (1, 0), 12),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-    ]))
-    story.append(amount_box)
-    story.append(Spacer(1, 18))
-
-    # --- Firma del operador ---
-    story.append(Paragraph("Firma del Operador", style_h2))
-
-    sig_bytes = _decode_signature(data.get("signature_data", ""))
-    sig_image = _build_signature_image(sig_bytes) if sig_bytes else None
-
-    sig_label_style = ParagraphStyle(
-        "SigLabel", parent=styles["Normal"],
-        fontName="Helvetica", fontSize=9,
-        textColor=COLOR_MUTED, alignment=TA_CENTER,
-    )
-
-    if sig_image:
-        sig_cell = [sig_image, Spacer(1, 4),
-                    Paragraph(f"{data.get('operator_name', '—')}", sig_label_style)]
-    else:
-        sig_cell = [Spacer(1, 60),
-                    Paragraph("(Sin firma registrada)", sig_label_style),
-                    Spacer(1, 4),
-                    Paragraph(f"{data.get('operator_name', '—')}", sig_label_style)]
-
-    firma_table = Table([[sig_cell]], colWidths=[7.1 * inch])
-    firma_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("LINEBELOW", (0, 0), (-1, -1), 1, COLOR_MUTED),
-        ("LEFTPADDING", (0, 0), (-1, -1), 40),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 40),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(firma_table)
-    story.append(Spacer(1, 20))
-
-    # --- Pie de página ---
-    story.append(HRFlowable(width="100%", thickness=1, color=COLOR_LIGHT))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(
-        f"{company} · Documento generado el "
-        f"{datetime.now().strftime('%d/%m/%Y a las %H:%M')}",
-        style_footer,
-    ))
-
-    doc.build(story)
+    _ThermalRenderer(c, data).render(top_y=used_height - MARGIN)
+    c.showPage()
+    c.save()
     pdf_bytes = buf.getvalue()
     buf.close()
     return pdf_bytes
 
 
 def generate_invoices_zip(invoices_data: list[dict], event_name: str = "Evento") -> bytes:
-    """Genera un ZIP con múltiples facturas PDF.
-
-    Args:
-        invoices_data: lista de dicts (mismo formato que generate_invoice_pdf).
-        event_name: nombre del evento (para el nombre de archivos internos).
-
-    Returns:
-        bytes con el contenido del archivo .zip.
-    """
-    import zipfile
-    import unicodedata
-    import re
-
+    """Genera un ZIP con múltiples facturas PDF (formato térmico)."""
     def _sanitize(text: str) -> str:
         text = unicodedata.normalize("NFKD", text)
         text = text.encode("ascii", "ignore").decode("ascii")
-        text = re.sub(r"[^A-Za-z0-9_\-]", "_", text.strip().replace(" ", "_"))
+        text = re.sub(r"[^A-Za-z0-9_\-]", "_", str(text).strip().replace(" ", "_"))
         text = re.sub(r"_+", "_", text).strip("_")
         return text or "evento"
 
@@ -353,13 +450,9 @@ def generate_invoices_zip(invoices_data: list[dict], event_name: str = "Evento")
         for idx, inv in enumerate(invoices_data, 1):
             try:
                 pdf = generate_invoice_pdf(inv)
-                # Nombre: Factura_Nombre_Operador_001.pdf
                 op_name = _sanitize(inv.get("operator_name", "operador"))
                 inv_no = _sanitize(inv.get("invoice_number", ""))
-                # FIX: separar el formato :03d del string inv_no.
-                # Antes: f"{inv_no or idx:03d}" aplicaba :03d (solo int)
-                # al resultado del `or`, que cuando hay invoice_number es un
-                # str → "Unknown format code 'd' for object of type 'str'".
+                # El formato :03d solo aplica al índice (int), nunca al string.
                 suffix = inv_no if inv_no else f"{idx:03d}"
                 fname = f"Factura_{op_name}_{suffix}.pdf"
                 zf.writestr(fname, pdf)
