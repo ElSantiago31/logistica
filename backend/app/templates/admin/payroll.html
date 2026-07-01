@@ -737,7 +737,16 @@ async function toggleUniformReturn(assignmentId) {
         }
         const data = await resp.json();
         showToast(data.returned ? '✅ Uniforme devuelto' : '⏳ Pendiente de devolución', 'bg-green-500');
-        loadPayroll(); // Recargar para actualizar UI
+
+        // Actualizar el estado local del operador inmediatamente y re-renderizar
+        // (sin esperar recarga completa de loadPayroll) para feedback instantáneo.
+        const op = allOperators.find(o => o.assignment_id === assignmentId);
+        if (op) {
+            op.uniform_returned_at = data.uniform_returned_at;
+            renderTable(getCurrentFilteredList());
+        } else {
+            loadPayroll(); // fallback si no se encuentra en memoria
+        }
     } catch(e) {
         console.error('toggleUniformReturn error:', e);
         showToast('Error de conexión', 'bg-red-500');

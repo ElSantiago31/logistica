@@ -166,9 +166,9 @@ async def get_payable_operators(
     if not event:
         raise HTTPException(404, "Evento no encontrado")
 
-    # Asignaciones pagables: todos excepto rejected, no_show y sin_acreditacion
-    # (sin_acreditacion = el establecimiento no dejó ingresar al operador a
-    # trabajar, por lo tanto NO debe incluirse en nómina)
+    # Asignaciones pagables: SOLO operadores con check-in físico realizado.
+    # Los estados confirmed/rejected/no_show/sin_acreditacion NO se incluyen
+    # en nómina (el operador debe hacer check-in antes de poder firmar/cobrar).
     result = await db.execute(
         select(EventAssignment, Operator, User, Role)
         .join(Operator, Operator.id == EventAssignment.operator_id)
@@ -176,7 +176,7 @@ async def get_payable_operators(
         .outerjoin(Role, Role.id == EventAssignment.role_id)
         .where(
             EventAssignment.event_id == event_id,
-            ~EventAssignment.status.in_(["rejected", "no_show", "sin_acreditacion"]),
+            EventAssignment.status == "checked_in",
         )
     )
     rows = result.all()
