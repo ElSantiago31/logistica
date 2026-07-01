@@ -435,7 +435,12 @@ def generate_invoice_pdf(data: dict) -> bytes:
 
 
 def generate_invoices_zip(invoices_data: list[dict], event_name: str = "Evento") -> bytes:
-    """Genera un ZIP con múltiples facturas PDF (formato térmico)."""
+    """Genera un ZIP con múltiples facturas PDF (formato térmico).
+
+    Si TODAS las facturas fallan, lanza ``RuntimeError`` con el primer error,
+    para que el endpoint devuelva 500 con el traceback real (en vez de un
+    ZIP vacío silencioso).
+    """
     def _sanitize(text: str) -> str:
         text = unicodedata.normalize("NFKD", text)
         text = text.encode("ascii", "ignore").decode("ascii")
@@ -446,19 +451,48 @@ def generate_invoices_zip(invoices_data: list[dict], event_name: str = "Evento")
     safe_event = _sanitize(event_name)
     buf = io.BytesIO()
 
+    generated = 0
+    failed = 0
+    first_error: Optional[Exception] = None
+    first_error_op: Optional[str] = None
+
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for idx, inv in enumerate(invoices_data, 1):
+            op_label = inv.get("operator_name") or inv.get("invoice_number") or f"#{idx}"
             try:
                 pdf = generate_invoice_pdf(inv)
+                if not pdf:
+                    raise RuntimeError("generate_invoice_pdf devolvió bytes vacíos")
                 op_name = _sanitize(inv.get("operator_name", "operador"))
                 inv_no = _sanitize(inv.get("invoice_number", ""))
                 # El formato :03d solo aplica al índice (int), nunca al string.
                 suffix = inv_no if inv_no else f"{idx:03d}"
                 fname = f"Factura_{op_name}_{suffix}.pdf"
                 zf.writestr(fname, pdf)
+                generated += 1
             except Exception as exc:
-                logger.error("Error generando PDF #%d (%s): %s",
-                             idx, inv.get("operator_name"), exc)
+                failed += 1
+                if first_error is None:
+                    first_error = exc
+                    first_error_op = str(op_label)
+                # Traceback completo para diagnóstico (no solo el mensaje)
+                logger.exception(
+                    "Error generando PDF #%d (%s): %s", idx, op_label, exc
+                )
+
+    # Si TODOS fallaron, no devolver un ZIP vacío: lanzar el error real.
+    if generated == 0 and invoices_data:
+        msg = (
+            f"No se pudo generar NINGÚN PDF de {len(invoices_data)} facturas. "
+            f"Primer error (operador '{first_error_op}'): "
+            f"{type(first_error).__name__}: {first_error}"
+        )
+        raise RuntimeError(msg) from first_error
+
+    logger.info(
+        "ZIP facturas '%s': %d OK, %d fallidos de %d total",
+        safe_event, generated, failed, len(invoices_data),
+    )
 
     zip_bytes = buf.getvalue()
     buf.close()
