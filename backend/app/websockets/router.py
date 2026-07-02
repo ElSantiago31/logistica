@@ -40,7 +40,11 @@ async def _validate_ws_token(token: str) -> User | None:
     """
     if not token:
         return None
-    payload = decode_token(token)
+    try:
+        payload = decode_token(token)
+    except Exception as exc:
+        logger.warning("[ws] decode_token lanzó excepción: %s", exc)
+        return None
     if payload is None:
         return None
     if payload.get("type") != "access":
