@@ -492,24 +492,64 @@ function startPolling() {
 //  WEBSOCKET — Tiempo real (reemplaza polling cada 4s)
 // ============================================================
 let _wsClient = null;
+// Debounce: agrupa ráfagas de cambios en una sola actualización visual
+let _wsRefreshTimer = null;
+let _wsLastBy = '';
+let _wsPendingCount = 0;
+
 function _initRealtime() {
     if (!window.RealTimeClient) return;
     _wsClient = new RealTimeClient(EVENT_ID, 'intendencia', {
-        onMessage: (msg) => {
-            if (!msg || !msg.type) return;
-            if (msg.type === 'checkin' || msg.type === 'uniform' || msg.type === 'reassign' || msg.type === 'sync_request') {
-                pollCheckinStatus();
-            }
-        },
+        onMessage: _onWsMessage,
         onStatusChange: (online) => {
-            const badge = document.getElementById('onlineBadge') || document.querySelector('.status-badge');
-            if (badge && badge) {
-                badge.textContent = online ? '⚡ En vivo' : '🔄 Reconectando...';
+            // FIX: el id real es 'online-badge' (con guion), no 'onlineBadge'
+            const badge = document.getElementById('online-badge');
+            if (badge) {
+                if (online) {
+                    badge.textContent = '⚡ En vivo';
+                    badge.className = 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700';
+                } else {
+                    badge.textContent = '🔄 Reconectando...';
+                    badge.className = 'text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700';
+                }
             }
         }
     });
     _wsClient.connect();
     window.addEventListener('beforeunload', () => { if (_wsClient) _wsClient.disconnect(); });
+}
+
+function _onWsMessage(msg) {
+    if (!msg || !msg.type) return;
+    if (msg.type === 'checkin' || msg.type === 'uniform' || msg.type === 'reassign' || msg.type === 'sync_request') {
+        if (msg.data && msg.data.by) _wsLastBy = msg.data.by;
+        _wsPendingCount++;
+        // Debounce 800ms: una sola actualización por ráfaga (evita refrescos múltiples)
+        if (_wsRefreshTimer) clearTimeout(_wsRefreshTimer);
+        _wsRefreshTimer = setTimeout(() => {
+            pollCheckinStatus();
+            _flashLiveIndicator();
+            _wsPendingCount = 0;
+        }, 800);
+    }
+}
+
+// Indicador sutil: el badge "En vivo" parpadea brevemente (no es invasivo)
+function _flashLiveIndicator() {
+    const badge = document.getElementById('online-badge');
+    if (!badge) return;
+    const label = _wsPendingCount > 1
+        ? `⚡ ${_wsPendingCount} cambios`
+        : (_wsLastBy ? `⚡ ${_wsLastBy}` : '⚡ En vivo');
+    badge.textContent = label;
+    badge.style.transition = 'transform 0.3s';
+    badge.style.transform = 'scale(1.1)';
+    clearTimeout(badge._restoreTimer);
+    badge._restoreTimer = setTimeout(() => {
+        badge.style.transform = '';
+        badge.textContent = '⚡ En vivo';
+        _wsLastBy = '';
+    }, 2500);
 }
 
 async function pollCheckinStatus() {

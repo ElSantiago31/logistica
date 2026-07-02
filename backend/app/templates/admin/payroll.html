@@ -481,28 +481,63 @@ const POLLING_INTERVAL_MS = 30000;  // Fallback lento (WebSocket = tiempo real)
 //  WEBSOCKET — Tiempo real (reemplaza polling cada 4s)
 // ============================================================
 let _wsClient = null;
+// Debounce: agrupa ráfagas de cambios en una sola actualización visual
+let _wsRefreshTimer = null;
+let _wsLastBy = '';
+let _wsPendingCount = 0;
+
 function _initRealtime() {
     if (!window.RealTimeClient) return;
     _wsClient = new RealTimeClient(EVENT_ID, 'payroll', {
-        onMessage: (msg) => {
-            if (!msg || !msg.type) return;
-            // Reaccionar a pagos / firmas / check-ins en tiempo real
-            if (msg.type === 'payroll' || msg.type === 'signature' || msg.type === 'checkin' || msg.type === 'sync_request') {
-                pollPayrollStatus();
-                if (msg.data && msg.data.by) {
-                    _showToast('🔄 Actualizado por ' + msg.data.by, 'info');
-                }
-            }
-        },
+        onMessage: _onWsMessage,
         onStatusChange: (online) => {
-            const badge = document.getElementById('online-badge') || document.querySelector('.status-badge');
+            const badge = document.getElementById('online-badge');
             if (badge) {
-                badge.textContent = online ? '⚡ En vivo' : '🔄 Reconectando...';
+                if (online) {
+                    badge.textContent = '⚡ En vivo';
+                    badge.className = 'status-pill status-signed';
+                } else {
+                    badge.textContent = '🔄 Reconectando...';
+                    badge.className = 'status-pill status-pending';
+                }
             }
         }
     });
     _wsClient.connect();
     window.addEventListener('beforeunload', () => { if (_wsClient) _wsClient.disconnect(); });
+}
+
+function _onWsMessage(msg) {
+    if (!msg || !msg.type) return;
+    if (msg.type === 'payroll' || msg.type === 'signature' || msg.type === 'checkin' || msg.type === 'sync_request') {
+        if (msg.data && msg.data.by) _wsLastBy = msg.data.by;
+        _wsPendingCount++;
+        // Debounce 800ms: una sola actualización por ráfaga (no por evento)
+        if (_wsRefreshTimer) clearTimeout(_wsRefreshTimer);
+        _wsRefreshTimer = setTimeout(() => {
+            pollPayrollStatus();
+            _flashLiveIndicator();
+            _wsPendingCount = 0;
+        }, 800);
+    }
+}
+
+// Indicador sutil (NO toast): el badge "En vivo" parpadea brevemente
+function _flashLiveIndicator() {
+    const badge = document.getElementById('online-badge');
+    if (!badge) return;
+    const label = _wsPendingCount > 1
+        ? `⚡ ${_wsPendingCount} cambios`
+        : (_wsLastBy ? `⚡ ${_wsLastBy}` : '⚡ En vivo');
+    badge.textContent = label;
+    badge.style.transition = 'transform 0.3s';
+    badge.style.transform = 'scale(1.1)';
+    clearTimeout(badge._restoreTimer);
+    badge._restoreTimer = setTimeout(() => {
+        badge.style.transform = '';
+        badge.textContent = '⚡ En vivo';
+        _wsLastBy = '';
+    }, 2500);
 }
 
 // Helper toast (si no existe ya en este archivo)

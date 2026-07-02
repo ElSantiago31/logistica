@@ -361,6 +361,12 @@ function _onWsStatus(online) {
     }
 }
 
+// Debounce: si llegan varios cambios en ráfaga, se agrupan en una sola
+// actualización visual (evita inundar con toasts y re-renders).
+let _wsRefreshTimer = null;
+let _wsLastBy = '';
+let _wsPendingCount = 0;
+
 function _onWsMessage(msg) {
     if (!msg || !msg.type) return;
     // Reaccionar a eventos push del servidor
@@ -368,14 +374,17 @@ function _onWsMessage(msg) {
         case 'checkin':
         case 'uniform':
         case 'reassign':
-            // Hubo un check-in / cambio de indumentaria / reasignación:
-            // refrescar estado + cupos en vivo (sin esperar al polling de 30s)
-            pollCheckinStatus();
-            pollQuotas();
-            // Notificación visual sutil
-            if (msg.data && msg.data.by) {
-                _showToast('🔄 Cambio en tiempo real por ' + msg.data.by, 'info');
-            }
+            // Guardar autor y contar cambios para el indicador sutil
+            if (msg.data && msg.data.by) _wsLastBy = msg.data.by;
+            _wsPendingCount++;
+            // Debounce: agrupar eventos en una sola actualización (800ms)
+            if (_wsRefreshTimer) clearTimeout(_wsRefreshTimer);
+            _wsRefreshTimer = setTimeout(() => {
+                pollCheckinStatus();
+                pollQuotas();
+                _flashLiveIndicator();
+                _wsPendingCount = 0;
+            }, 800);
             break;
         case 'sync_request':
             // El servidor pide refrescar todo desde la API
@@ -386,6 +395,25 @@ function _onWsMessage(msg) {
             // Otros tipos: ignorar
             break;
     }
+}
+
+// Indicador visual sutil (NO toast): el badge "En vivo" parpadea y muestra
+// quién hizo el último cambio. Se desvanece solo. No es invasivo.
+function _flashLiveIndicator() {
+    const badge = document.getElementById('online-badge');
+    if (!badge) return;
+    const label = _wsPendingCount > 1
+        ? `⚡ ${_wsPendingCount} cambios`
+        : (_wsLastBy ? `⚡ ${_wsLastBy}` : '⚡ En vivo');
+    badge.textContent = label;
+    badge.classList.add('animate-pulse');
+    // Volver al estado normal después de 2.5s
+    clearTimeout(badge._restoreTimer);
+    badge._restoreTimer = setTimeout(() => {
+        badge.classList.remove('animate-pulse');
+        badge.textContent = '⚡ En vivo';
+        _wsLastBy = '';
+    }, 2500);
 }
 
 async function loadEventData() {
