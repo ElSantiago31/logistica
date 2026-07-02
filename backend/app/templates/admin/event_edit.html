@@ -65,7 +65,13 @@
             <!-- Staff System Assignments (checkin / intendencia) -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <h2 class="text-lg font-semibold text-gray-800">Personal del Sistema</h2>
-                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in e Intendencia pueden ver este evento.</p>
+                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in e Intendencia pueden ver este evento. También puedes buscar operadores para asignarlos como staff.</p>
+                <!-- Buscador de operadores -->
+                <div class="relative">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">🔍 Buscar operador (por nombre o cédula)</label>
+                    <input type="text" id="opSearchInput" placeholder="Escribe nombre o cédula (mín. 2 caracteres)..." class="w-full border rounded-lg px-3 py-2 text-sm" autocomplete="off">
+                    <div id="opSearchResults" class="hidden absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-72 overflow-y-auto"></div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">🟢 Check-in</label>
@@ -129,6 +135,9 @@ function addStaffRow(roleId='',qty=1,rate='',edu=''){
 }
 
 let allStaffUsers = [];
+let addedOperators = [];
+let lastSearchItems = [];
+let searchTimer = null;
 
 async function loadStaffUsers() {
     const token = getToken();
@@ -145,10 +154,23 @@ async function loadCurrentStaffAssignments() {
         if (!res.ok) return;
         const staff = await res.json();
         staff.forEach(s => {
-            const list = s.staff_role === 'checkin' ? 'checkinList' : 'intendenciaList';
-            const cb = document.querySelector(`#${list} input[value="${s.user_id}"]`);
-            if (cb) cb.checked = true;
+            const listId = s.staff_role === 'checkin' ? 'checkinList' : 'intendenciaList';
+            const cb = document.querySelector(`#${listId} input[value="${s.user_id}"]`);
+            if (cb) {
+                cb.checked = true;
+            } else {
+                const exists = addedOperators.find(a => a.user_id === s.user_id && a.staffRole === s.staff_role);
+                if (!exists) {
+                    addedOperators.push({
+                        user_id: s.user_id,
+                        full_name: (s.first_name || '') + ' ' + (s.last_name || ''),
+                        document_number: s.document_number || '',
+                        staffRole: s.staff_role
+                    });
+                }
+            }
         });
+        renderStaffLists();
     } catch (e) {}
 }
 
@@ -156,17 +178,30 @@ function renderStaffLists() {
     const render = (containerId, role) => {
         const container = document.getElementById(containerId);
         const users = allStaffUsers.filter(u => u.user_type === role);
-        if (!users.length) {
-            container.innerHTML = '<p class="text-xs text-gray-400">No hay usuarios ' + role + '. Créalos en Superadmin.</p>';
+        const ops = addedOperators.filter(o => o.staffRole === role);
+        if (!users.length && !ops.length) {
+            container.innerHTML = '<p class="text-xs text-gray-400">No hay usuarios ' + role + '. Usa el buscador para asignar operadores.</p>';
             return;
         }
-        container.innerHTML = users.map(u =>
+        let html = users.map(u =>
             `<label class="flex items-center gap-2 text-sm hover:bg-gray-50 px-2 py-1 rounded">
                 <input type="checkbox" value="${u.id}" class="staff-cb rounded">
                 <span>${u.first_name} ${u.last_name}</span>
                 <span class="text-xs text-gray-400">${u.document_number}</span>
             </label>`
         ).join('');
+        html += ops.map(o =>
+            `<div class="flex items-center justify-between gap-2 text-sm bg-blue-50 px-2 py-1 rounded">
+                <label class="flex items-center gap-2 flex-1">
+                    <input type="checkbox" value="${o.user_id}" class="staff-cb rounded" checked>
+                    <span>${o.full_name}</span>
+                    <span class="text-xs text-gray-400">${o.document_number}</span>
+                    <span class="text-xs text-blue-600 font-semibold">Operador</span>
+                </label>
+                <button type="button" onclick="removeOperator('${o.user_id}','${o.staffRole}')" class="text-red-500 hover:text-red-700 text-xs" title="Quitar">✕</button>
+            </div>`
+        ).join('');
+        container.innerHTML = html;
     };
     render('checkinList', 'checkin');
     render('intendenciaList', 'intendencia');
@@ -174,8 +209,12 @@ function renderStaffLists() {
 
 async function saveStaffAssignments() {
     const token = getToken();
-    const collect = (containerId) => Array.from(document.querySelectorAll(`#${containerId} input:checked`)).map(cb => cb.value);
-    const body = {checkin: collect('checkinList'), intendencia: collect('intendenciaList')};
+    const collect = (containerId, role) => {
+        const checked = Array.from(document.querySelectorAll(`#${containerId} input:checked`)).map(cb => cb.value);
+        const added = addedOperators.filter(o => o.staffRole === role).map(o => o.user_id);
+        return [...new Set([...checked, ...added])];
+    };
+    const body = {checkin: collect('checkinList', 'checkin'), intendencia: collect('intendenciaList', 'intendencia')};
     try {
         await fetch(`/api/events/${EVENT_ID}/staff`, {
             method: 'POST',
@@ -184,6 +223,73 @@ async function saveStaffAssignments() {
         });
     } catch (e) {}
 }
+
+// ===== Buscador de operadores =====
+async function searchOperator() {
+    const q = document.getElementById('opSearchInput').value.trim();
+    const box = document.getElementById('opSearchResults');
+    if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; lastSearchItems = []; return; }
+    const token = getToken();
+    try {
+        const res = await fetch('/api/operators/search?q=' + encodeURIComponent(q) + '&limit=10', {headers: {'Authorization': 'Bearer ' + token}});
+        if (!res.ok) { box.classList.add('hidden'); return; }
+        const data = await res.json();
+        lastSearchItems = data.items || [];
+        renderSearchDropdown();
+    } catch (e) { box.classList.add('hidden'); }
+}
+
+function renderSearchDropdown() {
+    const box = document.getElementById('opSearchResults');
+    if (!lastSearchItems.length) {
+        box.innerHTML = '<p class="px-3 py-2 text-xs text-gray-400">Sin resultados</p>';
+        box.classList.remove('hidden');
+        return;
+    }
+    box.innerHTML = lastSearchItems.map(o => {
+        const inCheckin = addedOperators.find(a => a.user_id === o.user_id && a.staffRole === 'checkin');
+        const inIntendencia = addedOperators.find(a => a.user_id === o.user_id && a.staffRole === 'intendencia');
+        const safeName = o.full_name.replace(/'/g, "\\'");
+        return `<div class="border-b last:border-0 px-3 py-2 hover:bg-gray-50">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">${o.full_name}</span>
+                <span class="text-xs text-gray-400">${o.document_number}</span>
+            </div>
+            <div class="flex gap-2 ml-8">
+                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','checkin')" class="text-xs px-2 py-1 rounded ${inCheckin ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 hover:bg-gray-200'}">🟢 Check-in ${inCheckin ? '✓' : ''}</button>
+                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','intendencia')" class="text-xs px-2 py-1 rounded ${inIntendencia ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 hover:bg-gray-200'}">🟠 Intendencia ${inIntendencia ? '✓' : ''}</button>
+            </div>
+        </div>`;
+    }).join('');
+    box.classList.remove('hidden');
+}
+
+function toggleOperator(user_id, full_name, document_number, staffRole) {
+    const existing = addedOperators.find(a => a.user_id === user_id && a.staffRole === staffRole);
+    if (existing) {
+        addedOperators = addedOperators.filter(a => !(a.user_id === user_id && a.staffRole === staffRole));
+    } else {
+        addedOperators.push({user_id, full_name, document_number, staffRole});
+        showToast('Operador agregado a ' + (staffRole === 'checkin' ? 'Check-in' : 'Intendencia'), 'bg-green-500');
+    }
+    renderStaffLists();
+    renderSearchDropdown();
+}
+
+function removeOperator(user_id, role) {
+    addedOperators = addedOperators.filter(o => !(o.user_id === user_id && o.staffRole === role));
+    renderStaffLists();
+}
+
+document.getElementById('opSearchInput').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(searchOperator, 300);
+});
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#opSearchInput') && !e.target.closest('#opSearchResults')) {
+        document.getElementById('opSearchResults').classList.add('hidden');
+    }
+});
 
 async function loadEvent(){
     const token=getToken();
