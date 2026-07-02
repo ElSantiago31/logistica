@@ -163,7 +163,7 @@ async function loadCurrentStaffAssignments() {
                 if (!exists) {
                     addedOperators.push({
                         user_id: s.user_id,
-                        full_name: (s.first_name || '') + ' ' + (s.last_name || ''),
+                        full_name: s.full_name || ((s.first_name || '') + ' ' + (s.last_name || '')),
                         document_number: s.document_number || '',
                         staffRole: s.staff_role
                     });
