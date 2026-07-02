@@ -9,6 +9,7 @@
     <script>tailwind.config={theme:{extend:{colors:{primary:{50:'#fff2e4',100:'#ffebd6',200:'#f8d9b6',300:'#e3be95',400:'#d5aa7b',500:'#cf9b62',600:'#b48450',700:'#976e41',800:'#785631',900:'#5d4224'}}}}}</script>
     <!-- Interceptor global de fetch + refresh automático de token -->
     <script src="/static/js/auth.js"></script>
+    <script src="/static/js/ws.js"></script>
     <style>
         @keyframes highlight-row { 0% { background:#fef9c3; } 100% { background:transparent; } }
         .row-updated { animation: highlight-row 2s ease-out; }
@@ -484,7 +485,31 @@ function _getDeviceId() {
 // --- Polling tiempo real (cada 4s) ---
 function startPolling() {
     if (pollingTimer) clearInterval(pollingTimer);
-    pollingTimer = setInterval(pollCheckinStatus, 4000);
+    pollingTimer = setInterval(pollCheckinStatus, 30000);  // Fallback lento (WS = tiempo real)
+}
+
+// ============================================================
+//  WEBSOCKET — Tiempo real (reemplaza polling cada 4s)
+// ============================================================
+let _wsClient = null;
+function _initRealtime() {
+    if (!window.RealTimeClient) return;
+    _wsClient = new RealTimeClient(EVENT_ID, 'intendencia', {
+        onMessage: (msg) => {
+            if (!msg || !msg.type) return;
+            if (msg.type === 'checkin' || msg.type === 'uniform' || msg.type === 'reassign' || msg.type === 'sync_request') {
+                pollCheckinStatus();
+            }
+        },
+        onStatusChange: (online) => {
+            const badge = document.getElementById('onlineBadge') || document.querySelector('.status-badge');
+            if (badge && badge) {
+                badge.textContent = online ? '⚡ En vivo' : '🔄 Reconectando...';
+            }
+        }
+    });
+    _wsClient.connect();
+    window.addEventListener('beforeunload', () => { if (_wsClient) _wsClient.disconnect(); });
 }
 
 async function pollCheckinStatus() {
@@ -667,8 +692,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (_isOnline) await syncPendingRecords();
     }, 15000);
 
-    // Polling cada 4s para detectar cambios de otros usuarios
+    // Polling cada 30s (fallback) + WebSocket tiempo real
     startPolling();
+    _initRealtime();
 });
 </script>
 </body>

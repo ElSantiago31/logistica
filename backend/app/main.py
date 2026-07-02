@@ -21,6 +21,7 @@ from app.routers import sync as sync_router
 from app.routers import payroll as payroll_router
 from app.routers import reports as reports_router
 from app.routers import coordinator as coordinator_router
+from app.websockets import router as ws_router
 
 
 @asynccontextmanager
@@ -53,6 +54,7 @@ app.include_router(sync_router.router)
 app.include_router(payroll_router.router)
 app.include_router(reports_router.router)
 app.include_router(coordinator_router.router)
+app.include_router(ws_router.router)
 
 # Templates Jinja2
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")

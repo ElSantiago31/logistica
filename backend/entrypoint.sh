@@ -34,4 +34,7 @@ echo "=== Running initial seed ==="
 python -m scripts.seed || echo "Seed skipped (may already exist)"
 
 echo "=== Starting uvicorn ==="
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+# ⚠️ workers=1 es OBLIGATORIO para WebSockets (ConnectionManager en memoria).
+#    Con >1 worker, los mensajes WS se pierden entre procesos.
+#    Para escalar, migrar el manager a Redis pub/sub en el futuro.
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1

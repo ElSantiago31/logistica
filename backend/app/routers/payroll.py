@@ -48,6 +48,7 @@ from app.models.operators import Operator
 from app.models.payroll import Evaluation, PayrollRecord
 from app.models.roles import Role
 from app.models.users import User
+from app.websockets.manager import manager as ws_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/payroll", tags=["Payroll"])
@@ -337,6 +338,21 @@ async def sign_payroll(
         logger.error("Error al firmar nómina: %s", exc)
         raise HTTPException(500, f"Error al guardar firma: {exc}")
 
+    # --- Notificar por WebSocket (firma de nómina) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(assignment.event_id),
+            "payroll_signed",
+            {
+                "assignment_id": str(assignment.id),
+                "operator_id": str(assignment.operator_id),
+                "record_id": str(record.id),
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir payroll_signed: %s", exc)
+
     return {
         "status": "signed",
         "record_id": str(record.id),
@@ -370,6 +386,21 @@ async def toggle_uniform_return(
 
     await db.commit()
     await db.refresh(assignment)
+
+    # --- Notificar por WebSocket (devolución de uniforme) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(assignment.event_id),
+            "uniform_return",
+            {
+                "assignment_id": str(assignment.id),
+                "returned": assignment.uniform_returned_at is not None,
+                "uniform_returned_at": _to_bogota_iso(assignment.uniform_returned_at),
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir uniform_return: %s", exc)
 
     return {
         "assignment_id": str(assignment.id),
@@ -464,6 +495,21 @@ async def pay_payroll(
         await db.rollback()
         logger.error("Error al pagar nómina: %s", exc)
         raise HTTPException(500, f"Error al generar factura: {exc}")
+
+    # --- Notificar por WebSocket (pago de nómina) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(record.event_id),
+            "payroll_paid",
+            {
+                "record_id": str(record.id),
+                "operator_id": str(record.operator_id),
+                "invoice_number": record.invoice_number,
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir payroll_paid: %s", exc)
 
     return {
         "status": "paid",
@@ -604,6 +650,24 @@ async def sync_payroll_offline(
             await db.rollback()
             logger.error("Error sincronizando payroll record #%d: %s — %s", idx, exc, rec)
             failed += 1
+
+    # --- Notificar por WebSocket (batch sync offline de nómina) ---
+    if synced > 0:
+        first_event = _to_uuid(records[0].get("event_id"))
+        if first_event:
+            try:
+                await ws_manager.publish_broadcast(
+                    str(first_event),
+                    "payroll_sync",
+                    {
+                        "synced": synced,
+                        "failed": failed,
+                        "total": len(records),
+                        "by": f"{user.first_name} {user.last_name}",
+                    },
+                )
+            except Exception as exc:
+                logger.warning("[ws] no se pudo emitir payroll_sync: %s", exc)
 
     return {"synced": synced, "failed": failed, "total": len(records)}
 

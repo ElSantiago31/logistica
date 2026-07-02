@@ -5,6 +5,8 @@
 <script src="https://unpkg.com/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <!-- [TOPAZ] Wrapper del pad de firmas Topaz (puente local SigPlus Ext Lite) -->
 <script src="/static/js/topaz-signature.js"></script>
+<!-- [WS] Cliente WebSocket tiempo real (reemplaza polling agresivo) -->
+<script src="/static/js/ws.js"></script>
 <style>
     .pay-row:hover { background: #fff8f0; }
     .status-pill {
@@ -473,7 +475,57 @@ let _pollingInFlight = false;
 let _signMethod = 'topaz';    // 'topaz' (pad físico, DEFAULT) o 'draw' (canvas)
 let _topazPad = null;         // Instancia de TopazSignaturePad
 let _topazSignatureData = null;  // base64 de la firma capturada del pad
-const POLLING_INTERVAL_MS = 4000;
+const POLLING_INTERVAL_MS = 30000;  // Fallback lento (WebSocket = tiempo real)
+
+// ============================================================
+//  WEBSOCKET — Tiempo real (reemplaza polling cada 4s)
+// ============================================================
+let _wsClient = null;
+function _initRealtime() {
+    if (!window.RealTimeClient) return;
+    _wsClient = new RealTimeClient(EVENT_ID, 'payroll', {
+        onMessage: (msg) => {
+            if (!msg || !msg.type) return;
+            // Reaccionar a pagos / firmas / check-ins en tiempo real
+            if (msg.type === 'payroll' || msg.type === 'signature' || msg.type === 'checkin' || msg.type === 'sync_request') {
+                pollPayrollStatus();
+                if (msg.data && msg.data.by) {
+                    _showToast('🔄 Actualizado por ' + msg.data.by, 'info');
+                }
+            }
+        },
+        onStatusChange: (online) => {
+            const badge = document.getElementById('online-badge') || document.querySelector('.status-badge');
+            if (badge) {
+                badge.textContent = online ? '⚡ En vivo' : '🔄 Reconectando...';
+            }
+        }
+    });
+    _wsClient.connect();
+    window.addEventListener('beforeunload', () => { if (_wsClient) _wsClient.disconnect(); });
+}
+
+// Helper toast (si no existe ya en este archivo)
+function _showToast(message, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px;';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6';
+    toast.style.cssText = `background:${bgColor}; color:#fff; padding:12px 18px; border-radius:8px; font-size:0.85rem; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-width:340px;`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.4s, transform 0.4s';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(20px)';
+        setTimeout(() => toast.remove(), 400);
+    }, 4000);
+}
 
 // --- Auth helpers ---
 function getToken() { return localStorage.getItem('access_token'); }
@@ -1307,6 +1359,7 @@ function renderRecentPayments(payments) {
 document.addEventListener('DOMContentLoaded', () => {
     loadPayroll();
     startPolling();
+    _initRealtime();
 });
 </script>
 <!-- ============================================================ -->

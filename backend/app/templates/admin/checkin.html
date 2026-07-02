@@ -4,6 +4,7 @@
 <script src="/static/js/auth.js"></script>
 <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
 <script src="/static/js/scanner.js"></script>
+<script src="/static/js/ws.js"></script>
 <style>
     #scanner-container { width: 100%; max-width: 350px; margin: 0 auto; }
     #scanner-container video { border-radius: 12px; }
@@ -317,12 +318,75 @@ document.addEventListener('DOMContentLoaded', () => {
         if (_isOnline) syncPendingRecords();
     }, 15000);
 
-    // --- Fase 1: Polling tiempo real cada 4s ---
+    // --- Fase 1: Polling fallback cada 30s (WebSocket = tiempo real) ---
     startCheckinPolling();
-    // --- FASE 3/5: Polling de cupos cada 5s ---
+    // --- FASE 3/5: Polling de cupos fallback cada 30s ---
     pollQuotas();
-    setInterval(pollQuotas, 5000);
+    setInterval(pollQuotas, 30000);
+    // --- WebSocket: tiempo real (reemplaza el polling agresivo) ---
+    _initRealtime();
 });
+
+// ============================================================
+//  WEBSOCKET — Tiempo real (reemplaza polling cada 4s/5s)
+// ============================================================
+let _wsClient = null;
+
+function _initRealtime() {
+    if (!window.RealTimeClient) {
+        console.warn('[ws] RealTimeClient no disponible — sigue usando polling');
+        return;
+    }
+    _wsClient = new RealTimeClient(EVENT_ID, 'checkin', {
+        onMessage: _onWsMessage,
+        onStatusChange: _onWsStatus,
+    });
+    _wsClient.connect();
+    // Al salir de la página, cerrar el socket limpio
+    window.addEventListener('beforeunload', () => {
+        if (_wsClient) _wsClient.disconnect();
+    });
+}
+
+function _onWsStatus(online) {
+    const badge = document.getElementById('online-badge');
+    if (badge) {
+        if (online) {
+            badge.textContent = '⚡ En vivo';
+            badge.className = 'status-badge bg-green-100 text-green-700';
+        } else {
+            badge.textContent = '🔄 Reconectando...';
+            badge.className = 'status-badge bg-amber-100 text-amber-700';
+        }
+    }
+}
+
+function _onWsMessage(msg) {
+    if (!msg || !msg.type) return;
+    // Reaccionar a eventos push del servidor
+    switch (msg.type) {
+        case 'checkin':
+        case 'uniform':
+        case 'reassign':
+            // Hubo un check-in / cambio de indumentaria / reasignación:
+            // refrescar estado + cupos en vivo (sin esperar al polling de 30s)
+            pollCheckinStatus();
+            pollQuotas();
+            // Notificación visual sutil
+            if (msg.data && msg.data.by) {
+                _showToast('🔄 Cambio en tiempo real por ' + msg.data.by, 'info');
+            }
+            break;
+        case 'sync_request':
+            // El servidor pide refrescar todo desde la API
+            loadEventData();
+            pollQuotas();
+            break;
+        default:
+            // Otros tipos: ignorar
+            break;
+    }
+}
 
 async function loadEventData() {
     if (navigator.onLine) {
@@ -1177,7 +1241,7 @@ async function syncPendingRecords() {
 // ============================================================
 let _pollingTimer = null;
 let _pollingInFlight = false;
-const POLLING_INTERVAL_MS = 4000;
+const POLLING_INTERVAL_MS = 30000;  // Fallback lento (WebSocket = tiempo real)
 
 // --- Fase 3: device_id persistente por navegador ---
 function _getDeviceId() {

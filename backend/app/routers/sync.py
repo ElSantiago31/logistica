@@ -16,6 +16,7 @@ from app.models.events import Event, EventAssignment, EventStaffNeed, EventCoord
 from app.models.operators import Operator
 from app.models.sync import SyncSession, AttendanceLog
 from app.models.users import User
+from app.websockets.manager import manager as ws_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sync", tags=["Sync"])
@@ -510,12 +511,29 @@ async def sync_attendance(
         # Los datos ya están commiteados vía savepoints, solo falló la metadata
         logger.warning("Attendance synced=%d failed=%d (metadata no guardada)", synced, failed)
 
+    # --- Notificar por WebSocket (batch upload offline) ---
+    await _notify_batch_checkin(session_event_id, synced, failed, len(records), user)
+
     return {
         "synced": synced,
         "failed": failed,
         "total": len(records),
         "sync_session_id": str(sync_session.id) if sync_session else None,
     }
+
+
+async def _notify_batch_checkin(event_id, synced, failed, total, user):
+    """Helper: notifica batch check-in por WebSocket (mejor reusabilidad)."""
+    if synced <= 0:
+        return
+    try:
+        await ws_manager.publish_broadcast(
+            str(event_id), "checkin",
+            {"batch": True, "synced": synced, "failed": failed, "total": total,
+             "by": f"{user.first_name} {user.last_name}"},
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir batch checkin: %s", exc)
 
 
 @router.get("/status")
@@ -717,6 +735,22 @@ async def check_in(
         logger.error("Error en check-in: %s", exc)
         raise HTTPException(500, f"Error al guardar check-in: {exc}")
 
+    # --- Notificar por WebSocket a las vistas en tiempo real ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(event_id),
+            "checkin",
+            {
+                "operator_id": str(operator_id),
+                "assignment_id": str(assignment_id) if assignment_id else None,
+                "status": "checked_in",
+                "method": method,
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir evento checkin: %s", exc)
+
     return {"status": "checked_in", "log_id": str(log.id)}
 
 
@@ -810,6 +844,20 @@ async def reassign_coordinator(
         await db.rollback()
         logger.warning("No se pudo registrar audit log de reasignación: %s", exc)
 
+    # --- Notificar por WebSocket (reasignación de coordinador) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(assignment.event_id),
+            "reassign",
+            {
+                "assignment_id": str(assignment.id),
+                "old_coordinator": old,
+                "new_coordinator": new_coordinator,
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir reassign: %s", exc)
+
     return {
         "status": "reassigned",
         "assignment_id": str(assignment.id),
@@ -865,6 +913,22 @@ async def update_uniform(
 
     # Recargar para reflejar el estado final commiteado
     await db.refresh(assignment)
+
+    # --- Notificar por WebSocket (indumentaria actualizada) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(assignment.event_id),
+            "uniform",
+            {
+                "assignment_id": str(assignment.id),
+                "shirt_number": assignment.shirt_number,
+                "jacket_number": assignment.jacket_number,
+                "cap_number": assignment.cap_number,
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir uniform_update: %s", exc)
 
     return {
         "status": "updated",
