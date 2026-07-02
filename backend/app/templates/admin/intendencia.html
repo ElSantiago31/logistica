@@ -94,7 +94,7 @@ let lastUniformSnapshot = {}; // {assignmentId: 'status|shirt|jacket|cap'} para 
 // --- Auth helpers ---
 const t = localStorage.getItem('access_token');
 const u = JSON.parse(localStorage.getItem('user') || '{}');
-if (!t || !['intendencia', 'superadmin'].includes(u.user_type)) {
+if (!t || !['intendencia', 'superadmin', 'coordinator', 'operator'].includes(u.user_type)) {
     location.href = '/admin/login';
 }
 function authH() {

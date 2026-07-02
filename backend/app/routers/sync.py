@@ -3,6 +3,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
@@ -38,6 +39,68 @@ def _to_uuid(val):
         return None
 
 
+async def _resolve_staff_access(
+    db: AsyncSession,
+    user: User,
+    event_id,
+    allow_checkin: bool = True,
+    allow_intendencia: bool = True,
+):
+    """Valida permisos de staff para un evento.
+
+    Roles base (admin/superadmin/coordinator y, segun flags, checkin/intendencia)
+    siempre tienen acceso. Los operadores deben tener un EventStaffAssignment
+    activo en el evento con el staff_role correspondiente.
+
+    Returns:
+        staff_role (str|None): el staff_role del operador, o None si es rol base.
+    Raises:
+        HTTPException(403) si no tiene permisos.
+    """
+    base_roles = {"admin", "superadmin", "coordinator"}
+    if allow_checkin:
+        base_roles.add("checkin")
+    if allow_intendencia:
+        base_roles.add("intendencia")
+
+    if user.user_type in base_roles:
+        return None
+
+    if user.user_type == "operator" and event_id:
+        from app.models.events import EventStaffAssignment
+        allowed = set()
+        if allow_checkin:
+            allowed.add("checkin")
+        if allow_intendencia:
+            allowed.add("intendencia")
+        result = await db.execute(
+            select(EventStaffAssignment.staff_role).where(
+                EventStaffAssignment.event_id == event_id,
+                EventStaffAssignment.user_id == user.id,
+                EventStaffAssignment.staff_role.in_(allowed),
+                EventStaffAssignment.is_active == True,
+            )
+        )
+        role = result.scalar_one_or_none()
+        if role:
+            return role
+
+    raise HTTPException(403, "Sin permisos")
+
+
+def _can_manage_uniform(user: User, staff_role: Optional[str] = None) -> bool:
+    """Determina si el usuario puede setear indumentaria.
+
+    Pueden: admin, superadmin, coordinator, intendencia (rol base), u operador
+    cuyo staff_role en el evento sea 'intendencia'.
+    """
+    if user.user_type in ("admin", "superadmin", "coordinator", "intendencia"):
+        return True
+    if user.user_type == "operator" and staff_role == "intendencia":
+        return True
+    return False
+
+
 @router.get("/events/{event_id}/offline-data")
 async def get_offline_data(
     event_id: uuid.UUID,
@@ -45,8 +108,7 @@ async def get_offline_data(
     user=Depends(get_current_user),
 ):
     """Download event data for offline PWA use."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
+    await _resolve_staff_access(db, user, event_id)
 
     event = await db.get(Event, event_id)
     if not event:
@@ -328,9 +390,6 @@ async def sync_attendance(
     user=Depends(get_current_user),
 ):
     """Batch upload attendance records from offline PWA."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
-
     records = payload.get("records", [])
     if not records:
         return {"synced": 0, "failed": 0, "total": 0}
@@ -339,8 +398,9 @@ async def sync_attendance(
     if not session_event_id:
         raise HTTPException(400, "event_id inválido o vacío en records[0]")
 
-    # Rol checkin no puede setear indumentaria en sync batch
-    can_set_uniform_batch = user.user_type in ("admin", "superadmin", "coordinator", "intendencia")
+    staff_role = await _resolve_staff_access(db, user, session_event_id)
+    # Rol checkin u operador-checkin no puede setear indumentaria en sync batch
+    can_set_uniform_batch = _can_manage_uniform(user, staff_role)
 
     synced = 0
     failed = 0
@@ -465,7 +525,8 @@ async def sync_status(
     user=Depends(get_current_user),
 ):
     """Get sync status for dashboard."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
+    # Solo roles administrativos ven el historial de sincronización
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia", "operator"):
         raise HTTPException(403, "Sin permisos")
 
     query = select(SyncSession)
@@ -502,8 +563,7 @@ async def get_attendance(
     user=Depends(get_current_user),
 ):
     """Get attendance records for an event."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
+    await _resolve_staff_access(db, user, event_id)
 
     result = await db.execute(
         select(AttendanceLog, Operator, User)
@@ -538,8 +598,7 @@ async def check_in(
     user=Depends(get_current_user),
 ):
     """Single check-in (online) via QR scan or manual."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
+    staff_role = await _resolve_staff_access(db, user, event_id)
 
     operator_id = _to_uuid(payload.get("operator_id"))
     assignment_id = _to_uuid(payload.get("assignment_id"))
@@ -548,7 +607,7 @@ async def check_in(
     # Coordinator que admite al operador (opcional, desde selector UI)
     coordinator = (payload.get("coordinator") or "").strip().upper() or None
     # Optional uniform fields — solo intendencia/admin/coordinator pueden setearlos
-    can_set_uniform = user.user_type in ("admin", "superadmin", "coordinator", "intendencia")
+    can_set_uniform = _can_manage_uniform(user, staff_role)
     shirt_number = payload.get("shirt_number") if can_set_uniform else None
     jacket_number = payload.get("jacket_number") if can_set_uniform else None
     cap_number = payload.get("cap_number") if can_set_uniform else None
@@ -682,8 +741,7 @@ async def get_coordinator_quotas_endpoint(
     Usado por las tarjetas UI de check-in para mostrar el estado de cada
     coordinador en tiempo real.
     """
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
+    await _resolve_staff_access(db, user, event_id)
 
     quotas = await _get_coordinator_quotas(db, event_id)
     return {
@@ -705,9 +763,6 @@ async def reassign_coordinator(
     Permite mover un operador cuando su coordinador original está lleno.
     Solo actualiza admitted_by; el programmed_by se conserva histórico.
     """
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
-
     new_coordinator = (payload.get("new_coordinator") or "").strip().upper()
     if not new_coordinator:
         raise HTTPException(400, "new_coordinator requerido")
@@ -715,6 +770,9 @@ async def reassign_coordinator(
     assignment = await db.get(EventAssignment, assignment_id)
     if not assignment:
         raise HTTPException(404, "Asignación no encontrada")
+
+    # Validar permisos de staff para el evento de la asignación
+    await _resolve_staff_access(db, user, assignment.event_id)
 
     # Verificar cupo del nuevo coordinador
     ok, msg, info = await _check_coordinator_quota(db, assignment.event_id, new_coordinator)
@@ -769,12 +827,15 @@ async def update_uniform(
     user=Depends(get_current_user),
 ):
     """Edita la indumentaria asignada a un operador (incluso después del check-in)."""
-    if user.user_type not in ("admin", "superadmin", "coordinator", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
-
     assignment = await db.get(EventAssignment, assignment_id)
     if not assignment:
         raise HTTPException(404, "Asignación no encontrada")
+
+    staff_role = await _resolve_staff_access(
+        db, user, assignment.event_id, allow_checkin=False, allow_intendencia=True
+    )
+    if not _can_manage_uniform(user, staff_role):
+        raise HTTPException(403, "Sin permisos para editar indumentaria")
 
     shirt_number = payload.get("shirt_number") if "shirt_number" in payload else assignment.shirt_number
     jacket_number = payload.get("jacket_number") if "jacket_number" in payload else assignment.jacket_number
@@ -895,8 +956,7 @@ async def get_checkin_status(
       - active_viewers: cuántas personas están viendo el check-in ahora
       - recent_activity: últimos ingresos registrados (en cualquier dispositivo)
     """
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia"):
-        raise HTTPException(403, "Sin permisos")
+    await _resolve_staff_access(db, user, event_id)
 
     # --- Fase 3: registrar presencia ---
     viewer_name = f"{user.first_name} {user.last_name}" if getattr(user, "first_name", None) else (user.email or "Usuario")
