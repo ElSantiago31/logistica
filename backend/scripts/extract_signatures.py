@@ -72,15 +72,17 @@ async def main() -> int:
 
     query = text(
         """
-        SELECT o.document_number,
-               o.full_name,
+        SELECT u.document_number,
+               u.first_name,
+               u.last_name,
                pr.signature_data
         FROM payroll_records pr
         JOIN operators o ON o.id = pr.operator_id
+        JOIN users u ON u.id = o.user_id
         WHERE pr.event_id = :event_id
           AND pr.signature_data IS NOT NULL
           AND pr.signature_data <> ''
-        ORDER BY o.document_number
+        ORDER BY u.document_number
         """
     )
 
@@ -95,7 +97,8 @@ async def main() -> int:
     logger.info("Filas con signature_data no vacío: %d", len(rows))
 
     for row in rows:
-        doc_raw, full_name, signature_data = row
+        doc_raw, first_name, last_name, signature_data = row
+        full_name = f"{first_name or ''} {last_name or ''}".strip()
         cedula = _normalize_cedula(doc_raw)
         if not cedula:
             skipped += 1
