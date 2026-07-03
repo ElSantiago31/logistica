@@ -54,11 +54,15 @@ def _normalize_cedula(raw) -> str:
 
 
 def _load_signatures(firmas_dir: Path) -> dict[str, Path]:
-    """Carga {cedula: ruta_png} de la carpeta de firmas."""
+    """Carga {cedula: ruta_png} de la carpeta de firmas.
+
+    Busca recursivamente (rglob) para tolerar carpetas anidadas tipo
+    ``firmas_evento/firmas_evento/*.png`` (común al copiar con scp/docker cp).
+    """
     mapping: dict[str, Path] = {}
     if not firmas_dir.exists():
         return mapping
-    for png in firmas_dir.glob("*.png"):
+    for png in firmas_dir.rglob("*.png"):
         ced = _normalize_cedula(png.stem)
         if ced:
             mapping[ced] = png
