@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
+from sqlalchemy.orm import load_only
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Zona horaria Bogotá (UTC-5, Colombia no usa horario de verano)
@@ -194,9 +195,21 @@ async def get_payable_operators(
         rate_by_role[str(need.role_id)] = need.rate_per_shift or 0.0
 
     # Mapa de registros de pago existentes
+    # [OPTIMIZACIÓN] load_only: NUNCA cargar signature_data (blob ~50KB) en la
+    # carga inicial de nómina. Solo necesitamos status, id, invoice_number y un
+    # booleano de si hay firma. Con 800 operadores esto evita transferir ~40MB.
     rec_result = await db.execute(
-        select(PayrollRecord).where(PayrollRecord.event_id == event_id)
+        select(PayrollRecord)
+        .options(load_only(
+            PayrollRecord.id,
+            PayrollRecord.operator_id,
+            PayrollRecord.assignment_id,
+            PayrollRecord.status,
+            PayrollRecord.invoice_number,
+        ))
+        .where(PayrollRecord.event_id == event_id)
     )
+    # has_signature se infiere de status (signed/paid implica firma presente)
     records_by_op: dict[str, PayrollRecord] = {
         str(r.operator_id): r for r in rec_result.scalars().all()
     }
@@ -233,7 +246,7 @@ async def get_payable_operators(
             "payroll_status": record.status if record else "pending",
             "payroll_record_id": str(record.id) if record else None,
             "invoice_number": record.invoice_number if record else None,
-            "has_signature": bool(record and record.signature_data),
+            "has_signature": bool(record and record.status in ("signed", "paid")),
             "coordinator_name": coord_name,  # [NÓMINA-V2]
             # Uniformes asignados por intendencia
             "shirt_number": assignment.shirt_number or None,
@@ -777,10 +790,21 @@ async def get_payroll_status(
     active_count, viewers = _get_active_payroll_viewers(str(event_id))
 
     # --- Estado de pago por asignación ---
+    # [OPTIMIZACIÓN] Solo columnas ligeras: NUNCA cargar signature_data (blob ~50KB)
+    # en el polling. La BD evalúa "IS NOT NULL" y devuelve solo un booleano.
+    # Con 800 operadores esto baja el payload de ~40MB a unos pocos KB por polling.
     result = await db.execute(
-        select(PayrollRecord).where(PayrollRecord.event_id == event_id)
+        select(
+            PayrollRecord.id,
+            PayrollRecord.assignment_id,
+            PayrollRecord.operator_id,
+            PayrollRecord.status,
+            PayrollRecord.signature_data.is_not(None).label("has_signature"),
+            PayrollRecord.invoice_number,
+            PayrollRecord.payment_amount,
+        ).where(PayrollRecord.event_id == event_id)
     )
-    records = result.scalars().all()
+    records = result.all()
 
     # --- Pagos recientes (cualquier dispositivo) ---
     recent_payments = []
@@ -818,7 +842,7 @@ async def get_payroll_status(
                 "operator_id": str(r.operator_id),
                 "record_id": str(r.id),
                 "status": r.status,
-                "has_signature": bool(r.signature_data),
+                "has_signature": bool(r.has_signature),
                 "invoice_number": r.invoice_number,
                 "payment_amount": float(r.payment_amount),
             }
@@ -837,19 +861,51 @@ async def get_payroll_status(
 # por cada coordinador, paginada a 20 operadores por hoja.
 # Solo se incluyen operadores con status='checked_in'.
 
+# Valores válidos para los modos de generación de planilla
+_PLANILLA_GROUP_BY = {"coordinator", "none"}
+_PLANILLA_SORT_BY = {"lastname", "document"}
+
+
 @router.get("/events/{event_id}/planilla-coordinador")
 async def download_planilla_coordinador(
     event_id: uuid.UUID,
+    group_by: str = "coordinator",
+    sort_by: str = "lastname",
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Descarga la planilla de pago en Excel (.xlsx), una hoja por coordinador.
+    """Descarga la planilla de pago en Excel (.xlsx).
 
-    Solo incluye operadores con ``status='checked_in'``. Si un coordinador
-    tiene más de 20 operadores, se generan hojas adicionales paginadas.
+    Modos (combinables):
+
+    - ``group_by``:
+        - ``"coordinator"`` (default): una hoja por coordinador.
+        - ``"none"``: lista única (no agrupar), hojas tituladas con el evento.
+    - ``sort_by``:
+        - ``"lastname"`` (default): ordenado por apellido.
+        - ``"document"``: ordenado por número de cédula.
+
+    Solo incluye operadores con ``status='checked_in'``. Si una hoja tiene
+    más de 20 operadores, se generan hojas adicionales paginadas.
 
     Requiere permisos admin/superadmin/coordinator.
     """
+    # Validar parámetros (defensa en profundidad)
+    group_by = (group_by or "coordinator").strip().lower()
+    sort_by = (sort_by or "lastname").strip().lower()
+    if group_by not in _PLANILLA_GROUP_BY:
+        raise HTTPException(
+            400,
+            f"group_by inválido '{group_by}'. Valores válidos: "
+            f"{sorted(_PLANILLA_GROUP_BY)}",
+        )
+    if sort_by not in _PLANILLA_SORT_BY:
+        raise HTTPException(
+            400,
+            f"sort_by inválido '{sort_by}'. Valores válidos: "
+            f"{sorted(_PLANILLA_SORT_BY)}",
+        )
+
     if user.user_type not in _PERMITTED:
         raise HTTPException(403, "Sin permisos")
 
@@ -873,8 +929,8 @@ async def download_planilla_coordinador(
     # Mapear áreas a coordinadores del evento
     area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
 
-    # Agrupar operadores por coordinador
-    operators_by_coordinator: dict[str, list[dict]] = {}
+    # Construir lista plana de operadores (con su coordinator_name)
+    operators: list[dict] = []
     for assignment, operator, op_user, role in rows:
         # Determinar coordinador: quien lo programó (programmed_by) tiene
         # prioridad. Fallback: admitted_by → mapping por área → "Sin asignar".
@@ -884,7 +940,7 @@ async def download_planilla_coordinador(
             if role and role.area and role.area in area_to_coord:
                 coord_name = area_to_coord[role.area][0]
 
-        operators_by_coordinator.setdefault(coord_name, []).append({
+        operators.append({
             "full_name": f"{op_user.first_name} {op_user.last_name}",
             "document_number": op_user.document_number or "",
             "address": operator.address or "",
@@ -902,7 +958,9 @@ async def download_planilla_coordinador(
             event_name=event.name,
             event_date=event.start_date,
             event_location=event.location,
-            operators_by_coordinator=operators_by_coordinator,
+            operators=operators,
+            group_by=group_by,
+            sort_by=sort_by,
         )
     except FileNotFoundError as exc:
         logger.error("Plantilla no encontrada: %s", exc)
@@ -913,7 +971,13 @@ async def download_planilla_coordinador(
 
     # Sanitizar nombre del evento para el filename
     safe_name = _sanitize_event_name(event.name)
-    filename = f"Planilla_{safe_name}.xlsx"
+    # Sufijo del filename según el modo (para distinguir descargas)
+    mode_suffix = ""
+    if group_by == "none":
+        mode_suffix = f"_por{'Cedula' if sort_by == 'document' else 'Apellido'}"
+    elif sort_by == "document":
+        mode_suffix = "_porCedula"
+    filename = f"Planilla_{safe_name}{mode_suffix}.xlsx"
 
     return StreamingResponse(
         iter([xlsx_bytes]),

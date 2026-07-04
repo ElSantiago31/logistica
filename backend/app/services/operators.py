@@ -44,6 +44,7 @@ async def get_operators(
     is_active: bool = True,
     search: Optional[str] = None,
     experience_role_id: Optional[str] = None,
+    role_level: Optional[str] = None,
     city: Optional[str] = None,
     education_level: Optional[str] = None,
     exclude_event_id: Optional[str] = None,
@@ -52,6 +53,9 @@ async def get_operators(
     city: filter by operator city (accent-insensitive partial match).
     education_level: filter operators with education >= this level.
     exclude_event_id: exclude operators already assigned to this event.
+    role_level: filter by role hierarchy level(s), comma-separated (e.g. "1,2").
+        Matches operators whose experience_roles contains ANY role whose
+        hierarchy_level is in the provided set.
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import or_, func as sa_func
@@ -99,8 +103,24 @@ async def get_operators(
         query = query.where(search_filter)
         count_query = count_query.where(search_filter)
 
+    # Pre-resolve role_level filter into a set of experience_role_ids.
+    # experience_roles is a JSON string of role UUIDs, so we translate
+    # hierarchy levels -> role IDs and reuse the contains() pattern.
+    role_level_ids: list = []
+    if role_level:
+        try:
+            levels = [int(x.strip()) for x in role_level.split(",") if x.strip().isdigit()]
+        except ValueError:
+            levels = []
+        if levels:
+            from app.models.roles import Role
+            roles_r = await db.execute(
+                select(Role.id).where(Role.hierarchy_level.in_(levels))
+            )
+            role_level_ids = [str(r) for r in roles_r.scalars().all()]
+
     # Filter by experience role (JSON field contains role ID)
-    need_operator_join = experience_role_id or city or education_level
+    need_operator_join = bool(experience_role_id or city or education_level or role_level_ids)
     if need_operator_join:
         query = query.join(Operator, Operator.user_id == User.id)
         count_query = count_query.join(Operator, Operator.user_id == User.id)
@@ -109,6 +129,13 @@ async def get_operators(
             exp_filter = Operator.experience_roles.contains(experience_role_id)
             query = query.where(exp_filter)
             count_query = count_query.where(exp_filter)
+
+        # role_level -> any of the resolved role IDs (OR of contains)
+        if role_level_ids:
+            rl_filters = [Operator.experience_roles.contains(rid) for rid in role_level_ids]
+            rl_combined = or_(*rl_filters)
+            query = query.where(rl_combined)
+            count_query = count_query.where(rl_combined)
 
         # Filter by city (accent-insensitive, case-insensitive match)
         # PostgreSQL ILIKE is already case-insensitive for ASCII; we normalize

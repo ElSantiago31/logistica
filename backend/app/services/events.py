@@ -11,7 +11,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.events import Event, EventStaffNeed, EventAssignment, EventAuditLog
+from app.models.events import Event, EventStaffNeed, EventAssignment, EventAuditLog, EventCoordinatorQuota
 from app.models.operators import Operator
 from app.models.roles import Role
 from app.models.users import User
@@ -32,6 +32,91 @@ async def _add_audit_log(db: AsyncSession, event_id: uuid.UUID, user_id: uuid.UU
         user_name=user_name,
     )
     db.add(log)
+
+
+async def _resolve_coordinator(db: AsyncSession, any_id: uuid.UUID) -> Optional[Operator]:
+    """Resuelve un operador-coordinador a partir de un ID que puede ser
+    `operators.id` o `users.id` (user_id). Devuelve el objeto Operator o None.
+
+    El frontend históricamente envía el user_id (lo que devuelve /api/operators
+    como `id`), mientras que las FKs apuntan a operators.id. Esta función
+    tolera ambos para evitar ForeignKeyViolationError.
+    """
+    result = await db.execute(
+        select(Operator).where(
+            (Operator.id == any_id) | (Operator.user_id == any_id)
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _resolve_coordinator_name(db: AsyncSession, any_id: uuid.UUID) -> Optional[str]:
+    """Resuelve el nombre en MAYÚSCULAS del operador-coordinador.
+
+    Acepta `operator_id` (operators.id) o `user_id` (users.id).
+    """
+    operator = await _resolve_coordinator(db, any_id)
+    if not operator:
+        return None
+    u_result = await db.execute(select(User).where(User.id == operator.user_id))
+    user = u_result.scalar_one_or_none()
+    if not user:
+        return None
+    return f"{user.first_name} {user.last_name}".upper()
+
+
+async def _save_coordinator_quotas(
+    db: AsyncSession, event_id: uuid.UUID, quotas_data: list,
+) -> List[dict]:
+    """Reemplaza las quotas de coordinadores de un evento (delete + insert).
+
+    `quotas_data` es una lista de dicts: [{operator_id, quota}, ...].
+    Devuelve un resumen para el audit log.
+    """
+    # Borrar quotas existentes del evento.
+    existing = await db.execute(
+        select(EventCoordinatorQuota).where(EventCoordinatorQuota.event_id == event_id)
+    )
+    for q in existing.scalars().all():
+        await db.delete(q)
+    await db.flush()
+
+    summary = []
+    for q in quotas_data:
+        operator_id = q.get("operator_id") if isinstance(q, dict) else q.operator_id
+        quota = q.get("quota") if isinstance(q, dict) else q.quota
+        # Resolver al objeto Operator (acepta user_id u operator_id).
+        operator = await _resolve_coordinator(db, operator_id)
+        if not operator:
+            continue  # operador inválido, se omite
+        u_result = await db.execute(select(User).where(User.id == operator.user_id))
+        user = u_result.scalar_one_or_none()
+        name = f"{user.first_name} {user.last_name}".upper() if user else None
+        if not name:
+            continue
+        ecq = EventCoordinatorQuota(
+            event_id=event_id,
+            coordinator_operator_id=operator.id,  # FK siempre a operators.id
+            coordinator=name,
+            quota=int(quota),
+        )
+        db.add(ecq)
+        summary.append({"operator_id": str(operator.id), "coordinator": name, "quota": int(quota)})
+    return summary
+
+
+async def _count_used_by_coordinator(
+    db: AsyncSession, event_id: uuid.UUID, operator_id: uuid.UUID,
+) -> int:
+    """Cuenta cuántos operadores admitió este coordinador en el evento."""
+    result = await db.execute(
+        select(func.count()).select_from(EventAssignment)
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.admitted_by_operator_id == operator_id,
+        )
+    )
+    return int(result.scalar() or 0)
 
 
 async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) -> Event:
@@ -66,10 +151,16 @@ async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) 
         db.add(sn)
         staff_summary.append({"role_id": str(need.role_id), "qty": need.quantity_needed, "education_level": need.education_level})
 
+    # Coordinator quotas (nuevo flujo)
+    quota_summary = []
+    if data.coordinator_quotas:
+        quota_summary = await _save_coordinator_quotas(db, event.id, data.coordinator_quotas)
+
     # Audit log
     await _add_audit_log(db, event.id, user_id, "created", {
         "name": data.name, "location": data.location, "city": data.city,
         "staff_needs": staff_summary,
+        "coordinator_quotas": quota_summary,
     })
 
     await db.commit()
@@ -96,8 +187,9 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
 
     update_data = data.model_dump(exclude_unset=True)
 
-    # Handle staff_needs separately
+    # Handle staff_needs and coordinator_quotas separately
     staff_needs_data = update_data.pop('staff_needs', None)
+    coordinator_quotas_data = update_data.pop('coordinator_quotas', None)
 
     # Track changed fields (normalize datetimes to avoid false positives)
     changed_fields = {}
@@ -173,6 +265,20 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
             })
 
         changed_fields["staff_needs"] = {"antes": old_staff, "despues": new_staff}
+
+    # Update coordinator quotas if provided (nuevo flujo)
+    if coordinator_quotas_data is not None:
+        old_quotas_r = await db.execute(
+            select(EventCoordinatorQuota).where(EventCoordinatorQuota.event_id == event_id)
+        )
+        old_quotas = []
+        for q in old_quotas_r.scalars().all():
+            name = await _resolve_coordinator_name(db, q.coordinator_operator_id) if q.coordinator_operator_id else q.coordinator
+            old_quotas.append({"coordinator": name or q.coordinator, "quota": q.quota})
+        new_quotas = await _save_coordinator_quotas(db, event_id, coordinator_quotas_data)
+        changed_fields["coordinator_quotas"] = {"antes": old_quotas, "despues": new_quotas}
+        if action == "updated" and not changed_fields.get("staff_needs"):
+            action = "staff_updated"
 
     # Audit log
     if user_id and changed_fields:
@@ -252,6 +358,26 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
             "education_level": sn.education_level,
         })
 
+    # Coordinator quotas con conteo used/available (nuevo flujo).
+    coord_quotas_r = await db.execute(
+        select(EventCoordinatorQuota).where(EventCoordinatorQuota.event_id == event_id)
+    )
+    coordinator_quotas = []
+    for q in coord_quotas_r.scalars().all():
+        used = 0
+        if q.coordinator_operator_id:
+            used = await _count_used_by_coordinator(db, event_id, q.coordinator_operator_id)
+        available = (q.quota - used) if q.coordinator_operator_id else None
+        coordinator_quotas.append({
+            "id": q.id,
+            "event_id": event_id,
+            "coordinator_operator_id": q.coordinator_operator_id,
+            "coordinator": q.coordinator,
+            "quota": q.quota,
+            "used": used,
+            "available": available,
+        })
+
     return {
         "id": event.id,
         "name": event.name,
@@ -269,6 +395,7 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
         "client_phone": event.client_phone,
         "notes": event.notes,
         "staff_needs": staff_needs,
+        "coordinator_quotas": coordinator_quotas,
         "total_staff_needed": total_needed,
         "total_confirmed": total_confirmed,
         "created_at": event.created_at,
@@ -339,9 +466,24 @@ async def list_events(
 async def assign_operators(
     db: AsyncSession, event_id: uuid.UUID, operator_ids: List[uuid.UUID],
     role_id: Optional[uuid.UUID] = None, rate: Optional[float] = None,
+    programmed_by_operator_id: Optional[uuid.UUID] = None,
 ) -> List[EventAssignment]:
     """Assign operators to an event. operator_ids can be user_ids or operator_ids.
-    If no rate is provided, uses the rate_per_shift from EventStaffNeed for the role."""
+    If no rate is provided, uses the rate_per_shift from EventStaffNeed for the role.
+
+    programmed_by_operator_id (nuevo flujo): operador-coordinador que
+    programa/admite a estos operadores. Si se provee, se estampan las FKs
+    programmed_by_operator_id / admitted_by_operator_id y los strings
+    programmed_by / admitted_by (nombre en MAYÚSCULAS del coordinador).
+    El cupo es informativo: nunca bloquea la asignación.
+    """
+    # Resolver coordinador (si vino el nuevo flujo): objeto Operator + nombre.
+    coord_operator: Optional[Operator] = None
+    coord_name: Optional[str] = None
+    if programmed_by_operator_id:
+        coord_operator = await _resolve_coordinator(db, programmed_by_operator_id)
+        if coord_operator:
+            coord_name = await _resolve_coordinator_name(db, programmed_by_operator_id)
     # Auto-fill rate from EventStaffNeed if not provided
     if not rate and role_id:
         sn_result = await db.execute(
@@ -406,7 +548,7 @@ async def assign_operators(
                 "conflict_event_id": str(overlap.event_id),
             })
             continue
-        assignment = EventAssignment(
+        assignment_kwargs = dict(
             event_id=event_id,
             operator_id=operator.id,
             role_id=role_id,
@@ -414,6 +556,14 @@ async def assign_operators(
             invited_at=datetime.now(timezone.utc),
             rate_applied=rate,
         )
+        # Estampar coordinador (nuevo flujo) si se proveyó y resolvió.
+        if coord_operator:
+            assignment_kwargs["programmed_by_operator_id"] = coord_operator.id
+            assignment_kwargs["admitted_by_operator_id"] = coord_operator.id
+            if coord_name:
+                assignment_kwargs["programmed_by"] = coord_name
+                assignment_kwargs["admitted_by"] = coord_name
+        assignment = EventAssignment(**assignment_kwargs)
         db.add(assignment)
         assignments.append(assignment)
 
@@ -462,6 +612,61 @@ async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
             "cap_number": a.cap_number,
         })
     return items
+
+
+async def list_available_operators(
+    db: AsyncSession, event_id: uuid.UUID
+) -> List[dict]:
+    """Lista operadores disponibles para asignar a un evento.
+
+    - Excluye los ya asignados al evento.
+    - Marca los que tienen solapamiento con otro evento en las mismas fechas.
+    """
+    current_event = await db.get(Event, event_id)
+    if not current_event:
+        return []
+
+    # Operadores ya asignados a este evento (para excluirlos).
+    assigned_r = await db.execute(
+        select(EventAssignment.operator_id).where(EventAssignment.event_id == event_id)
+    )
+    assigned_ids = {row[0] for row in assigned_r.all()}
+
+    # Todos los operadores activos.
+    result = await db.execute(
+        select(Operator, User)
+        .join(User, User.id == Operator.user_id)
+        .where(Operator.is_active == True)
+        .order_by(User.first_name, User.last_name)
+    )
+
+    out = []
+    for op, u in result.all():
+        if op.id in assigned_ids:
+            continue
+        # Verificar solapamiento con otros eventos.
+        overlap_r = await db.execute(
+            select(EventAssignment)
+            .join(Event, EventAssignment.event_id == Event.id)
+            .where(
+                EventAssignment.operator_id == op.id,
+                EventAssignment.status.in_(["invited", "confirmed", "checked_in", "standby"]),
+                Event.status.in_(["draft", "published", "in_progress"]),
+                Event.start_date < current_event.end_date,
+                Event.end_date > current_event.start_date,
+            )
+        )
+        overlap = overlap_r.scalars().first()
+        out.append({
+            "operator_id": str(op.id),
+            "user_id": str(op.user_id),
+            "name": f"{u.first_name} {u.last_name}",
+            "document_number": u.document_number,
+            "phone": u.phone,
+            "available": overlap is None,
+            "conflict_event_id": str(overlap.event_id) if overlap else None,
+        })
+    return out
 
 
 async def delete_event(db: AsyncSession, event_id: uuid.UUID) -> bool:

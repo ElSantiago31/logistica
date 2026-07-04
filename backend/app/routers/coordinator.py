@@ -9,17 +9,18 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
-from app.models.events import Event, EventAssignment
+from app.models.events import Event, EventAssignment, EventCoordinatorQuota
 from app.models.operators import Operator
 from app.models.payroll import Evaluation
 from app.models.roles import Role
 from app.models.users import User
+from app.services import events as event_svc
 
 router = APIRouter(prefix="/api/coordinator", tags=["Coordinator Evaluation"])
 
@@ -312,3 +313,214 @@ async def get_my_evaluations(
         ],
         "total": len(rows),
     }
+
+
+# ============================================================
+# GESTIÓN DE CUPOS — nuevo flujo
+# ============================================================
+
+async def _get_my_operator(db: AsyncSession, user: User) -> Operator | None:
+    """Obtiene el perfil Operator del usuario actual."""
+    result = await db.execute(select(Operator).where(Operator.user_id == user.id))
+    return result.scalar_one_or_none()
+
+
+@router.get("/my-quotas")
+async def my_quotas(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Lista los eventos donde el coordinador actual tiene un cupo asignado,
+    con conteo de usados/disponibles."""
+    operator = await _get_my_operator(db, user)
+    if not operator:
+        return {"quotas": []}
+
+    result = await db.execute(
+        select(EventCoordinatorQuota, Event)
+        .join(Event, EventCoordinatorQuota.event_id == Event.id)
+        .where(
+            EventCoordinatorQuota.coordinator_operator_id == operator.id,
+            Event.is_active == True,
+        )
+        .order_by(Event.start_date.desc())
+    )
+    rows = result.all()
+
+    out = []
+    for quota, ev in rows:
+        used = await event_svc._count_used_by_coordinator(db, ev.id, operator.id)
+        out.append({
+            "id": str(quota.id),
+            "event_id": str(ev.id),
+            "event_name": ev.name,
+            "event_start": ev.start_date.isoformat() if ev.start_date else None,
+            "event_status": ev.status,
+            "quota": quota.quota,
+            "used": used,
+            "available": (quota.quota - used) if quota.quota is not None else None,
+        })
+    return {"quotas": out}
+
+
+@router.get("/events/{event_id}/my-quota")
+async def my_quota_for_event(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Cupo del coordinador actual para un evento específico + lista de operadores admitidos."""
+    operator = await _get_my_operator(db, user)
+    if not operator:
+        raise HTTPException(404, "No tienes perfil de operador")
+
+    quota_r = await db.execute(
+        select(EventCoordinatorQuota).where(
+            EventCoordinatorQuota.event_id == event_id,
+            EventCoordinatorQuota.coordinator_operator_id == operator.id,
+        )
+    )
+    quota = quota_r.scalar_one_or_none()
+    if not quota:
+        raise HTTPException(404, "No tienes cupo asignado en este evento")
+
+    used = await event_svc._count_used_by_coordinator(db, event_id, operator.id)
+
+    # Operadores que este coordinador admitió en este evento.
+    ops_r = await db.execute(
+        select(EventAssignment, Operator, User, Role)
+        .join(Operator, EventAssignment.operator_id == Operator.id)
+        .join(User, User.id == Operator.user_id)
+        .outerjoin(Role, Role.id == EventAssignment.role_id)
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.admitted_by_operator_id == operator.id,
+        )
+        .order_by(EventAssignment.invited_at.desc())
+    )
+    admitted = []
+    for a, op, u, role in ops_r.all():
+        admitted.append({
+            "assignment_id": str(a.id),
+            "operator_id": str(op.id),
+            "name": f"{u.first_name} {u.last_name}",
+            "document_number": u.document_number,
+            "phone": u.phone,
+            "role_name": role.name if role else None,
+            "status": a.status,
+        })
+
+    return {
+        "event_id": str(event_id),
+        "coordinator": quota.coordinator,
+        "quota": quota.quota,
+        "used": used,
+        "available": (quota.quota - used) if quota.quota is not None else None,
+        "admitted_operators": admitted,
+    }
+
+
+@router.post("/events/{event_id}/admit")
+async def admit_operators(
+    event_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admite (asigna) operadores bajo el cupo del coordinador actual.
+
+    Body: {"operator_ids": [uuid, ...], "role_id": uuid (opcional)}
+    El cupo es informativo: no bloquea la asignación.
+    """
+    operator = await _get_my_operator(db, user)
+    if not operator:
+        raise HTTPException(403, "No tienes perfil de operador")
+
+    # Validar que el coordinador tenga cupo en este evento.
+    quota_r = await db.execute(
+        select(EventCoordinatorQuota).where(
+            EventCoordinatorQuota.event_id == event_id,
+            EventCoordinatorQuota.coordinator_operator_id == operator.id,
+        )
+    )
+    if not quota_r.scalar_one_or_none():
+        raise HTTPException(403, "No tienes cupo asignado en este evento")
+
+    # Validar IDs: filtrar valores inválidos (ej. "undefined" del frontend)
+    # en lugar de lanzar un 500 genérico por ValueError.
+    raw_ids = payload.get("operator_ids", []) or []
+    operator_ids = []
+    invalid_ids = []
+    for x in raw_ids:
+        try:
+            operator_ids.append(uuid.UUID(str(x)))
+        except (ValueError, AttributeError, TypeError):
+            invalid_ids.append(str(x))
+    if not operator_ids:
+        raise HTTPException(
+            422,
+            "No se enviaron IDs de operador válidos"
+            + (f" (inválidos: {invalid_ids})" if invalid_ids else ""),
+        )
+    role_id = None
+    if payload.get("role_id"):
+        try:
+            role_id = uuid.UUID(str(payload["role_id"]))
+        except (ValueError, AttributeError, TypeError):
+            role_id = None
+
+    assignments, unavailable = await event_svc.assign_operators(
+        db, event_id, operator_ids, role_id,
+        programmed_by_operator_id=operator.id,
+    )
+
+    all_assignments = await event_svc.get_assignments(db, event_id)
+    return {
+        "assignments": all_assignments,
+        "unavailable": unavailable,
+        "admitted_by": str(operator.id),
+    }
+
+
+@router.get("/events/{event_id}/available-operators")
+async def available_operators_for_quota(
+    event_id: uuid.UUID,
+    search: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Lista operadores disponibles para asignar bajo el cupo del coordinador.
+
+    Excluye los ya asignados al evento y aplica el filtro de solapamiento.
+    Soporta búsqueda opcional por nombre/documento (query param `search`).
+    """
+    operator = await _get_my_operator(db, user)
+    if not operator:
+        raise HTTPException(403, "No tienes perfil de operador")
+
+    # Validar cupo
+    quota_r = await db.execute(
+        select(EventCoordinatorQuota).where(
+            EventCoordinatorQuota.event_id == event_id,
+            EventCoordinatorQuota.coordinator_operator_id == operator.id,
+        )
+    )
+    if not quota_r.scalar_one_or_none():
+        raise HTTPException(403, "No tienes cupo asignado en este evento")
+
+    operators = await event_svc.list_available_operators(db, event_id)
+
+    # Filtro de búsqueda server-side (nombre/documento/teléfono) si se provee.
+    # list_available_operators devuelve los campos: name, document_number, phone.
+    if search and len(search) >= 2:
+        q = search.lower().strip()
+        operators = [
+            o for o in operators
+            if q in (
+                ((o.get("name") or "")
+                 + " " + (o.get("document_number") or "")
+                 + " " + (o.get("phone") or "")).lower()
+            )
+        ]
+
+    return {"operators": operators}

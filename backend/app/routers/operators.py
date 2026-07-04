@@ -262,6 +262,45 @@ async def search_operators_for_staff(
     }
 
 
+@router.get("/coordinators")
+async def list_coordinators(
+    current_user: User = Depends(require_admin_or_coordinator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista coordinadores y operadores aptos para recibir cupos de coordinación.
+
+    Devuelve campos normalizados para el selector de cupos en crear/editar evento:
+    operator_id, user_id, full_name, document_number, phone, user_type.
+
+    Incluye cualquier usuario con perfil de operador (coordinator u operator),
+    ya que los cupos (EventCoordinatorQuota) referencian operators.id.
+    Prioriza coordinadores primero, luego operadores, ordenados alfabéticamente.
+    """
+    result = await db.execute(
+        select(Operator, User)
+        .join(User, User.id == Operator.user_id)
+        .where(User.is_active == True)
+        .order_by(User.first_name, User.last_name)
+    )
+    rows = result.all()
+    # Ordenar: coordinadores primero, luego operadores
+    rows.sort(key=lambda r: (0 if r[1].user_type == "coordinator" else 1, r[1].first_name))
+    return {
+        "items": [
+            {
+                "operator_id": str(op.id),
+                "user_id": str(u.id),
+                "full_name": f"{u.first_name} {u.last_name}",
+                "document_number": u.document_number,
+                "phone": u.phone,
+                "user_type": u.user_type,
+            }
+            for op, u in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @router.get("/", response_model=OperatorListResponse)
 async def list_operators(
     skip: int = Query(0, ge=0),
@@ -270,6 +309,7 @@ async def list_operators(
     is_active: bool = Query(True),
     search: Optional[str] = Query(None, min_length=1),
     experience_role_id: Optional[str] = Query(None),
+    role_level: Optional[str] = Query(None, description="Filtrar por nivel(es) jerárquicos de rol (csv, e.g. '1,2')"),
     city: Optional[str] = Query(None, description="Filtrar por ciudad del operador"),
     education_level: Optional[str] = Query(None, description="Filtrar por nivel educativo minimo"),
     exclude_event_id: Optional[str] = Query(None, description="Excluir operadores ya asignados a este evento"),
@@ -280,6 +320,7 @@ async def list_operators(
     operators, total = await get_operators(
         db, skip, limit, is_approved, is_active,
         search=search, experience_role_id=experience_role_id,
+        role_level=role_level,
         city=city, education_level=education_level,
         exclude_event_id=exclude_event_id,
     )
@@ -473,57 +514,3 @@ async def unblock_operator_endpoint(
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador no encontrado")
     return {"message": "Operador desbloqueado exitosamente"}
-
-
-@router.post("/{user_id}/enrollment-photo")
-async def upload_enrollment_photo(
-    user_id: uuid.UUID,
-    photo: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
-):
-    """Upload a profile photo during enrollment (no auth required)."""
-    import os
-    from app.config import settings
-
-    # Verify operator exists
-    result = await db.execute(
-        select(User).where(User.id == user_id, User.user_type == "operator", User.is_active == True)
-    )
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador no encontrado")
-
-    # Ensure operator profile row exists
-    op_result = await db.execute(
-        select(Operator).where(Operator.user_id == user_id)
-    )
-    operator = op_result.scalar_one_or_none()
-    if not operator:
-        operator = Operator(user_id=user_id)
-        db.add(operator)
-        await db.flush()
-
-    # Validate file size (5MB max)
-    photo.file.seek(0, 2)
-    file_size = photo.file.tell()
-    photo.file.seek(0)
-    if file_size > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Archivo muy grande. Max 5MB.")
-
-    if photo.content_type not in ["image/jpeg", "image/png", "image/webp"]:
-        raise HTTPException(status_code=400, detail="Tipo invalido. Solo JPEG, PNG, WEBP.")
-
-    try:
-        contents = await photo.read()
-        # Delete old photo files first (if any)
-        delete_operator_photos(operator.photo_path, operator.photo_thumbnail_path)
-        # Use centralized service — compresses + generates thumbnail
-        photo_url, thumb_url = save_operator_photo_bytes(contents, user_id)
-        operator.photo_path = photo_url
-        operator.photo_thumbnail_path = thumb_url
-        await db.commit()
-        return {"message": "Foto subida correctamente", "photo_path": operator.photo_path}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error procesando imagen: {str(e)}")

@@ -108,12 +108,29 @@ async def assign_operators(
     if not event:
         raise HTTPException(404, "Evento no encontrado")
     assignments, unavailable = await svc.assign_operators(
-        db, event_id, data.operator_ids, data.role_id, data.rate_applied
+        db, event_id, data.operator_ids, data.role_id, data.rate_applied,
+        programmed_by_operator_id=data.programmed_by_operator_id,
     )
     # Return updated assignments + any conflicts
     all_assignments = await svc.get_assignments(db, event_id)
     result = {"assignments": all_assignments, "unavailable": unavailable}
     return result
+
+
+@router.get("/{event_id}/coordinators")
+async def get_event_coordinators(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Lista los coordinadores asignados a un evento con su cupo/ocupado.
+    Devuelve el EventCoordinatorQuota con conteos calculados."""
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    event = await svc.get_event(db, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+    return event.get("coordinator_quotas", [])
 
 
 @router.post("/{event_id}/check-availability")
