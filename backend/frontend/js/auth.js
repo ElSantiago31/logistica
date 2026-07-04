@@ -9,6 +9,12 @@
  *   - Cola anti-bucle: si hay un refresh en curso, las demás
  *     peticiones esperan a que termine (no se lanza más de uno).
  *
+ * Cierre de sesión por inactividad (idle timeout):
+ *   - Tras 15 min sin actividad, se cierra la sesión.
+ *   - Aviso previo a los 13 min con botón "Seguir activo".
+ *   - Sliding session: el refresh proactivo NO renueva si el
+ *     usuario está inactivo, para que los 15 min realmente cierren.
+ *
  * Uso (reemplaza fetch en las páginas):
  *   const res = await Auth.apiFetch('/api/sync/events/.../check-in', {
  *       method: 'POST',
@@ -29,10 +35,29 @@
     const REFRESH_AHEAD_MS = 25 * 60 * 1000;      // refrescar a los 25 min
     const REFRESH_ENDPOINT = '/api/auth/refresh';
 
+    // --- Cierre de sesión por inactividad (idle timeout) ---
+    // 🔴 PRUEBA: 3 minutos. Para producción, descomentar los valores de PRODUCCIÓN
+    // y borrar/comentar los de PRUEBA.
+    // const IDLE_LIMIT_MS = 15 * 60 * 1000;       // PRODUCCIÓN: 15 min
+    // const IDLE_WARNING_MS = 13 * 60 * 1000;     // PRODUCCIÓN: 13 min
+    // const IDLE_CHECK_INTERVAL_MS = 15 * 1000;   // PRODUCCIÓN: 15s
+    const IDLE_LIMIT_MS = 3 * 60 * 1000;           // PRUEBA: 3 min
+    const IDLE_WARNING_MS = 150 * 1000;            // PRUEBA: 2.5 min (aviso 30s antes)
+    const IDLE_CHECK_INTERVAL_MS = 5 * 1000;       // PRUEBA: 5s (chequeo más fino)
+    const IDLE_ACTIVITY_KEY = 'auth_last_activity';
+    const IDLE_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'pointerdown'];
+
     // --- Estado interno del refresh (singleton anti-bucle) ---
     let refreshPromise = null;        // Promise en curso (o null)
     let proactiveTimer = null;        // id del setTimeout de refresh proactivo
     let lastTokenIssuedAt = null;     // ms (Date.now()) del último login/refresh
+
+    // --- Estado interno del idle timeout ---
+    let idleTimer = null;             // id del setInterval de chequeo
+    let warningCountdownTimer = null; // id del setInterval del countdown
+    let lastTouchWriteAt = 0;         // throttle de escritura a localStorage
+    let warningVisible = false;       // si el modal de aviso está en pantalla
+    let idleTrackingStarted = false;  // idempotencia de startIdleTracking
 
     // ----------------------------------------------------------------
     //  Utilidades de almacenamiento
@@ -50,6 +75,8 @@
             localStorage.setItem(ACCESS_KEY, access);
             lastTokenIssuedAt = Date.now();
             scheduleProactiveRefresh();
+            // Iniciar el control de inactividad (idempotente).
+            startIdleTracking();
         }
         if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
     }
@@ -62,6 +89,7 @@
             clearTimeout(proactiveTimer);
             proactiveTimer = null;
         }
+        stopIdleTracking();
     }
 
     /**
@@ -80,8 +108,15 @@
     // ----------------------------------------------------------------
     function redirectToLogin() {
         const path = window.location.pathname || '';
+        // Determinar si el usuario actual es operador (por user_type guardado)
+        let isOperator = false;
+        try {
+            const user = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+            isOperator = user && user.user_type === 'operator';
+        } catch (e) { /* noop */ }
+
         let target;
-        if (path.indexOf('/enrolamiento') === 0 || path.indexOf('/coordinator') === 0) {
+        if (path.indexOf('/enrolamiento') === 0 || path.indexOf('/coordinator') === 0 || isOperator) {
             target = '/enrolamiento/login';
         } else {
             target = '/admin/login';
@@ -136,22 +171,256 @@
     }
 
     // ----------------------------------------------------------------
-    //  Refresh proactivo en background
+    //  Refresh proactivo en background (con sliding session)
     // ----------------------------------------------------------------
     function scheduleProactiveRefresh() {
         if (proactiveTimer) clearTimeout(proactiveTimer);
         // Refrescar un poco antes de que expire
         const delay = REFRESH_AHEAD_MS + Math.floor(Math.random() * 10000); // jitter 0-10s
         proactiveTimer = setTimeout(function () {
+            // SLIDING SESSION: solo renovar si el usuario está activo.
+            // Si lleva inactivo cerca del límite de idle, NO refrescamos:
+            // dejaremos que expire su token y el idle timeout cierre sesión.
+            if (!isUserActive()) {
+                console.info('[auth] refresh proactivo omitido por inactividad (sliding session)');
+                return;
+            }
             doRefresh().then(function (ok) {
                 if (!ok) {
-                    // No redirigir automáticamente aquí: el siguiente apiFetch
-                    // lo hará si realmente hace falta. Así evitamos expulsar
-                    // a quien tiene la pestaña abierta sin estar activo.
                     console.warn('[auth] refresh proactivo no pudo renovar; se reintentará en el próximo 401');
                 }
             });
         }, delay);
+    }
+
+    // ----------------------------------------------------------------
+    //  Cierre de sesión por inactividad (idle timeout)
+    // ----------------------------------------------------------------
+    /**
+     * Marca de tiempo (ms) de la última actividad del usuario.
+     * Se guarda en localStorage para sincronizar entre pestañas.
+     */
+    function getLastActivity() {
+        const stored = parseInt(localStorage.getItem(IDLE_ACTIVITY_KEY), 10);
+        return isNaN(stored) ? Date.now() : stored;
+    }
+
+    function touchActivity() {
+        const now = Date.now();
+        // Throttle: escribir a localStorage cada 5s como mucho
+        if (now - lastTouchWriteAt > 5000) {
+            localStorage.setItem(IDLE_ACTIVITY_KEY, String(now));
+            lastTouchWriteAt = now;
+        }
+        // Si el aviso estaba visible y el usuario vuelve a interactuar, ocultarlo
+        if (warningVisible) {
+            hideIdleWarning();
+        }
+    }
+
+    /**
+     * Sliding session: ¿el usuario ha estado activo en los últimos minutos?
+     * Consideramos "activo" si su última interacción es < IDLE_WARNING_MS.
+     */
+    function isUserActive() {
+        return (Date.now() - getLastActivity()) < IDLE_WARNING_MS;
+    }
+
+    /**
+     * ¿La página actual soporta modo offline?
+     * Las páginas offline-capable declaran `window.OFFLINE_CAPABLE = true`.
+     * En esas páginas, el idle timeout NO cierra sesión si no hay internet,
+     * para no bloquear al coordinador en medio de un evento sin señal.
+     */
+    function isOfflineCapablePage() {
+        return window.OFFLINE_CAPABLE === true;
+    }
+
+    /**
+     * ¿Estamos actualmente sin conexión a internet?
+     */
+    function isOffline() {
+        return navigator.onLine === false;
+    }
+
+    /**
+     * Listener de actividad (registrado con {passive:true} para no bloquear scroll).
+     */
+    function activityListener() {
+        touchActivity();
+    }
+
+    function startIdleTracking() {
+        // Idempotente: si ya está corriendo, no duplicar listeners ni resetear
+        // actividad. Esto es clave porque saveTokens() se llama en cada refresh.
+        if (idleTrackingStarted) return;
+        idleTrackingStarted = true;
+
+        // Si no hay marca de actividad previa (primera vez tras login),
+        // inicializarla ahora. No la reseteamos si ya existe, para respetar
+        // la inactividad real acumulada (ej. refresh no "falsea" actividad).
+        if (!localStorage.getItem(IDLE_ACTIVITY_KEY)) {
+            const now = Date.now();
+            localStorage.setItem(IDLE_ACTIVITY_KEY, String(now));
+            lastTouchWriteAt = now;
+        }
+
+        // Listeners de actividad (passive para rendimiento móvil)
+        IDLE_EVENTS.forEach(function (evt) {
+            window.addEventListener(evt, activityListener, { passive: true });
+        });
+
+        // Chequeo periódico
+        if (idleTimer) clearInterval(idleTimer);
+        idleTimer = setInterval(checkIdle, IDLE_CHECK_INTERVAL_MS);
+
+        // Sincronización entre pestañas: si otra pestaña cierra sesión, esta también
+        window.addEventListener('storage', function (e) {
+            if (e.key === ACCESS_KEY && !e.newValue) {
+                // El access_token se eliminó en otra pestaña -> cerrar aquí también
+                stopIdleTracking();
+                redirectToLogin();
+            }
+        });
+    }
+
+    function stopIdleTracking() {
+        idleTrackingStarted = false;
+        if (idleTimer) {
+            clearInterval(idleTimer);
+            idleTimer = null;
+        }
+        if (warningCountdownTimer) {
+            clearInterval(warningCountdownTimer);
+            warningCountdownTimer = null;
+        }
+        IDLE_EVENTS.forEach(function (evt) {
+            window.removeEventListener(evt, activityListener);
+        });
+        hideIdleWarning();
+    }
+
+    /**
+     * Chequeo del estado de inactividad. Se ejecuta cada IDLE_CHECK_INTERVAL_MS.
+     *  - Si inactivo >= IDLE_LIMIT_MS  -> cerrar sesión.
+     *  - Si inactivo >= IDLE_WARNING_MS -> mostrar aviso (con countdown).
+     */
+    function checkIdle() {
+        // No chequear si no hay sesión activa
+        if (!getAccessToken()) return;
+
+        const idleMs = Date.now() - getLastActivity();
+
+        // 🛡️ PROTECCIÓN OFFLINE: si no hay internet y la página soporta
+        // modo offline (check-in, nómina, intendencia), NO cerrar sesión.
+        // El coordinador podría estar en medio de un evento sin señal y
+        // un logout lo dejaría bloqueado sin poder re-loguearse.
+        if (idleMs >= IDLE_WARNING_MS && isOffline() && isOfflineCapablePage()) {
+            if (warningVisible) hideIdleWarning();
+            console.info('[auth] idle pausado: offline + página offline-capable (' + Math.round(idleMs / 1000) + 's)');
+            return;
+        }
+
+        if (idleMs >= IDLE_LIMIT_MS) {
+            // Antes de cerrar, última verificación offline (por si acaba de caer la red)
+            if (isOffline() && isOfflineCapablePage()) {
+                if (warningVisible) hideIdleWarning();
+                console.info('[auth] logout evitado por offline (' + Math.round(idleMs / 1000) + 's)');
+                return;
+            }
+            // Tiempo agotado: cerrar sesión
+            hideIdleWarning();
+            console.info('[auth] cierre de sesión por inactividad (' + Math.round(idleMs / 1000) + 's)');
+            logout();
+            return;
+        }
+
+        if (idleMs >= IDLE_WARNING_MS && !warningVisible) {
+            // No mostrar aviso si estamos offline en página offline-capable
+            if (isOffline() && isOfflineCapablePage()) return;
+            showIdleWarning();
+        }
+    }
+
+    // ----------------------------------------------------------------
+    //  Modal de aviso de inactividad
+    // ----------------------------------------------------------------
+    function showIdleWarning() {
+        if (warningVisible) return;
+        // No mostrar en páginas de login (no tendría sentido)
+        const path = window.location.pathname || '';
+        if (path.indexOf('/login') !== -1) return;
+
+        warningVisible = true;
+
+        // Conteo regresivo inicial (desde el límite hasta ahora)
+        const secondsLeft = Math.max(1, Math.round((IDLE_LIMIT_MS - (Date.now() - getLastActivity())) / 1000));
+
+        // Construir el modal
+        const overlay = document.createElement('div');
+        overlay.id = 'auth-idle-overlay';
+        overlay.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:99999',
+            'background:rgba(0,0,0,0.5)', 'display:flex',
+            'align-items:center', 'justify-content:center',
+            'padding:1rem'
+        ].join(';');
+
+        const modal = document.createElement('div');
+        modal.style.cssText = [
+            'background:#fff', 'border-radius:0.75rem', 'padding:1.5rem',
+            'max-width:24rem', 'width:100%', 'text-align:center',
+            'box-shadow:0 20px 25px -5px rgba(0,0,0,0.2)',
+            'font-family:inherit'
+        ].join(';');
+
+        modal.innerHTML =
+            '<div style="font-size:2.25rem;margin-bottom:0.5rem;">⏰</div>' +
+            '<h3 style="font-size:1.125rem;font-weight:700;color:#111827;margin:0 0 0.5rem;">¿Sigues ahí?</h3>' +
+            '<p style="color:#6B7280;font-size:0.875rem;margin:0 0 1rem;">Tu sesión se cerrará por inactividad en</p>' +
+            '<div id="auth-idle-countdown" style="font-size:2rem;font-weight:700;color:#DC2626;margin-bottom:1rem;">' + secondsLeft + 's</div>' +
+            '<button id="auth-idle-extend" type="button" style="width:100%;background:#2563EB;color:#fff;font-weight:600;border:none;border-radius:0.5rem;padding:0.625rem 1rem;cursor:pointer;font-size:0.875rem;">Seguir activo</button>';
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // Botón "Seguir activo": extiende la sesión
+        document.getElementById('auth-idle-extend').addEventListener('click', function () {
+            extendSession();
+        });
+
+        // Countdown cada 1s
+        let remaining = secondsLeft;
+        warningCountdownTimer = setInterval(function () {
+            remaining--;
+            const el = document.getElementById('auth-idle-countdown');
+            if (el) el.textContent = Math.max(0, remaining) + 's';
+            // Cuando llegue a 0, el checkIdle cerrará la sesión en el próximo tick
+        }, 1000);
+    }
+
+    function hideIdleWarning() {
+        if (warningCountdownTimer) {
+            clearInterval(warningCountdownTimer);
+            warningCountdownTimer = null;
+        }
+        const overlay = document.getElementById('auth-idle-overlay');
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+        warningVisible = false;
+    }
+
+    /**
+     * Extiende la sesión: marca actividad y refresca el token si conviene.
+     */
+    function extendSession() {
+        const now = Date.now();
+        localStorage.setItem(IDLE_ACTIVITY_KEY, String(now));
+        lastTouchWriteAt = now;
+        hideIdleWarning();
+        // Renovar el access token para asegurar 30 min frescos
+        doRefresh();
     }
 
     // ----------------------------------------------------------------
@@ -339,7 +608,28 @@
             // cubre cualquier desfase.
             lastTokenIssuedAt = Date.now();
             scheduleProactiveRefresh();
+            // Iniciar el control de inactividad (cierre a los 15 min)
+            startIdleTracking();
         }
+
+        // 🛡️ Listeners de conectividad: al volver internet, refrescar el
+        // token silenciosamente (pudo expirar durante el offline) y reanudar
+        // el control de inactividad normal.
+        window.addEventListener('online', function () {
+            console.info('[auth] conexión restablecida — refrescando sesión');
+            if (getAccessToken()) {
+                // Marcar actividad para no disparar el idle justo al volver
+                touchActivity();
+                // Refrescar silenciosamente (best-effort, no bloquea)
+                doRefresh().then(function (ok) {
+                    if (ok) console.info('[auth] token refrescado tras reconexión');
+                });
+            }
+        });
+
+        window.addEventListener('offline', function () {
+            console.info('[auth] sin conexión — protección offline activa en páginas offline-capable');
+        });
     }
 
     // --- API pública ---
@@ -354,6 +644,8 @@
         logout: logout,
         redirectToLogin: redirectToLogin,
         scheduleProactiveRefresh: scheduleProactiveRefresh,
+        startIdleTracking: startIdleTracking,
+        extendSession: extendSession,
     };
 
     init();

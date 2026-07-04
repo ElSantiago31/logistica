@@ -36,9 +36,11 @@
     const REFRESH_ENDPOINT = '/api/auth/refresh';
 
     // --- Cierre de sesión por inactividad (idle timeout) ---
-    const IDLE_LIMIT_MS = 15 * 60 * 1000;          // 15 min: cerrar sesión
-    const IDLE_WARNING_MS = 13 * 60 * 1000;        // 13 min: mostrar aviso
-    const IDLE_CHECK_INTERVAL_MS = 15 * 1000;      // chequear cada 15s
+    // PRODUCCIÓN: 15 min de inactividad → cierre de sesión.
+    // Aviso a los 13 min (2 min antes) con countdown.
+    const IDLE_LIMIT_MS = 15 * 60 * 1000;          // PRODUCCIÓN: 15 min
+    const IDLE_WARNING_MS = 13 * 60 * 1000;        // PRODUCCIÓN: 13 min (aviso 2 min antes)
+    const IDLE_CHECK_INTERVAL_MS = 15 * 1000;      // PRODUCCIÓN: 15s
     const IDLE_ACTIVITY_KEY = 'auth_last_activity';
     const IDLE_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'pointerdown'];
 
@@ -222,6 +224,23 @@
     }
 
     /**
+     * ¿La página actual soporta modo offline?
+     * Las páginas offline-capable declaran `window.OFFLINE_CAPABLE = true`.
+     * En esas páginas, el idle timeout NO cierra sesión si no hay internet,
+     * para no bloquear al coordinador en medio de un evento sin señal.
+     */
+    function isOfflineCapablePage() {
+        return window.OFFLINE_CAPABLE === true;
+    }
+
+    /**
+     * ¿Estamos actualmente sin conexión a internet?
+     */
+    function isOffline() {
+        return navigator.onLine === false;
+    }
+
+    /**
      * Listener de actividad (registrado con {passive:true} para no bloquear scroll).
      */
     function activityListener() {
@@ -289,7 +308,23 @@
 
         const idleMs = Date.now() - getLastActivity();
 
+        // 🛡️ PROTECCIÓN OFFLINE: si no hay internet y la página soporta
+        // modo offline (check-in, nómina, intendencia), NO cerrar sesión.
+        // El coordinador podría estar en medio de un evento sin señal y
+        // un logout lo dejaría bloqueado sin poder re-loguearse.
+        if (idleMs >= IDLE_WARNING_MS && isOffline() && isOfflineCapablePage()) {
+            if (warningVisible) hideIdleWarning();
+            console.info('[auth] idle pausado: offline + página offline-capable (' + Math.round(idleMs / 1000) + 's)');
+            return;
+        }
+
         if (idleMs >= IDLE_LIMIT_MS) {
+            // Antes de cerrar, última verificación offline (por si acaba de caer la red)
+            if (isOffline() && isOfflineCapablePage()) {
+                if (warningVisible) hideIdleWarning();
+                console.info('[auth] logout evitado por offline (' + Math.round(idleMs / 1000) + 's)');
+                return;
+            }
             // Tiempo agotado: cerrar sesión
             hideIdleWarning();
             console.info('[auth] cierre de sesión por inactividad (' + Math.round(idleMs / 1000) + 's)');
@@ -298,6 +333,8 @@
         }
 
         if (idleMs >= IDLE_WARNING_MS && !warningVisible) {
+            // No mostrar aviso si estamos offline en página offline-capable
+            if (isOffline() && isOfflineCapablePage()) return;
             showIdleWarning();
         }
     }
@@ -571,6 +608,25 @@
             // Iniciar el control de inactividad (cierre a los 15 min)
             startIdleTracking();
         }
+
+        // 🛡️ Listeners de conectividad: al volver internet, refrescar el
+        // token silenciosamente (pudo expirar durante el offline) y reanudar
+        // el control de inactividad normal.
+        window.addEventListener('online', function () {
+            console.info('[auth] conexión restablecida — refrescando sesión');
+            if (getAccessToken()) {
+                // Marcar actividad para no disparar el idle justo al volver
+                touchActivity();
+                // Refrescar silenciosamente (best-effort, no bloquea)
+                doRefresh().then(function (ok) {
+                    if (ok) console.info('[auth] token refrescado tras reconexión');
+                });
+            }
+        });
+
+        window.addEventListener('offline', function () {
+            console.info('[auth] sin conexión — protección offline activa en páginas offline-capable');
+        });
     }
 
     // --- API pública ---
