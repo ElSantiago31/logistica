@@ -50,7 +50,19 @@ class Operator(BaseModel):
     user = relationship("User", back_populates="operator_profile")
     eps = relationship("EPS", back_populates="operators")
     pension_fund = relationship("PensionFund", back_populates="operators")
-    event_assignments = relationship("EventAssignment", back_populates="operator")
+    event_assignments = relationship(
+        "EventAssignment", back_populates="operator",
+        foreign_keys="EventAssignment.operator_id",
+    )
+    # Asignaciones donde este operador actuó como coordinador (programó/admitió)
+    programmed_assignments = relationship(
+        "EventAssignment", back_populates="programmed_by_operator",
+        foreign_keys="EventAssignment.programmed_by_operator_id",
+    )
+    admitted_assignments = relationship(
+        "EventAssignment", back_populates="admitted_by_operator",
+        foreign_keys="EventAssignment.admitted_by_operator_id",
+    )
 
     def __repr__(self):
         return f"<Operator {self.user_id}>"

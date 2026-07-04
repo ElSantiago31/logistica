@@ -26,6 +26,26 @@ class StaffNeedResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Coordinator Quota ---
+class CoordinatorQuotaCreate(BaseModel):
+    """Asignación de cupo a un coordinador (operador) en un evento nuevo."""
+    operator_id: uuid.UUID
+    quota: int = Field(ge=0, description="Cupo informativo (no bloquea la asignación)")
+
+
+class CoordinatorQuotaResponse(BaseModel):
+    id: uuid.UUID
+    event_id: uuid.UUID
+    coordinator_operator_id: Optional[uuid.UUID] = None
+    coordinator: str
+    quota: int
+    # Conteo calculado en runtime (no es columna)
+    used: int = 0
+    available: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
 # --- Event ---
 class EventCreate(BaseModel):
     name: str = Field(min_length=3, max_length=300)
@@ -40,6 +60,7 @@ class EventCreate(BaseModel):
     client_phone: Optional[str] = None
     notes: Optional[str] = None
     staff_needs: List[StaffNeedCreate] = []
+    coordinator_quotas: List[CoordinatorQuotaCreate] = []
 
     @model_validator(mode='after')
     def validate_dates(self):
@@ -62,6 +83,7 @@ class EventUpdate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = Field(None, pattern="^(draft|published|in_progress|completed|cancelled)$")
     staff_needs: Optional[List[StaffNeedCreate]] = None
+    coordinator_quotas: Optional[List[CoordinatorQuotaCreate]] = None
 
 
 class EventResponse(BaseModel):
@@ -81,6 +103,7 @@ class EventResponse(BaseModel):
     client_phone: Optional[str]
     notes: Optional[str]
     staff_needs: List[StaffNeedResponse] = []
+    coordinator_quotas: List[CoordinatorQuotaResponse] = []
     total_staff_needed: int = 0
     total_confirmed: int = 0
     created_at: Optional[datetime] = None
@@ -122,3 +145,5 @@ class AssignOperatorsRequest(BaseModel):
     operator_ids: List[uuid.UUID]
     role_id: Optional[uuid.UUID] = None
     rate_applied: Optional[float] = None
+    # Operador-coordinador que programa/admite a estos operadores (nuevo flujo).
+    programmed_by_operator_id: Optional[uuid.UUID] = None

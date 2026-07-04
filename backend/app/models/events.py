@@ -158,6 +158,15 @@ class EventAssignment(BaseModel):
         String(100), nullable=True,
         comment="Coordinador que admitió al operador (cupo). Default = programmed_by",
     )
+    # FK al operador-coordinador que programó / admitió (nuevo flujo de cupos).
+    programmed_by_operator_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("operators.id", ondelete="SET NULL"), nullable=True, index=True,
+        comment="Operador-coordinador que programó a este operador en el evento",
+    )
+    admitted_by_operator_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("operators.id", ondelete="SET NULL"), nullable=True, index=True,
+        comment="Operador-coordinador que admitió a este operador (cupo). Default = programmed_by",
+    )
     # Uniform assignment fields
     shirt_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de camisa asignada")
     jacket_number: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Número de chaqueta asignada")
@@ -170,8 +179,10 @@ class EventAssignment(BaseModel):
 
     # Relationships
     event = relationship("Event", back_populates="assignments")
-    operator = relationship("Operator", back_populates="event_assignments")
+    operator = relationship("Operator", back_populates="event_assignments", foreign_keys=[operator_id])
     role = relationship("Role")
+    programmed_by_operator = relationship("Operator", foreign_keys=[programmed_by_operator_id])
+    admitted_by_operator = relationship("Operator", foreign_keys=[admitted_by_operator_id])
 
     def __repr__(self):
         return f"<EventAssignment event={self.event_id} op={self.operator_id} status={self.status}>"
@@ -205,19 +216,33 @@ class EventStaffAssignment(BaseModel):
 
 
 class EventCoordinatorQuota(BaseModel):
-    """Cupo máximo de operadores que un coordinador puede admitir en un evento.
+    """Cupo de operadores que un coordinador gestiona en un evento.
 
-    Permite controlar cuántos operadores de cada coordinador ingresan al evento
-    (independientemente de cuántos programó). Si un coordinador se llena, los
-    operadores extra pueden reasignarse a otro coordinador (cambiando
-    event_assignments.admitted_by).
+    Nuevo flujo (eventos nuevos): el superadmin selecciona operadores del
+    listado como coordinadores y les asigna un cupo. El cupo es solo
+    informativo (no bloquea la asignación: un coordinador puede asignar
+    más operadores que su cupo).
+
+    Flujo legacy (Futbolfest etc.): coordinador identificado por nombre en
+    MAYÚSCULAS (sin FK). Se conserva para no romper datos existentes.
     """
     __tablename__ = "event_coordinator_quotas"
     __table_args__ = (
+        # Índice único para el flujo legacy (nombre string).
         Index(
             "uq_event_coordinator",
             "event_id", "coordinator",
             unique=True,
+            postgresql_where=text("coordinator_operator_id IS NULL"),
+            sqlite_where=text("coordinator_operator_id IS NULL"),
+        ),
+        # Índice único para el nuevo flujo (FK a operador).
+        Index(
+            "uq_event_coordinator_operator",
+            "event_id", "coordinator_operator_id",
+            unique=True,
+            postgresql_where=text("coordinator_operator_id IS NOT NULL"),
+            sqlite_where=text("coordinator_operator_id IS NOT NULL"),
         ),
     )
 
@@ -225,15 +250,21 @@ class EventCoordinatorQuota(BaseModel):
         ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     # Nombre del coordinador en MAYÚSCULAS (ej: XIMENA, CLAUDIA, SANDRA).
-    # Debe coincidir con event_assignments.programmed_by / admitted_by.
+    # Para el nuevo flujo se llena automáticamente desde el operador (display).
     coordinator: Mapped[str] = mapped_column(
         String(100), nullable=False,
-        comment="Nombre del coordinador en MAYÚSCULAS (match programmed_by)",
+        comment="Nombre del coordinador en MAYÚSCULAS (display)",
     )
-    quota: Mapped[int] = mapped_column(Integer, nullable=False, comment="Cupo máximo")
+    # FK al operador-coordinador (nuevo flujo). NULL en datos legacy.
+    coordinator_operator_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("operators.id", ondelete="SET NULL"), nullable=True, index=True,
+        comment="Operador-coordinador (nuevo flujo). NULL en datos legacy.",
+    )
+    quota: Mapped[int] = mapped_column(Integer, nullable=False, comment="Cupo (informativo, no bloquea)")
 
     # Relationships
     event = relationship("Event", back_populates="coordinator_quotas")
+    coordinator_operator = relationship("Operator", foreign_keys=[coordinator_operator_id])
 
     def __repr__(self):
         return f"<EventCoordinatorQuota event={self.event_id} coord={self.coordinator} quota={self.quota}>"
