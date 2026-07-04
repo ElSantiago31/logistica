@@ -81,6 +81,15 @@
                 </div>
                 <div id="staffRows" class="space-y-3"></div>
             </div>
+            <!-- Coordinator Quotas (nuevo flujo) -->
+            <div class="bg-white rounded-lg shadow p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-800">Cupos de Coordinadores</h2>
+                    <button type="button" onclick="addQuotaRow()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ Agregar coordinador</button>
+                </div>
+                <p class="text-xs text-gray-500">Asigna cupos a coordinadores. El cupo es informativo (no bloquea la asignación). El coordinador podrá admitir operadores hasta su cupo desde su panel.</p>
+                <div id="quotaRows" class="space-y-3"></div>
+            </div>
             <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
             <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
                 <a href="/admin/events" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-center">Cancelar</a>
@@ -253,7 +262,8 @@ document.getElementById('eventForm').addEventListener('submit',async(e)=>{
         end_date:document.getElementById('end_date').value,
         client_name:document.getElementById('client_name').value||null,
         client_phone:document.getElementById('client_phone').value||null,
-        staff_needs:staffNeeds
+        staff_needs:staffNeeds,
+        coordinator_quotas:collectQuotas()
     };
     try{
         const res=await fetch('/api/events/',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
@@ -287,7 +297,77 @@ document.addEventListener('click',(e)=>{
         document.getElementById('opSearchResults').classList.add('hidden');
     }
 });
-loadRoles();loadCities();loadStaffUsers();
+let coordinatorOperators=[];
+async function loadCoordinators(){
+    const token=getToken();
+    try{
+        // Endpoint dedicado: devuelve coordinadores con campos normalizados
+        // (operator_id, full_name, document_number) para el selector de cupos.
+        const res=await fetch('/api/operators/coordinators',{headers:{'Authorization':'Bearer '+token}});
+        const data=await res.json();
+        coordinatorOperators=(data.items||[]).filter(o=>o.is_active!==false);
+        addQuotaRow();
+    }catch(e){console.error('Error cargando coordinadores',e);}
+}
+function addQuotaRow(){
+    const div=document.getElementById('quotaRows');
+    const rowId='qr'+Date.now()+Math.random().toString(36).slice(2,6);
+    const row=document.createElement('div');
+    row.className='relative grid grid-cols-[1fr_100px_40px] gap-2 items-center';
+    row.dataset.rowId=rowId;
+    row.innerHTML=`
+        <div class="relative">
+            <input type="text" class="quota-search border rounded-lg px-3 py-2 text-sm w-full" placeholder="🔍 Buscar coordinador por nombre o cédula..." autocomplete="off" oninput="filterCoordinator(this,'${rowId}')" onfocus="filterCoordinator(this,'${rowId}')">
+            <input type="hidden" class="quota-op" value="">
+            <div class="quota-dropdown hidden absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto"></div>
+        </div>
+        <input type="number" class="quota-val border rounded-lg px-3 py-2 text-sm" min="0" value="5" placeholder="Cupo">
+        <button type="button" onclick="this.closest('[data-row-id]').remove()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
+    div.appendChild(row);
+}
+
+function filterCoordinator(input,rowId){
+    const row=input.closest('[data-row-id]');
+    if(!row)return;
+    const dd=row.querySelector('.quota-dropdown');
+    const q=input.value.toLowerCase().trim();
+    if(q.length<1){dd.classList.add('hidden');dd.innerHTML='';return}
+    const results=coordinatorOperators.filter(o=>{
+        const name=((o.full_name||o.name||'')+' '+(o.document_number||'')).toLowerCase();
+        return name.includes(q);
+    }).slice(0,15);
+    if(!results.length){dd.innerHTML='<p class="px-3 py-2 text-xs text-gray-400">Sin resultados</p>';dd.classList.remove('hidden');return}
+    dd.innerHTML=results.map(o=>{
+        const oid=o.operator_id||o.id;
+        const label=(o.full_name||o.name||'').toUpperCase()+(o.document_number?' · '+o.document_number:'');
+        const safe=label.replace(/'/g,"\\'").replace(/"/g,'"');
+        return `<button type="button" onclick="pickCoordinator('${rowId}','${oid}','${safe}')" class="w-full text-left px-3 py-2 hover:bg-amber-50 text-sm border-b last:border-0">${label}</button>`;
+    }).join('');
+    dd.classList.remove('hidden');
+}
+
+function pickCoordinator(rowId,opId,label){
+    const row=document.querySelector(`[data-row-id="${rowId}"]`);
+    if(!row)return;
+    row.querySelector('.quota-op').value=opId;
+    row.querySelector('.quota-search').value=label;
+    row.querySelector('.quota-dropdown').classList.add('hidden');
+}
+document.addEventListener('click',(e)=>{
+    if(!e.target.closest('.quota-search')&&!e.target.closest('.quota-dropdown')){
+        document.querySelectorAll('.quota-dropdown').forEach(dd=>dd.classList.add('hidden'));
+    }
+});
+function collectQuotas(){
+    const out=[];
+    document.querySelectorAll('#quotaRows > div[data-row-id]').forEach(row=>{
+        const opId=row.querySelector('.quota-op').value;
+        const val=parseInt(row.querySelector('.quota-val').value)||0;
+        if(opId && val>=0) out.push({operator_id:opId,quota:val});
+    });
+    return out;
+}
+loadRoles();loadCities();loadStaffUsers();loadCoordinators();
 </script>
 </body>
 </html>

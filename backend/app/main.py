@@ -90,6 +90,14 @@ async def add_security_headers(request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
+    # Prevenir cache de JS con bugs antiguos: el navegador debe revalidar
+    # SIEMPRE con el servidor (ETag/Last-Modified) antes de usar una versión
+    # cacheada. Así, al subir auth.js?v=20260704, todos los navegadores lo
+    # notan al instante sin editar a mano el versionado de cada plantilla.
+    if request.url.path.startswith("/static/js/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 

@@ -10,22 +10,65 @@
   .role-badge{font-size:.7rem;padding:.15rem .5rem;border-radius:9999px;font-weight:600}
   .role-1{background:rgba(207,155,98,0.2);color:#cf9b62}
   .role-2{background:rgba(74,222,128,0.15);color:#4ade80}
+  .tab-btn{padding:.5rem 1.25rem;border-radius:8px 8px 0 0;font-weight:600;font-size:.9rem;cursor:pointer;border:1px solid transparent}
+  .tab-active{background:rgba(207,155,98,0.15);color:#cf9b62;border-color:rgba(207,155,98,0.3)}
+  .tab-inactive{background:transparent;color:#785631}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:50;padding:1rem}
+  .modal-box{background:#0a0a0a;border:1px solid rgba(207,155,98,0.3);border-radius:12px;max-width:42rem;width:100%;max-height:85vh;overflow-y:auto;padding:1.5rem}
+  .op-row{background:rgba(207,155,98,0.05);border:1px solid rgba(207,155,98,0.15);border-radius:8px;padding:.75rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem}
+  .op-row:hover{background:rgba(207,155,98,0.1)}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dash-container">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold" style="color:#cf9b62">📅 Mis Eventos como Coordinador</h1>
+    <h1 class="text-2xl font-bold" style="color:#cf9b62">🎯 Panel del Coordinador</h1>
     <a href="/enrolamiento/perfil" class="text-sm" style="color:#785631">← Mi Perfil</a>
   </div>
 
-  <div id="loading" class="text-center py-12" style="color:#785631">Cargando eventos...</div>
-  <div id="empty" class="hidden text-center py-12" style="color:#785631">
-    <p class="mb-2">No tienes eventos asignados como coordinador.</p>
-    <p class="text-sm">Cuando te asignen a un evento con rol de coordinador, aparecerá aquí.</p>
+  <!-- Tabs -->
+  <div class="flex gap-1 mb-4 border-b" style="border-color:rgba(207,155,98,0.2)">
+    <button id="tab-quotas" onclick="switchTab('quotas')" class="tab-btn tab-active">🎯 Mis Cupos</button>
+    <button id="tab-events" onclick="switchTab('events')" class="tab-btn tab-inactive">📋 Evaluaciones</button>
   </div>
-  <div id="events-list"></div>
+
+  <!-- Tab: Cupos (admitir operadores) -->
+  <div id="panel-quotas">
+    <div id="quota-loading" class="text-center py-12" style="color:#785631">Cargando cupos...</div>
+    <div id="quota-empty" class="hidden text-center py-12" style="color:#785631">
+      <p class="mb-2">No tienes cupos asignados.</p>
+      <p class="text-sm">Cuando un admin te asigne un cupo en un evento, aparecerá aquí para que admitas operadores.</p>
+    </div>
+    <div id="quotas-list"></div>
+  </div>
+
+  <!-- Tab: Eventos para evaluar -->
+  <div id="panel-events" class="hidden">
+    <div id="loading" class="text-center py-12" style="color:#785631">Cargando eventos...</div>
+    <div id="empty" class="hidden text-center py-12" style="color:#785631">
+      <p class="mb-2">No tienes eventos asignados como coordinador para evaluar.</p>
+      <p class="text-sm">Los eventos donde debas evaluar a tu equipo aparecerán aquí cuando estén en progreso o completados.</p>
+    </div>
+    <div id="events-list"></div>
+  </div>
+</div>
+
+<!-- Modal: Admitir operadores -->
+<div id="admitModal" class="modal-bg hidden">
+  <div class="modal-box">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-lg font-bold" style="color:#cf9b62">🎯 Admitir Operadores</h3>
+      <button onclick="closeAdmitModal()" class="text-2xl" style="color:#785631">&times;</button>
+    </div>
+    <div id="quotaInfo" class="mb-4 p-3 rounded-lg" style="background:rgba(207,155,98,0.08)"></div>
+    <input type="text" id="opSearch" placeholder="🔍 Buscar operador por nombre o cédula..." class="w-full mb-3 px-3 py-2 rounded-lg text-sm" style="background:#1a1a1a;border:1px solid rgba(207,155,98,0.2);color:#f5f5f5" oninput="debounceOpSearch()">
+    <div id="opResults" class="mb-4 max-h-64 overflow-y-auto"></div>
+    <div class="flex justify-between items-center">
+      <span id="selCounter" class="text-sm" style="color:#785631"></span>
+      <button id="btnAdmit" onclick="admitSelected()" class="px-6 py-2 rounded-lg font-semibold" style="background:#cf9b62;color:#1a1a1a">Admitir</button>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -33,24 +76,158 @@
 <script>
 function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
 
-async function loadEvents(){
-  const token = localStorage.getItem('access_token');
+function switchTab(tab){
+  document.getElementById('tab-quotas').className='tab-btn '+(tab==='quotas'?'tab-active':'tab-inactive');
+  document.getElementById('tab-events').className='tab-btn '+(tab==='events'?'tab-active':'tab-inactive');
+  document.getElementById('panel-quotas').classList.toggle('hidden',tab!=='quotas');
+  document.getElementById('panel-events').classList.toggle('hidden',tab!=='events');
+}
+
+// ============ CUPÓS ============
+let currentQuotaEventId=null;
+let currentQuotaLimit=0;
+let currentQuotaUsed=0;
+let selectedOps=new Set();
+let opSearchTimer=null;
+
+async function loadQuotas(){
+  const token=localStorage.getItem('access_token');
   if(!token){window.location.href='/enrolamiento/login';return;}
   try{
-    const r = await fetch('/api/coordinator/my-events',{headers:authH()});
+    const r=await fetch('/api/coordinator/my-quotas',{headers:authH()});
+    if(r.status===401){window.location.href='/enrolamiento/login';return;}
+    if(!r.ok){document.getElementById('quota-loading').textContent='Error al cargar';return;}
+    const data=await r.json();
+    document.getElementById('quota-loading').classList.add('hidden');
+    if(!data.quotas||data.quotas.length===0){
+      document.getElementById('quota-empty').classList.remove('hidden');
+      return;
+    }
+    const list=document.getElementById('quotas-list');
+    list.innerHTML=data.quotas.map(q=>{
+      const startDate=q.event_start?new Date(q.event_start).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}):'';
+      const avail=q.available;
+      const availColor=avail<0?'#ef4444':avail===0?'#785631':'#4ade80';
+      const canManage=['draft','published','in_progress'].includes(q.event_status);
+      return `
+        <div class="event-card">
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <h3 class="font-semibold text-lg mb-1" style="color:#f5f5f5">${q.event_name}</h3>
+              <p class="text-sm mb-3" style="color:#785631">📅 ${startDate} · ${q.event_status}</p>
+              <div class="flex gap-3 items-center text-sm">
+                <span style="color:#cf9b62">🎯 Cupo: <strong>${q.quota}</strong></span>
+                <span style="color:#f5f5f5">✅ Usado: <strong>${q.used}</strong></span>
+                <span style="color:${availColor}">📊 Disponible: <strong>${avail}</strong></span>
+              </div>
+            </div>
+            ${canManage?`<button onclick="openAdmitModal('${q.event_id}',${q.quota},${q.used})" class="px-4 py-2 rounded-lg font-semibold text-sm" style="background:#cf9b62;color:#1a1a1a">+ Admitir</button>`:`<span class="text-xs" style="color:#785631">No editable</span>`}
+          </div>
+        </div>`;
+    }).join('');
+  }catch(e){
+    document.getElementById('quota-loading').textContent='Error de conexión';
+  }
+}
+
+async function openAdmitModal(eventId,quota,used){
+  currentQuotaEventId=eventId;
+  currentQuotaLimit=quota;
+  currentQuotaUsed=used;
+  selectedOps.clear();
+  document.getElementById('opSearch').value='';
+  const avail=quota-used;
+  document.getElementById('quotaInfo').innerHTML=`<p class="text-sm" style="color:#cf9b62">Cupo: <strong>${quota}</strong> · Usado: <strong>${used}</strong> · Disponible: <strong style="color:${avail<0?'#ef4444':'#4ade80'}">${avail}</strong></p><p class="text-xs mt-1" style="color:#785631">El cupo es informativo: puedes admitir más operadores si lo necesitas.</p>`;
+  document.getElementById('admitModal').classList.remove('hidden');
+  updateSelCounter();
+  await searchAvailableOps();
+}
+
+function closeAdmitModal(){document.getElementById('admitModal').classList.add('hidden')}
+
+function debounceOpSearch(){clearTimeout(opSearchTimer);opSearchTimer=setTimeout(searchAvailableOps,300)}
+
+async function searchAvailableOps(){
+  if(!currentQuotaEventId)return;
+  const q=document.getElementById('opSearch').value.trim();
+  let url=`/api/coordinator/events/${currentQuotaEventId}/available-operators`;
+  if(q.length>=2)url+=`?search=${encodeURIComponent(q)}`;
+  try{
+    const r=await fetch(url,{headers:authH()});
+    if(!r.ok){document.getElementById('opResults').innerHTML='<p style="color:#ef4444">Error al cargar</p>';return}
+    const data=await r.json();
+    const ops=data.operators||data.items||data||[];
+    if(!ops.length){document.getElementById('opResults').innerHTML='<p style="color:#785631" class="text-center py-4">No hay operadores disponibles</p>';return}
+    document.getElementById('opResults').innerHTML=ops.map(o=>{
+      // La API devuelve operator_id/name (no id/first_name). Normalizamos.
+      const oid=o.operator_id||o.id;
+      const name=o.name||((o.first_name||'')+' '+(o.last_name||'')+' '+(o.full_name||'')).trim();
+      const checked=selectedOps.has(String(oid))?'checked':'';
+      const unavailable=o.available===false?'<span class="text-xs" style="color:#ef4444">⚠️ Solapa con otro evento</span>':'';
+      return `<label class="op-row cursor-pointer">
+        <input type="checkbox" value="${oid}" ${checked} onchange="toggleOpAdmit(this)" class="rounded" style="accent-color:#cf9b62">
+        <div class="flex-1">
+          <div class="font-medium text-sm" style="color:#f5f5f5">${name}</div>
+          <div class="text-xs" style="color:#785631">${o.document_number||''} ${o.phone?'· '+o.phone:''}</div>
+          ${unavailable}
+        </div>
+      </label>`;
+    }).join('');
+  }catch(e){document.getElementById('opResults').innerHTML='<p style="color:#ef4444">Error de conexión</p>'}
+}
+
+function toggleOpAdmit(cb){
+  if(cb.checked){selectedOps.add(cb.value)}else{selectedOps.delete(cb.value)}
+  updateSelCounter();
+}
+
+function updateSelCounter(){
+  const c=document.getElementById('selCounter');
+  const btn=document.getElementById('btnAdmit');
+  c.textContent=selectedOps.size+' seleccionado(s)';
+  btn.disabled=selectedOps.size===0;
+  btn.style.opacity=selectedOps.size===0?'0.5':'1';
+}
+
+async function admitSelected(){
+  if(!selectedOps.size)return;
+  if(!confirm(`¿Admitir ${selectedOps.size} operador(es) a este evento bajo tu cupo?`))return;
+  try{
+    const r=await fetch(`/api/coordinator/events/${currentQuotaEventId}/admit`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json',...authH()},
+      body:JSON.stringify({operator_ids:Array.from(selectedOps)})
+    });
+    if(r.ok){
+      alert('Operadores admitidos correctamente');
+      closeAdmitModal();
+      loadQuotas();
+    }else{
+      const d=await r.json().catch(()=>({}));
+      alert(d.detail||'Error al admitir operadores');
+    }
+  }catch(e){alert('Error de conexión')}
+}
+
+// ============ EVALUACIONES ============
+async function loadEvents(){
+  const token=localStorage.getItem('access_token');
+  if(!token){window.location.href='/enrolamiento/login';return;}
+  try{
+    const r=await fetch('/api/coordinator/my-events',{headers:authH()});
     if(r.status===401){window.location.href='/enrolamiento/login';return;}
     if(!r.ok){document.getElementById('loading').textContent='Error al cargar';return;}
-    const data = await r.json();
+    const data=await r.json();
     document.getElementById('loading').classList.add('hidden');
     if(!data.events||data.events.length===0){
       document.getElementById('empty').classList.remove('hidden');
       return;
     }
-    const list = document.getElementById('events-list');
-    list.innerHTML = data.events.map(ev=>{
-      const startDate = ev.start_date ? new Date(ev.start_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : 'N/A';
-      const roleClass = ev.my_level===1 ? 'role-1' : 'role-2';
-      const statusLabel = ev.status==='in_progress' ? '🔵 En progreso' : '✅ Completado';
+    const list=document.getElementById('events-list');
+    list.innerHTML=data.events.map(ev=>{
+      const startDate=ev.start_date?new Date(ev.start_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'N/A';
+      const roleClass=ev.my_level===1?'role-1':'role-2';
+      const statusLabel=ev.status==='in_progress'?'🔵 En progreso':'✅ Completado';
       return `
         <div class="event-card">
           <div class="flex justify-between items-start">
@@ -59,7 +236,7 @@ async function loadEvents(){
               <p class="text-sm mb-2" style="color:#785631">📅 ${startDate}</p>
               <div class="flex gap-2 items-center">
                 <span class="role-badge ${roleClass}">${ev.my_role}</span>
-                ${ev.my_area ? `<span class="text-xs" style="color:#785631">Área: ${ev.my_area}</span>`:''}
+                ${ev.my_area?`<span class="text-xs" style="color:#785631">Área: ${ev.my_area}</span>`:''}
                 <span class="text-xs" style="color:#785631">${statusLabel}</span>
               </div>
             </div>
@@ -71,6 +248,8 @@ async function loadEvents(){
     document.getElementById('loading').textContent='Error de conexión';
   }
 }
+
+loadQuotas();
 loadEvents();
 </script>
 {% endblock %}

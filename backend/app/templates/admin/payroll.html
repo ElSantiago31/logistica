@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Nómina — A&C Eventos{% endblock %}
 {% block head %}
+<script>window.OFFLINE_CAPABLE = true;</script>
 <!-- [NÓMINA-V2] Signature Pad para firma del operador -->
 <script src="https://unpkg.com/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-<!-- [TOPAZ] Wrapper del pad de firmas Topaz (puente local SigPlus Ext Lite) -->
-<script src="/static/js/topaz-signature.js"></script>
 <!-- [WS] Cliente WebSocket tiempo real (reemplaza polling agresivo) -->
 <script src="/static/js/ws.js"></script>
 <style>
@@ -20,22 +19,31 @@
         width: 60px; height: 30px; border: 1px solid #e5d3b8;
         border-radius: 4px; background: #fff;
     }
-    /* Signature pad canvas */
-    #sig-canvas, #topaz-preview-canvas {
+    /* Signature pad canvas — responsive (móvil/tablet sin zoom) */
+    #sig-canvas {
         border: 2px dashed #cf9b62; border-radius: 8px;
         background: #fff; cursor: crosshair; touch-action: none;
-        width: 100%; height: 200px;
+        display: block;
+        width: 100%;
+        height: min(62vh, 460px);
+        min-height: 300px;
     }
-    /* Modal */
+    /* Modal — ocupa más pantalla en móvil */
     .modal-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0,0,0,0.5); z-index: 50;
         display: none; align-items: center; justify-content: center;
+        padding: 8px;
     }
     .modal-overlay.active { display: flex; }
     .modal-box {
-        background: #fff; border-radius: 16px; padding: 24px;
-        max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;
+        background: #fff; border-radius: 16px; padding: 20px;
+        width: 96%; max-width: 640px; max-height: 95vh; overflow-y: auto;
+        margin: 0 auto;
+    }
+    @media (max-width: 640px) {
+        .modal-box { padding: 14px; border-radius: 12px; }
+        #sig-canvas { height: 70vh; min-height: 340px; }
     }
     .btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.15s; }
     .btn-primary { background: #5d4224; color: white; }
@@ -52,8 +60,22 @@
         100% { background-color: transparent; }
     }
     .flash-changed { animation: flash-green 1.5s ease-out; }
-    /* ===== Factura imprimible — Térmica 80mm monocromática ===== */
+    /* ===== Factura: vista previa + impresión térmica 80mm ===== */
+    #invoice-preview-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.75); z-index: 60;
+        display: none; align-items: flex-start; justify-content: center;
+        padding: 16px; overflow-y: auto;
+    }
+    #invoice-preview-overlay.active { display: flex; }
+    #invoice-preview-toolbar {
+        position: sticky; top: 0; z-index: 2;
+        background: #fff; border-radius: 10px; padding: 8px 12px;
+        margin: 0 auto 12px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 220px;
+    }
     #invoice-print-area { display: none; }
+    #invoice-preview-overlay.active #invoice-print-area { display: block; }
     /* @page: tamaño papel térmico 80mm, margen mínimo.
        Elimina URL/fecha/pie del navegador. Compatibilidad Epson/Xprinter/SAT. */
     @page {
@@ -61,6 +83,8 @@
         margin: 2mm;
     }
     @media print {
+        #invoice-preview-overlay { display: block !important; background: none !important; padding: 0 !important; }
+        #invoice-preview-toolbar { display: none !important; }
         html, body {
             margin: 0 !important;
             padding: 0 !important;
@@ -208,9 +232,27 @@
             <p id="event-name" class="text-gray-500 text-sm ml-1">Cargando...</p>
         </div>
         <div class="flex gap-2 items-center no-print">
-            <button onclick="downloadPlanillaCoordinador()" class="btn btn-outline" title="Descargar Excel con una hoja por coordinador (solo checked_in)">
-                📄 Planilla
-            </button>
+            <div class="relative" id="planilla-dropdown-wrap">
+                <button onclick="togglePlanillaMenu(event)" class="btn btn-outline" title="Descargar planilla Excel (4 modos)">
+                    📄 Planilla ▾
+                </button>
+                <div id="planilla-menu" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 z-50" style="min-width:18rem;">
+                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">Agrupado por coordinador</div>
+                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📋 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(una hoja por coordinador)</span>
+                    </a>
+                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(una hoja por coordinador)</span>
+                    </a>
+                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Lista única</div>
+                    <a href="#" onclick="downloadPlanillaCoordinador('none','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📄 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(lista única, no agrupar)</span>
+                    </a>
+                    <a href="#" onclick="downloadPlanillaCoordinador('none','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📄 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(lista única, no agrupar)</span>
+                    </a>
+                </div>
+            </div>
             <button onclick="downloadInvoicesBulk()" class="btn btn-primary" title="Descargar ZIP con todas las facturas PDF (operadores pagados con firma)">
                 🗄️ Facturas PDF
             </button>
@@ -284,34 +326,16 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- [NÓMINA-V2 + TOPAZ] MODAL: Pad Topaz (default) + Canvas     -->
+<!-- [NÓMINA-V2] MODAL: Canvas de firma (dibujo responsive)      -->
 <!-- ============================================================ -->
 <div id="sig-modal" class="modal-overlay no-print">
     <div class="modal-box">
-        <h3 class="text-lg font-bold mb-2" style="color:#5d4224;">✍️ Firmar Factura</h3>
-        <p id="sig-operator-name" class="text-sm text-gray-500 mb-4">Operador: —</p>
+        <h3 class="text-lg font-bold mb-1" style="color:#5d4224;">✍️ Firmar Factura</h3>
+        <p id="sig-operator-name" class="text-sm text-gray-500 mb-2">Operador: —</p>
+        <p class="text-xs text-gray-400 mb-3">Dibuje la firma con el dedo o el mouse en el área inferior.</p>
 
-        <!-- Selector: Pad Topaz por defecto, Canvas como alternativa -->
-        <div class="flex gap-2 mb-3">
-            <button id="tab-topaz" onclick="switchSignMethod('topaz')" class="btn btn-primary" style="font-size:0.75rem;">📋 Pad Topaz</button>
-            <button id="tab-draw" onclick="switchSignMethod('draw')" class="btn btn-outline" style="font-size:0.75rem;">✏️ Dibujar</button>
-        </div>
-
-        <!-- Modo: Pad Topaz (conexión directa, captura en vivo) -->
-        <div id="sig-topaz-area">
-            <div id="topaz-status" class="mb-3 text-center text-sm font-medium py-2 px-3 rounded-lg"
-                 style="background:#f3f4f6; color:#6b7280;">🔌 Conectando al pad...</div>
-            <div style="border: 2px solid #cf9b62; border-radius: 8px; background:#fff; position:relative; overflow:hidden;">
-                <canvas id="topaz-preview-canvas" style="display:block;"></canvas>
-            </div>
-            <p class="text-xs text-gray-400 text-center mt-2">El operador firma en el pad de firmas Topaz y aparece aquí en vivo</p>
-            <div class="flex gap-2 mt-3 justify-center">
-                <button id="btn-topaz-capture" onclick="captureFromTopazPad()" class="btn btn-success" style="font-size:0.875rem;">✓ Listo — Capturar Firma</button>
-            </div>
-        </div>
-
-        <!-- Modo: Dibujar en canvas (mouse/táctil/lápiz digital) -->
-        <div id="sig-draw-area" style="display:none;">
+        <!-- Canvas de dibujo (mouse/táctil/lápiz digital) — ocupa casi toda la pantalla -->
+        <div id="sig-draw-area">
             <canvas id="sig-canvas"></canvas>
         </div>
 
@@ -326,11 +350,17 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- FACTURA TÉRMICA 80mm — Monocromática / Profesional           -->
+<!-- FACTURA TÉRMICA 80mm — Vista previa + impresión manual       -->
 <!-- Compatible: Epson, Xprinter, SAT (papel 80mm)                -->
 <!-- ============================================================ -->
-<div id="invoice-print-area">
-    <div class="thermal-receipt">
+<div id="invoice-preview-overlay">
+    <div>
+        <div id="invoice-preview-toolbar" class="no-print">
+            <button onclick="window.print()" class="btn btn-success">🖨️ Imprimir / Guardar PDF</button>
+            <button onclick="closeInvoicePreview()" class="btn btn-outline">✕ Cerrar</button>
+        </div>
+        <div id="invoice-print-area">
+            <div class="thermal-receipt">
 
         <!-- ===== 1. ENCABEZADO EMPRESA (centrado) ===== -->
         <div class="t-center">
@@ -456,25 +486,24 @@
 
         <hr class="t-solid-divider">
 
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <!-- ============================================================ -->
-<!-- [NÓMINA-V2 + TOPAZ - inicio] JavaScript completo de nómina   -->
+<!-- [NÓMINA-V2] JavaScript completo de nómina                   -->
 <!-- ============================================================ -->
 <script>
-// [NÓMINA-V2 + TOPAZ]
+// [NÓMINA-V2]
 const EVENT_ID = "{{ event_id }}";
 let allOperators = [];        // Datos completos del endpoint /payable
 let currentSignOp = null;     // Operador que se está firmando ahora
 let signaturePad = null;      // Instancia de SignaturePad (canvas)
 let _pollingTimer = null;
 let _pollingInFlight = false;
-let _signMethod = 'topaz';    // 'topaz' (pad físico, DEFAULT) o 'draw' (canvas)
-let _topazPad = null;         // Instancia de TopazSignaturePad
-let _topazSignatureData = null;  // base64 de la firma capturada del pad
 const POLLING_INTERVAL_MS = 30000;  // Fallback lento (WebSocket = tiempo real)
 
 // ============================================================
@@ -591,13 +620,44 @@ function _getDeviceId() {
 }
 
 // ============================================================
-// DESCARGAR PLANILLA EXCEL POR COORDINADOR
+// DESCARGAR PLANILLA EXCEL — 4 MODOS
 // ============================================================
-async function downloadPlanillaCoordinador() {
+// Menú desplegable con 4 opciones:
+//   group_by = "coordinator" | "none"
+//   sort_by  = "lastname"   | "document"
+
+function togglePlanillaMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('planilla-menu');
+    if (!menu) return;
+    menu.classList.toggle('hidden');
+}
+
+// Cerrar el menú al hacer click fuera
+document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('planilla-dropdown-wrap');
+    const menu = document.getElementById('planilla-menu');
+    if (wrap && menu && !wrap.contains(e.target)) {
+        menu.classList.add('hidden');
+    }
+});
+
+async function downloadPlanillaCoordinador(groupBy = 'coordinator', sortBy = 'lastname') {
+    // Cerrar el menú al seleccionar
+    const menu = document.getElementById('planilla-menu');
+    if (menu) menu.classList.add('hidden');
+
+    // Feedback visual: deshabilitar botón durante la descarga
+    const btn = document.querySelector('#planilla-dropdown-wrap > button');
+    const originalText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+
     try {
-        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/planilla-coordinador`, {
-            headers: authHeaders()
-        });
+        const params = new URLSearchParams({ group_by: groupBy, sort_by: sortBy });
+        const resp = await fetch(
+            `/api/payroll/events/${EVENT_ID}/planilla-coordinador?${params.toString()}`,
+            { headers: authHeaders() }
+        );
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             alert('❌ Error al generar planilla: ' + (err.detail || resp.status));
@@ -618,6 +678,8 @@ async function downloadPlanillaCoordinador() {
     } catch(e) {
         console.error('downloadPlanillaCoordinador error:', e);
         alert('❌ Error de red: ' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = originalText || '📄 Planilla ▾'; }
     }
 }
 
@@ -853,127 +915,53 @@ async function toggleUniformReturn(assignmentId) {
 }
 
 // ============================================================
-// FIRMA — MODAL CON PAD TOPAZ (default) o CANVAS
+// FIRMA — MODAL CON CANVAS (dibujo responsive, sin hardware)
 // ============================================================
 
-// [TOPAZ] Cambiar entre "Pad Topaz" (default) y "Dibujar"
-function switchSignMethod(method) {
-    _signMethod = method;
-    const tabTopaz = document.getElementById('tab-topaz');
-    const tabDraw = document.getElementById('tab-draw');
-    const topazArea = document.getElementById('sig-topaz-area');
-    const drawArea = document.getElementById('sig-draw-area');
-
-    if (method === 'topaz') {
-        tabTopaz.classList.remove('btn-outline'); tabTopaz.classList.add('btn-primary');
-        tabDraw.classList.remove('btn-primary'); tabDraw.classList.add('btn-outline');
-        topazArea.style.display = '';
-        drawArea.style.display = 'none';
-        if (_topazPad && _topazPad.hasError()) {
-            _initTopazPad();
-        }
-    } else {
-        tabDraw.classList.remove('btn-outline'); tabDraw.classList.add('btn-primary');
-        tabTopaz.classList.remove('btn-primary'); tabTopaz.classList.add('btn-outline');
-        topazArea.style.display = 'none';
-        drawArea.style.display = '';
-        _initDrawCanvas();
-    }
-}
-
-// [TOPAZ] Inicializar el canvas de dibujo (SignaturePad)
+// Inicializar el canvas de dibujo (SignaturePad) — responsive HiDPI.
+// Recalcula dimensiones reales con getBoundingClientRect y escala el
+// contexto según devicePixelRatio para que se vea nítido en móvil/tablet
+// sin necesidad de pellizcar/hacer zoom. Reajusta al rotar el dispositivo.
+let _sigResizeHandler = null;
 function _initDrawCanvas() {
     const canvas = document.getElementById('sig-canvas');
+    if (!canvas) return;
     if (signaturePad) { signaturePad.off(); }
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
-    canvas.getContext('2d').scale(ratio, ratio);
-    signaturePad = new SignaturePad(canvas, {
-        backgroundColor: '#ffffff',
-        penColor: '#1a1a1a',
-        minWidth: 1.5,
-        maxWidth: 3.0,
-    });
-}
 
-// [TOPAZ] Inicializar el wrapper del pad Topaz y conectar
-function _initTopazPad() {
-    const statusEl = document.getElementById('topaz-status');
-    const previewCanvas = document.getElementById('topaz-preview-canvas');
-
-    // Ajustar canvas de preview
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    previewCanvas.width = previewCanvas.offsetWidth * ratio;
-    previewCanvas.height = previewCanvas.offsetHeight * ratio;
-    const ctx = previewCanvas.getContext('2d');
-    ctx.scale(ratio, ratio);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Limpiar instancia previa
-    if (_topazPad) { _topazPad.disconnect(); }
-
-    _topazPad = new TopazSignaturePad({
-        onStatus: (state, msg) => {
-            const colors = {
-                idle:        { bg: '#f3f4f6', fg: '#6b7280' },
-                connecting:  { bg: '#fef3c7', fg: '#92400e' },
-                ready:       { bg: '#dcfce7', fg: '#166534' },
-                signing:     { bg: '#dbeafe', fg: '#1e40af' },
-                captured:    { bg: '#dcfce7', fg: '#166534' },
-                error:       { bg: '#fee2e2', fg: '#991b1b' },
-                disconnected:{ bg: '#f3f4f6', fg: '#9ca3af' },
-            };
-            const c = colors[state] || colors.idle;
-            statusEl.style.background = c.bg;
-            statusEl.style.color = c.fg;
-            statusEl.textContent = msg;
-        },
-        onPoint: (pt) => {
-            if (pt.isStart) ctx.beginPath();
-            ctx.lineTo(pt.x, pt.y);
-            ctx.stroke();
-        },
-        onSign: (base64Png) => {
-            _topazSignatureData = base64Png;
-        },
-    });
-
-    // Intentar conectar
-    _topazPad.connect().then((ok) => {
-        if (ok) {
-            _topazPad.startCapture();
-        } else {
-            statusEl.innerHTML = '⚠️ Pad no detectado. <button onclick="switchSignMethod(\'draw\')" class="underline font-bold">Usa Dibujar</button>';
+    function resize() {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        const rect = canvas.getBoundingClientRect();
+        const cssW = Math.max(rect.width, 280);
+        const cssH = Math.max(rect.height, 300);
+        // Conservar el dibujo previo al redimensionar (rotación/resize)
+        let prevData = null;
+        if (signaturePad && !signaturePad.isEmpty()) {
+            try { prevData = signaturePad.toDataURL('image/png'); } catch(e) {}
         }
-    });
-}
-
-// [TOPAZ] Capturar la firma del pad al dar click en "✓ Listo"
-async function captureFromTopazPad() {
-    if (!_topazPad || !_topazPad.isReady()) {
-        alert('⚠️ El pad no está conectado. Usa "Dibujar" como alternativa.');
-        return;
-    }
-    const sig = await _topazPad.captureDone();
-    if (sig) {
-        _topazSignatureData = sig;
-        const canvas = document.getElementById('topaz-preview-canvas');
+        canvas.width = Math.floor(cssW * ratio);
+        canvas.height = Math.floor(cssH * ratio);
         const ctx = canvas.getContext('2d');
-        const img = new Image();
-        img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
-        };
-        img.src = sig;
-    } else {
-        alert('⚠️ No se detectó firma en el pad. Pídele al operador que firme de nuevo.');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(ratio, ratio);
+        signaturePad = new SignaturePad(canvas, {
+            backgroundColor: '#ffffff',
+            penColor: '#1a1a1a',
+            minWidth: 1.5,
+            maxWidth: 3.0,
+        });
+        if (prevData) {
+            const img = new Image();
+            img.onload = () => signaturePad.fromDataURL(prevData, { width: cssW, height: cssH });
+            img.src = prevData;
+        }
     }
+
+    resize();
+    if (_sigResizeHandler) window.removeEventListener('resize', _sigResizeHandler);
+    _sigResizeHandler = () => {
+        if (document.getElementById('sig-modal').classList.contains('active')) resize();
+    };
+    window.addEventListener('resize', _sigResizeHandler);
 }
 
 function openSignatureModal(assignmentId) {
@@ -989,52 +977,69 @@ function openSignatureModal(assignmentId) {
     document.getElementById('sig-operator-name').textContent = 'Operador: ' + op.full_name + ' (' + op.document_number + ')';
     document.getElementById('sig-modal').classList.add('active');
 
-    _topazSignatureData = null;
-
-    // Default: Pad Topaz
-    switchSignMethod('topaz');
-    _initTopazPad();
-    _initDrawCanvas();
+    // Inicializar canvas de dibujo (responsive).
+    // requestAnimationFrame asegura que el modal ya tenga dimensiones reales.
+    requestAnimationFrame(() => _initDrawCanvas());
 }
 
 function closeSignatureModal() {
     document.getElementById('sig-modal').classList.remove('active');
     currentSignOp = null;
     if (signaturePad) signaturePad.clear();
-    _topazSignatureData = null;
-    if (_topazPad) { _topazPad.disconnect(); _topazPad = null; }
+    if (_sigResizeHandler) { window.removeEventListener('resize', _sigResizeHandler); _sigResizeHandler = null; }
 }
 
 function clearSignature() {
-    if (_signMethod === 'topaz') {
-        _topazSignatureData = null;
-        if (_topazPad) _topazPad.clearPad();
-        const canvas = document.getElementById('topaz-preview-canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (_topazPad && _topazPad.isReady()) _topazPad.startCapture();
-    } else if (_signMethod === 'draw') {
-        if (signaturePad) signaturePad.clear();
+    if (signaturePad) signaturePad.clear();
+}
+
+// ============================================================
+// OPTIMIZACIÓN DE FIRMA (downscale + monocromático)
+// ============================================================
+// Una firma dibujada a mano no necesita alta resolución ni color.
+// Este helper reduce el canvas original a ~400×200px en blanco/negro
+// puro (1 bit efectivo) antes de exportar a PNG.
+// Resultado: ~50KB → 2-5KB por firma (10× más pequeño).
+// Con 800 operadores: 40MB → 3MB por evento en la BD.
+function optimizeSignature(sourceCanvas) {
+    const TARGET_W = 400;   // ancho objetivo (suficiente para firma legible)
+    const THRESHOLD = 90;   // 0-255: píxeles más oscuros → negro, resto → blanco
+
+    const tmp = document.createElement('canvas');
+    tmp.width = TARGET_W;
+    // Mantener aspect ratio del canvas original
+    const ratio = sourceCanvas.height / sourceCanvas.width;
+    tmp.height = Math.round(TARGET_W * ratio);
+
+    const tctx = tmp.getContext('2d');
+    tctx.fillStyle = '#ffffff';
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+    tctx.drawImage(sourceCanvas, 0, 0, tmp.width, tmp.height);
+
+    // Monocromizar: recorrer píxeles y aplicar umbral
+    const imgData = tctx.getImageData(0, 0, tmp.width, tmp.height);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+        // Luminancia perceptual: 0.299R + 0.587G + 0.114B
+        const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+        const v = lum < THRESHOLD ? 0 : 255;  // negro o blanco
+        d[i] = d[i+1] = d[i+2] = v;
     }
+    tctx.putImageData(imgData, 0, 0);
+
+    return tmp.toDataURL('image/png');
 }
 
 async function confirmSignature() {
     if (!currentSignOp) return;
 
-    let signatureData = null;
-    if (_signMethod === 'topaz') {
-        if (!_topazSignatureData) {
-            alert('⚠️ Captura la firma del pad primero (botón "✓ Listo").');
-            return;
-        }
-        signatureData = _topazSignatureData;
-    } else {
-        if (!signaturePad || signaturePad.isEmpty()) {
-            alert('⚠️ Por favor dibuje la firma antes de confirmar.');
-            return;
-        }
-        signatureData = signaturePad.toDataURL('image/png');
+    if (!signaturePad || signaturePad.isEmpty()) {
+        alert('⚠️ Por favor dibuje la firma antes de confirmar.');
+        return;
     }
+    // [OPTIMIZACIÓN] Comprimir la firma antes de enviar:
+    // downscale a 400px + monocromático → ~50KB a ~2-5KB.
+    const signatureData = optimizeSignature(signaturePad.canvas);
 
     const btn = document.getElementById('btn-confirm-sig');
     btn.disabled = true;
@@ -1119,9 +1124,9 @@ async function confirmPayment(recordId) {
             updateStatsFromOps();
             renderTable(getCurrentFilteredList());
 
-            if (confirm(`✅ Pago confirmado. Factura generada: ${result.invoice_number}\n\n¿Deseas generar/imprimir la factura ahora?`)) {
-                generateInvoice(recordId);
-            }
+            // No abrir/imprimir la factura automáticamente: el usuario decide
+            // manualmente cuándo ver/imprimir usando el botón "📄 Ver Factura".
+            showToast(`✅ Pago confirmado · Factura ${result.invoice_number}`, 'bg-green-500');
         } else if (resp.status === 409) {
             const err = await resp.json().catch(() => ({}));
             alert('⚠️ ' + (err.detail || 'El operador debe firmar antes de pagar.'));
@@ -1191,11 +1196,25 @@ async function generateInvoice(recordId) {
             sigImg.style.display = 'none';
         }
 
-        window.print();
+        // No abrir el diálogo de impresión automáticamente.
+        // El usuario decide manualmente si imprime/guarda como PDF
+        // desde la vista previa con el botón "🖨️ Imprimir".
+        openInvoicePreview();
     } catch(e) {
         console.error('generateInvoice error:', e);
         alert('❌ Error: ' + e.message);
     }
+}
+
+// Vista previa de factura: muestra el recibo en pantalla y deja que el
+// usuario decida manualmente cuándo imprimir (botón explícito).
+function openInvoicePreview() {
+    const overlay = document.getElementById('invoice-preview-overlay');
+    if (overlay) overlay.classList.add('active');
+}
+function closeInvoicePreview() {
+    const overlay = document.getElementById('invoice-preview-overlay');
+    if (overlay) overlay.classList.remove('active');
 }
 
 // ============================================================
@@ -1398,6 +1417,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 <!-- ============================================================ -->
-<!-- [NÓMINA-V2 + TOPAZ - fin]                                    -->
+<!-- [NÓMINA-V2] Fin                                              -->
 <!-- ============================================================ -->
 {% endblock %}
