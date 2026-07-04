@@ -27,6 +27,7 @@ from app.models.payroll import Evaluation, PayrollRecord
 # Security / Audit
 from app.models.audit import AuditLog, RevokedToken
 from app.models.blocked_document import BlockedDocument
+from app.models.password_reset import PasswordResetToken
 
 __all__ = [
     "BaseModel",
@@ -39,4 +40,5 @@ __all__ = [
     "Evaluation", "PayrollRecord",
     "AuditLog", "RevokedToken",
     "BlockedDocument",
+    "PasswordResetToken",
 ]

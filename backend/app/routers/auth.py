@@ -1,7 +1,7 @@
 """Auth router — login, register, refresh, logout, change password."""
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -14,6 +14,7 @@ from app.models.operators import Operator
 from app.models.roles import Role
 from app.models.audit import AuditLog
 from app.models.blocked_document import BlockedDocument
+from app.models.password_reset import PasswordResetToken
 from app.schemas.auth import (
     LoginRequest, LoginResponse, UserBrief,
     RegisterRequest, RegisterResponse,
@@ -440,11 +441,17 @@ async def delete_admin(
 
 
 @router.post("/forgot-password")
+@limiter.limit("5/minute")
 async def forgot_password(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Request password reset — verifies document number + phone."""
+    """Request password reset — verifies document number + phone.
+
+    SECURITY (CRIT-2 fix): No longer returns a JWT. Instead, creates an opaque
+    server-side PasswordResetToken record and returns only its UUID id (reset_id).
+    This id cannot be used to authenticate against the API.
+    """
     data = await request.json()
     document_number = data.get("document_number", "").strip()
     phone = data.get("phone", "").strip()
@@ -465,33 +472,40 @@ async def forgot_password(
         # Don't reveal if user exists or not
         return {"message": "Si los datos son correctos, se generó un token de recuperación"}
 
-    # Generate reset token (JWT with 15 min expiry)
-    from app.services.auth import create_access_token
-    reset_token = create_access_token(
-        user.id, user.email, user.user_type,
-        role_name=None, expires_delta_minutes=15
+    # Create opaque, single-use, server-side reset token (NOT a JWT)
+    reset_record = PasswordResetToken(
+        user_id=user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
     )
+    db.add(reset_record)
+    await db.commit()
+    await db.refresh(reset_record)
 
     return {
         "message": "Datos verificados",
-        "reset_token": reset_token["token"],
+        "reset_id": str(reset_record.id),
         "user_name": f"{user.first_name} {user.last_name}",
     }
 
 
 @router.post("/reset-password")
+@limiter.limit("10/minute")
 async def reset_password(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Reset password using a valid reset token."""
+    """Reset password using a valid opaque reset_id.
+
+    SECURITY (CRIT-2 fix): Validates the server-side PasswordResetToken
+    (exists, not expired, not used). Marks it as used (single-use).
+    """
     data = await request.json()
-    reset_token = data.get("reset_token", "")
+    reset_id = data.get("reset_id", "")
     new_password = data.get("new_password", "")
     confirm_password = data.get("confirm_password", "")
 
-    if not reset_token or not new_password:
-        raise HTTPException(status_code=400, detail="Token y nueva contraseña son requeridos")
+    if not reset_id or not new_password:
+        raise HTTPException(status_code=400, detail="ID de reset y nueva contraseña son requeridos")
 
     if new_password != confirm_password:
         raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
@@ -499,21 +513,43 @@ async def reset_password(
     if len(new_password) < 6:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
 
-    # Decode and validate reset token
-    from app.services.auth import decode_token
-    payload = decode_token(reset_token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Token de recuperación inválido o expirado")
+    # Validate opaque reset_id (exists, not expired, not used)
+    try:
+        reset_uuid = uuid.UUID(reset_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="ID de recuperación inválido")
 
-    user_id = payload.get("sub")
     result = await db.execute(
-        select(User).where(User.id == uuid.UUID(user_id), User.is_active == True)
+        select(PasswordResetToken).where(
+            PasswordResetToken.id == reset_uuid,
+            PasswordResetToken.is_active == True,
+        )
+    )
+    reset_record = result.scalar_one_or_none()
+    if not reset_record:
+        raise HTTPException(status_code=401, detail="ID de recuperación inválido")
+
+    # Check expiry
+    if datetime.now(timezone.utc) > reset_record.expires_at:
+        raise HTTPException(status_code=401, detail="El ID de recuperación ha expirado")
+
+    # Check single-use
+    if reset_record.used_at is not None:
+        raise HTTPException(status_code=401, detail="Este ID de recuperación ya fue utilizado")
+
+    # Get user
+    result = await db.execute(
+        select(User).where(User.id == reset_record.user_id, User.is_active == True)
     )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    # Change password
     user.password_hash = hash_password(new_password)
+
+    # Mark token as used (single-use)
+    reset_record.used_at = datetime.now(timezone.utc)
 
     audit = AuditLog(
         user_id=user.id,
