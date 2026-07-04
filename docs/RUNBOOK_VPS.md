@@ -110,8 +110,12 @@ cat backup_20260616.sql | docker exec -i logistica_postgres psql -U logistica_us
   - **NUNCA usar Flexible** (causa loop de redirecciones con Nginx).
 
   ### IPs reales de clientes (auditoría + rate-limit)
-  - Nginx está configurado con `set_real_ip_from` para los rangos IP de Cloudflare.
-  - El backend lee el header `CF-Connecting-IP` (ver `app/dependencies/rate_limit.py`).
+  - Nginx está configurado con `set_real_ip_from` para los rangos IP de Cloudflare
+    y `real_ip_header CF-Connecting-IP` para resolver la IP real del cliente.
+  - Nginx sobrescribe el header `X-Real-IP` con la IP saneada antes de reenviar
+    al backend. El backend lee `X-Real-IP` (no forjable por el cliente) en
+    `app/dependencies/rate_limit.py`. Esto evita bypass del rate-limit por
+    spoofing de headers.
   - Para actualizar los rangos IP de Cloudflare (cambian ocasionalmente):
     ```bash
     # En el VPS, actualizar nginx.conf con las IPs actuales:
