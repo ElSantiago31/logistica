@@ -16,6 +16,8 @@ from app.services.operators import (
     upload_operator_photo, block_operator, unblock_operator, search_blocked_documents
 )
 from app.services.photos import save_operator_photo_bytes, delete_operator_photos
+from app.services.documents import delete_rut_pdf
+from app.models.audit import AuditLog
 from app.dependencies.auth import get_current_active_user, require_admin_or_coordinator, require_superadmin
 
 router = APIRouter(prefix="/api/operators", tags=["Operators"])
@@ -202,6 +204,128 @@ async def update_my_profile(
 
     await db.commit()
     return {"message": "Perfil actualizado correctamente"}
+
+
+# --- Pending approvals (superadmin only) ---
+
+@router.get("/pending")
+async def list_pending_approvals(
+    current_user: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista operadores pendientes de aprobación (is_approved=False).
+
+    Devuelve datos básicos + rutas de foto (thumbnail) y RUT para que el
+    superadmin pueda revisar la solicitud antes de aprobar/rechazar.
+    """
+    result = await db.execute(
+        select(Operator, User)
+        .join(User, Operator.user_id == User.id)
+        .where(
+            User.is_approved == False,
+            User.is_active == True,
+            User.user_type == "operator",
+        )
+        .order_by(User.created_at.desc())
+    )
+    rows = result.all()
+    return {
+        "items": [
+            {
+                "user_id": str(u.id),
+                "operator_id": str(op.id),
+                "full_name": f"{u.first_name} {u.last_name}",
+                "email": u.email,
+                "document_type": u.document_type,
+                "document_number": u.document_number,
+                "phone": u.phone,
+                "photo_thumbnail_path": op.photo_thumbnail_path,
+                "rut_path": op.rut_path,
+                "created_at": str(u.created_at) if u.created_at else None,
+            }
+            for op, u in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@router.post("/{user_id}/approve")
+async def approve_operator(
+    user_id: uuid.UUID,
+    current_user: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aprueba un operador pendiente (is_approved=False → True)."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    if user.user_type != "operator":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se pueden aprobar operadores")
+    if user.is_approved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El operador ya está aprobado")
+
+    user.is_approved = True
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="approve_operator",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"Operador aprobado: {user.first_name} {user.last_name}",
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {"message": "Operador aprobado exitosamente"}
+
+
+@router.post("/{user_id}/reject")
+async def reject_operator(
+    user_id: uuid.UUID,
+    request: dict = None,
+    current_user: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rechaza un operador pendiente — desactiva la cuenta + limpia archivos + auditoría.
+
+    Body opcional: { "reason": "motivo del rechazo" }
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    if user.user_type != "operator":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se pueden rechazar operadores")
+    if user.is_approved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El operador ya está aprobado")
+
+    reason = (request or {}).get("reason", "Rechazado por superadmin")
+
+    # Obtener perfil para limpiar archivos
+    op_result = await db.execute(select(Operator).where(Operator.user_id == user_id))
+    operator = op_result.scalar_one_or_none()
+    if operator:
+        delete_operator_photos(operator.photo_path, operator.photo_thumbnail_path)
+        delete_rut_pdf(operator.rut_path)
+        operator.photo_path = None
+        operator.photo_thumbnail_path = None
+        operator.rut_path = None
+
+    # Soft delete
+    user.is_active = False
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="reject_operator",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"Operador rechazado: {user.first_name} {user.last_name}. Motivo: {reason}",
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {"message": "Operador rechazado exitosamente"}
 
 
 # --- Admin endpoints ---
