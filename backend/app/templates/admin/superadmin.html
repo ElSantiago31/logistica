@@ -30,6 +30,11 @@
             <div id="pendingList" class="divide-y">
                 <div class="p-8 text-center text-gray-400">Cargando solicitudes...</div>
             </div>
+            <div id="pendingPagination" class="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between hidden">
+                <button id="pendingPrev" onclick="changePendingPage(-1)" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-gray-600" disabled>← Anterior</button>
+                <span id="pendingPageInfo" class="text-xs text-gray-500 font-medium"></span>
+                <button id="pendingNext" onclick="changePendingPage(1)" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-gray-600" disabled>Siguiente →</button>
+            </div>
         </div>
 
         <div id="adminsTable" class="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -139,7 +144,11 @@
         try{const r=await fetch('/api/auth/admins/'+id,{method:'DELETE',headers:authH()});if(r.ok||r.status===204){toast('Desactivado','success');loadAdmins()}else toast('Error','error')}catch(e){toast('Error','error')}
     }
 
-    // ===== SOLICITUDES PENDIENTES =====
+    // ===== SOLICITUDES PENDIENTES (con paginación client-side) =====
+    const PENDING_PER_PAGE=5;
+    let pendingAllItems=[];
+    let pendingCurrentPage=1;
+
     async function loadPendingOperators(){
         const card=document.getElementById('pendingCard');
         const list=document.getElementById('pendingList');
@@ -148,32 +157,64 @@
             const r=await fetch('/api/operators/pending',{headers:authH()});
             if(!r.ok){card.classList.add('hidden');return}
             const data=await r.json();
-            const items=data.items||[];
-            countBadge.textContent=items.length;
-            if(!items.length){card.classList.add('hidden');return}
+            pendingAllItems=data.items||[];
+            countBadge.textContent=pendingAllItems.length;
+            if(!pendingAllItems.length){card.classList.add('hidden');return}
             card.classList.remove('hidden');
-            let h='';
-            items.forEach(op=>{
-                const photo=op.photo_thumbnail_path?`<img src="${op.photo_thumbnail_path}" class="w-14 h-14 rounded-full object-cover border">`:'<div class="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl">👤</div>';
-                const rut=op.rut_path?`<a href="${op.rut_path}" target="_blank" download class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded font-semibold">📄 Ver RUT</a>`:'<span class="text-xs text-gray-400">Sin RUT</span>';
-                h+=`<div class="p-4 flex items-center gap-4">
-                    ${photo}
-                    <div class="flex-1 min-w-0">
-                        <p class="font-semibold text-gray-800 truncate">${op.full_name}</p>
-                        <p class="text-xs text-gray-500">${op.document_type} ${op.document_number} · ${op.email||''}</p>
-                        <p class="text-xs text-gray-400">${op.phone||'Sin teléfono'}</p>
-                    </div>
-                    <div class="flex flex-col gap-1 items-end">
-                        ${rut}
-                        <div class="flex gap-1 mt-1">
-                            <button onclick="approveOperator('${op.user_id}')" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold">✅ Aprobar</button>
-                            <button onclick="rejectOperator('${op.user_id}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold">❌ Rechazar</button>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            list.innerHTML=h;
+            pendingCurrentPage=1;
+            renderPendingPage();
         }catch(e){card.classList.add('hidden')}
+    }
+
+    function renderPendingPage(){
+        const list=document.getElementById('pendingList');
+        const totalPages=Math.ceil(pendingAllItems.length/PENDING_PER_PAGE);
+        if(pendingCurrentPage>totalPages)pendingCurrentPage=totalPages;
+        if(pendingCurrentPage<1)pendingCurrentPage=1;
+        const start=(pendingCurrentPage-1)*PENDING_PER_PAGE;
+        const pageItems=pendingAllItems.slice(start,start+PENDING_PER_PAGE);
+        let h='';
+        pageItems.forEach(op=>{
+            const photo=op.photo_thumbnail_path?`<img src="${op.photo_thumbnail_path}" class="w-14 h-14 rounded-full object-cover border">`:'<div class="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl">👤</div>';
+            const rut=op.rut_path?`<a href="${op.rut_path}" target="_blank" download class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded font-semibold">📄 Ver RUT</a>`:'<span class="text-xs text-gray-400">Sin RUT</span>';
+            h+=`<div class="p-4 flex items-center gap-4">
+                ${photo}
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-800 truncate">${op.full_name}</p>
+                    <p class="text-xs text-gray-500">${op.document_type} ${op.document_number} · ${op.email||''}</p>
+                    <p class="text-xs text-gray-400">${op.phone||'Sin teléfono'}</p>
+                </div>
+                <div class="flex flex-col gap-1 items-end">
+                    <div class="flex gap-1 mb-1">
+                        ${rut}
+                        <a href="/admin/operator/${op.user_id}" target="_blank" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">👁️ Ver detalle</a>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="approveOperator('${op.user_id}')" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold">✅ Aprobar</button>
+                        <button onclick="rejectOperator('${op.user_id}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold">❌ Rechazar</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+        list.innerHTML=h;
+        // Controles de paginación
+        const pager=document.getElementById('pendingPagination');
+        const prev=document.getElementById('pendingPrev');
+        const next=document.getElementById('pendingNext');
+        const info=document.getElementById('pendingPageInfo');
+        if(totalPages>1){
+            pager.classList.remove('hidden');
+            prev.disabled=pendingCurrentPage<=1;
+            next.disabled=pendingCurrentPage>=totalPages;
+            info.textContent='Página '+pendingCurrentPage+' de '+totalPages+' ('+pendingAllItems.length+' solicitudes)';
+        }else{
+            pager.classList.add('hidden');
+        }
+    }
+
+    function changePendingPage(delta){
+        pendingCurrentPage+=delta;
+        renderPendingPage();
     }
 
     async function approveOperator(userId){

@@ -124,9 +124,12 @@
         currentOp=o;
         const n=(o.first_name||'')+' '+(o.last_name||'');
         const isActive=o.is_active!==false;
-        const statusBadge=isActive
-           ?'<span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✅ Activo</span>'
-            :'<span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">🔒 Bloqueado</span>';
+        const isPending = isActive && o.is_approved===false;
+        const statusBadge = isPending
+            ?'<span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">⏳ Pendiente de aprobación</span>'
+            :(isActive
+                ?'<span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✅ Activo</span>'
+                :'<span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">🔒 Bloqueado</span>');
         const avatarHtml = o.photo_path
             ? '<div onclick="openPhotoViewer(\''+o.photo_path+'\')" class="relative cursor-pointer group">'+
                 '<img src="'+o.photo_path+'" class="w-16 h-16 rounded-full object-cover border-2 border-white/40 group-hover:opacity-80 transition">'+
@@ -144,8 +147,10 @@
     }
 
     function renderViewMode(o,n,avatarHtml,statusBadge,isActive){
+        const isPending = isActive && o.is_approved===false;
+        const gradClass = isPending ? 'from-amber-600 to-amber-500' : (isActive?'from-primary-800 to-primary-600':'from-red-800 to-red-600');
         document.getElementById('detail').innerHTML=`
-        <div class="bg-gradient-to-r ${isActive?'from-primary-800 to-primary-600':'from-red-800 to-red-600'} text-white p-6">
+        <div class="bg-gradient-to-r ${gradClass} text-white p-6">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     ${avatarHtml}
@@ -227,6 +232,10 @@
                 ${o.rut_path?`
                     <a href="${o.rut_path}" target="_blank" download class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center">📄 Descargar RUT</a>
                 `:`<span class="text-xs text-gray-400 self-center">Sin RUT</span>`}
+                ${isPending?`
+                    <button onclick="approveOp()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">✅ Aprobar Operador</button>
+                    <button onclick="rejectOp()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">❌ Rechazar Operador</button>
+                `:''}
                 ${isActive?`
                     <button onclick="openBlockModal()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium">🔒 Bloquear</button>
                     <button onclick="deactivateOp()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">🗑️ Eliminar</button>
@@ -477,6 +486,25 @@
                 const err=await r.json();
                 toast(err.detail||'Error al eliminar','error');
             }
+        }catch(e){toast('Error de conexión','error')}
+    }
+
+    async function approveOp(){
+        if(!confirm('¿Aprobar este operador? Podrá iniciar sesión inmediatamente.'))return;
+        try{
+            const r=await fetch('/api/operators/'+opId+'/approve',{method:'POST',headers:authH()});
+            if(r.ok){toast('Operador aprobado ✅','success');setTimeout(()=>load(),800)}
+            else{const e=await r.json();toast(e.detail||'Error','error')}
+        }catch(e){toast('Error de conexión','error')}
+    }
+
+    async function rejectOp(){
+        const reason=prompt('Motivo del rechazo (opcional):','No cumple requisitos');
+        if(reason===null)return;
+        try{
+            const r=await fetch('/api/operators/'+opId+'/reject',{method:'POST',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify({reason})});
+            if(r.ok){toast('Operador rechazado','success');setTimeout(()=>window.location.href='/admin/superadmin',1200)}
+            else{const e=await r.json();toast(e.detail||'Error','error')}
         }catch(e){toast('Error de conexión','error')}
     }
 
