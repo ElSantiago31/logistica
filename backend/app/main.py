@@ -67,6 +67,12 @@ FRONTEND_JS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend
 os.makedirs(FRONTEND_PUBLIC, exist_ok=True)
 os.makedirs(FRONTEND_JS, exist_ok=True)
 
+# Asegurar que los directorios de datos existan ANTES de montarlos con StaticFiles,
+# ya que StaticFiles valida la existencia al crear la instancia (en tiempo de importación),
+# no cuando arranca el servidor (lifespan).
+for _d in (settings.PHOTOS_DIR, settings.PHOTOS_THUMBNAIL_DIR, settings.RUT_DIR):
+    os.makedirs(_d, exist_ok=True)
+
 # Mount static files for photos and RUT PDFs
 app.mount("/static/photos", StaticFiles(directory=settings.PHOTOS_DIR), name="photos")
 app.mount("/static/rut", StaticFiles(directory=settings.RUT_DIR), name="rut")
