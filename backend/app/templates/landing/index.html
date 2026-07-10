@@ -88,6 +88,7 @@
         <h2 class="text-lg font-semibold mb-3" style="color:#cf9b62">📝 Antes de empezar necesitas tener a la mano:</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm" style="color:#d4b896">
             <div class="flex items-center gap-2">🪪 Tu cédula o documento de identidad</div>
+            <div class="flex items-center gap-2">📄 Tu <strong>RUT en PDF</strong> (obligatorio)</div>
             <div class="flex items-center gap-2">🏥 Nombre de tu EPS</div>
             <div class="flex items-center gap-2">🏦 Nombre de tu Fondo de Pensión</div>
             <div class="flex items-center gap-2">🩸 Tu tipo de sangre</div>
@@ -480,6 +481,26 @@
                 <p id="photo-error" class="text-red-500 text-xs mt-2 hidden">⚠️ La foto es obligatoria para registrarte</p>
             </div>
 
+            <!-- RUT obligatorio (PDF) -->
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">📄 Tu RUT (Obligatorio) *</label>
+                <p class="text-xs text-gray-500 mb-3">Sube tu Registro Único Tributario en formato PDF. El administrador lo revisará antes de aprobar tu cuenta.</p>
+                <button type="button" id="rut-select-btn" onclick="document.getElementById('rut-input').click()"
+                    class="w-full py-4 rounded-lg font-semibold transition text-center cursor-pointer"
+                    style="background:rgba(207,155,98,0.1);border:2px dashed rgba(207,155,98,0.3);color:#cf9b62">
+                    📄 Selecciona tu RUT en PDF<br>
+                    <span class="text-xs" style="color:rgba(207,155,98,0.5)">Toca aquí · Solo PDF · Máximo 10MB</span>
+                </button>
+                <input type="file" id="rut-input" accept="application/pdf" class="hidden">
+                <div id="rut-preview" class="hidden mt-3 text-center">
+                    <p class="text-sm" style="color:#cf9b62">✅ RUT cargado: <strong id="rut-file-name"></strong></p>
+                    <button type="button" onclick="document.getElementById('rut-input').click()" class="block mx-auto mt-2 text-xs" style="color:#cf9b62">
+                        ↻ Cambiar RUT
+                    </button>
+                </div>
+                <p id="rut-error" class="text-red-500 text-xs mt-2 hidden">⚠️ El RUT en PDF es obligatorio para registrarte</p>
+            </div>
+
             <div id="summary" class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm"></div>
 
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -705,6 +726,13 @@ async function submitForm() {
         return;
     }
 
+    // Validate RUT is present (before disabling button)
+    if (!window._operatorRutData) {
+        showToast('Debes subir tu RUT en PDF para registrarte', 'error');
+        goToStep(3);
+        return;
+    }
+
     const btn = document.getElementById('submit-btn');
     const text = document.getElementById('submit-text');
     const spinner = document.getElementById('submit-spinner');
@@ -735,6 +763,7 @@ async function submitForm() {
         shirt_size: document.getElementById('shirt_size').value || undefined,
         jacket_size: document.getElementById('jacket_size').value || undefined,
         photo_data: window._operatorPhotoData || undefined,
+        rut_data: window._operatorRutData || undefined,
     };
 
     // Collect selected experience roles
@@ -744,6 +773,13 @@ async function submitForm() {
     // Validate photo is present
     if (!data.photo_data) {
         showToast('Debes subir tu foto para registrarte', 'error');
+        goToStep(3);
+        return;
+    }
+
+    // Validate RUT is present
+    if (!data.rut_data) {
+        showToast('Debes subir tu RUT en PDF para registrarte', 'error');
         goToStep(3);
         return;
     }
@@ -917,6 +953,41 @@ function handlePhotoFile(file) {
             _photoError.classList.add('hidden');
         };
         img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+// ===== RUT UPLOAD (Step 3 - mandatory PDF) =====
+window._operatorRutData = null;
+const _rutInput = document.getElementById('rut-input');
+const _rutPreview = document.getElementById('rut-preview');
+const _rutError = document.getElementById('rut-error');
+const _rutFileName = document.getElementById('rut-file-name');
+
+_rutInput.addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0]) handleRutFile(e.target.files[0]);
+});
+
+function handleRutFile(file) {
+    if (file.type !== 'application/pdf') {
+        showToast('El RUT debe ser un archivo PDF', 'error');
+        _rutError.classList.remove('hidden');
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('El PDF supera 10MB', 'error');
+        _rutError.classList.remove('hidden');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        window._operatorRutData = ev.target.result;
+        _rutFileName.textContent = file.name;
+        _rutPreview.classList.remove('hidden');
+        _rutError.classList.add('hidden');
+    };
+    reader.onerror = function() {
+        showToast('Error leyendo el PDF. Intenta con otro archivo.', 'error');
     };
     reader.readAsDataURL(file);
 }

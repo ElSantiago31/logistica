@@ -32,48 +32,41 @@
 <div class="noise-overlay"></div>
 <div class="success-container">
     <div class="success-card">
-        <div class="text-6xl mb-4">🎉</div>
-        <h1 class="text-2xl font-bold mb-2">¡Registro Exitoso!</h1>
-        <p class="mb-6">Tu registro ha sido procesado correctamente.</p>
+        <div class="text-6xl mb-4">⏳</div>
+        <h1 class="text-2xl font-bold mb-2" style="color:#cf9b62">¡Registro Recibido!</h1>
+        <p class="mb-6">Hemos recibido tu solicitud de registro correctamente. Tu cuenta está <strong>pendiente de aprobación</strong>.</p>
 
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-            <p class="font-semibold mb-2" style="color:#cf9b62">📋 ¿Qué sigue? Sigue estos pasos:</p>
+            <p class="font-semibold mb-2" style="color:#cf9b62">📋 ¿Qué sigue ahora?</p>
             <div class="space-y-2 text-sm" style="color:#d4b896">
                 <div class="flex items-start gap-2">
                     <span class="font-bold" style="color:#cf9b62">✅</span>
-                    <span>📸 Tu foto fue registrada correctamente</span>
+                    <span>📸 Tu foto y 📄 tu RUT fueron recibidos correctamente</span>
                 </div>
                 <div class="flex items-start gap-2">
                     <span class="font-bold" style="color:#cf9b62">Paso 1.</span>
-                    <span>🔑 Inicia sesión con tu <strong>número de cédula</strong> y la contraseña que creaste</span>
+                    <span>🔍 El <strong>administrador revisará tu RUT</strong> y aprobará tu cuenta</span>
                 </div>
                 <div class="flex items-start gap-2">
                     <span class="font-bold" style="color:#cf9b62">Paso 2.</span>
-                    <span>✏️ Completa tu perfil si quedaron datos pendientes</span>
+                    <span>⏳ Este proceso puede tomar <strong>algunas horas o días hábiles</strong></span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="font-bold" style="color:#cf9b62">Paso 3.</span>
+                    <span>✅ Una vez aprobado, podrás iniciar sesión con tu <strong>número de cédula</strong> y contraseña</span>
                 </div>
             </div>
         </div>
 
-        <a id="login-link" href="/enrolamiento/login" class="inline-block mb-6 bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-8 rounded-lg transition" style="font-size:1.05rem">
-            🔑 Iniciar Sesión
-        </a>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm" style="background:rgba(255,193,7,0.08)!important;border-color:rgba(255,193,7,0.3)!important">
+            <p style="color:#d4b896">
+                <strong style="color:#ffc107">⚠️ Importante:</strong> Si intentas iniciar sesión antes de ser aprobado, verás un mensaje de "cuenta pendiente de aprobación".
+            </p>
+        </div>
 
-        <a href="/" class="font-medium" style="color:#cf9b62">
+        <a href="/" class="inline-block mb-6 bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-8 rounded-lg transition" style="font-size:1.05rem">
             ← Volver al Inicio
         </a>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-const params = new URLSearchParams(window.location.search);
-const docNumber = params.get('doc');
-
-// Pass doc number to login page for pre-fill
-if (docNumber) {
-    const loginLink = document.getElementById('login-link');
-    if (loginLink) loginLink.href = '/enrolamiento/login?doc=' + encodeURIComponent(docNumber);
-}
-</script>
 {% endblock %}
