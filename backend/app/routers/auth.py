@@ -28,6 +28,7 @@ from app.services.auth import (
     decode_token, revoke_token,
 )
 from app.services.photos import save_operator_photo
+from app.services.documents import save_rut_pdf
 from app.dependencies.auth import get_current_user, get_current_active_user, require_superadmin
 from app.dependencies.rate_limit import limiter
 
@@ -65,6 +66,14 @@ async def login(request: Request, body: LoginRequest = None, db: AsyncSession = 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Documento o contraseña incorrectos",
+        )
+
+    # Si el operador aún no ha sido aprobado, no emitir tokens.
+    # Mensaje claro para que sepa que su solicitud está en revisión.
+    if not user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu registro está pendiente de aprobación por el administrador. Inténtalo más tarde.",
         )
 
     # Update last login
@@ -123,7 +132,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
             detail="Este documento ha sido bloqueado. Contacte al administrador.",
         )
 
-    # Create user (auto-approved on registration)
+    # Create user (pending approval — superadmin must review RUT)
     user = User(
         email=body.email,
         password_hash=hash_password(body.password),
@@ -134,13 +143,16 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         document_number=body.document_number,
         user_type="operator",
         is_verified=True,
-        is_approved=True,
+        is_approved=False,
     )
     db.add(user)
     await db.flush()
 
     # Process and save the mandatory photo (validates + normalizes)
     photo_name, thumb_name = save_operator_photo(body.photo_data, user.id)
+
+    # Process and save the mandatory RUT PDF (validates + compresses)
+    rut_path = save_rut_pdf(body.rut_data, user.id)
 
     # Security: filtrar roles event-only de experience_roles (aunque el frontend
     # no los muestre, un usuario malicioso podría enviarlos por API).
@@ -183,6 +195,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         experience_roles=json.dumps(filtered_role_ids) if filtered_role_ids else None,
         photo_path=photo_name,
         photo_thumbnail_path=thumb_name,
+        rut_path=rut_path,
     )
     db.add(operator)
 
@@ -199,7 +212,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
     return RegisterResponse(
         id=user.id,
         email=body.email,
-        message="Registro exitoso. Bienvenido al sistema.",
+        message="Registro recibido. Tu solicitud está pendiente de aprobación por el administrador.",
     )
 
 
