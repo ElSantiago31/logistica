@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     PHOTOS_THUMBNAIL_DIR: str = "./data/photos/thumbnails"
     PHOTO_MAX_SIZE_MB: int = 5
 
+    # RUT (Registro Único Tributario) — PDF obligatorio en el registro
+    RUT_DIR: str = "./data/rut"
+    RUT_MAX_SIZE_MB: int = 5
+    # Compresión del PDF del RUT
+    RUT_COMPRESS_DPI: int = 150
+    RUT_COMPRESS_QUALITY: int = 75
+
     # pgAdmin
     PGADMIN_EMAIL: str = "admin@logistica.com"
     PGADMIN_PASSWORD: str = "admin123"

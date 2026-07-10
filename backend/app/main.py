@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle events."""
     os.makedirs(settings.PHOTOS_DIR, exist_ok=True)
     os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
+    os.makedirs(settings.RUT_DIR, exist_ok=True)
     yield
 
 
@@ -66,8 +67,9 @@ FRONTEND_JS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend
 os.makedirs(FRONTEND_PUBLIC, exist_ok=True)
 os.makedirs(FRONTEND_JS, exist_ok=True)
 
-# Mount static files for photos
+# Mount static files for photos and RUT PDFs
 app.mount("/static/photos", StaticFiles(directory=settings.PHOTOS_DIR), name="photos")
+app.mount("/static/rut", StaticFiles(directory=settings.RUT_DIR), name="rut")
 app.mount("/static/frontend", StaticFiles(directory=FRONTEND_PUBLIC), name="frontend_static")
 app.mount("/static/js", StaticFiles(directory=FRONTEND_JS), name="frontend_js")
 

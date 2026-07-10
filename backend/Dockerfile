@@ -18,7 +18,7 @@ COPY . .
 RUN chmod +x /app/entrypoint.sh
 
 # Create data dirs
-RUN mkdir -p /app/data/photos/thumbnails
+RUN mkdir -p /app/data/photos/thumbnails /app/data/rut
 
 EXPOSE 8000
 
