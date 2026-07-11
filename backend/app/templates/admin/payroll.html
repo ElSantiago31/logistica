@@ -244,6 +244,20 @@
                     <a href="#" onclick="downloadPlanillaCoordinador('coordinator','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
                         📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(una hoja por coordinador)</span>
                     </a>
+                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Agrupado por rol</div>
+                    <a href="#" onclick="downloadPlanillaCoordinador('role','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📋 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(una hoja por rol)</span>
+                    </a>
+                    <a href="#" onclick="downloadPlanillaCoordinador('role','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(una hoja por rol)</span>
+                    </a>
+                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Por coordinador y rol</div>
+                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator_role','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📋 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(hoja por coordinador y rol)</span>
+                    </a>
+                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator_role','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
+                        📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(hoja por coordinador y rol)</span>
+                    </a>
                     <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Lista única</div>
                     <a href="#" onclick="downloadPlanillaCoordinador('none','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
                         📄 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(lista única, no agrupar)</span>
@@ -620,10 +634,10 @@ function _getDeviceId() {
 }
 
 // ============================================================
-// DESCARGAR PLANILLA EXCEL — 4 MODOS
+// DESCARGAR PLANILLA EXCEL — 8 MODOS
 // ============================================================
-// Menú desplegable con 4 opciones:
-//   group_by = "coordinator" | "none"
+// Menú desplegable con 8 opciones:
+//   group_by = "coordinator" | "role" | "coordinator_role" | "none"
 //   sort_by  = "lastname"   | "document"
 
 function togglePlanillaMenu(e) {
