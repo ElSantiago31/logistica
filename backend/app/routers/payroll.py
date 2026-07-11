@@ -862,7 +862,7 @@ async def get_payroll_status(
 # Solo se incluyen operadores con status='checked_in'.
 
 # Valores válidos para los modos de generación de planilla
-_PLANILLA_GROUP_BY = {"coordinator", "none"}
+_PLANILLA_GROUP_BY = {"coordinator", "role", "coordinator_role", "none"}
 _PLANILLA_SORT_BY = {"lastname", "document"}
 
 
@@ -880,6 +880,8 @@ async def download_planilla_coordinador(
 
     - ``group_by``:
         - ``"coordinator"`` (default): una hoja por coordinador.
+        - ``"role"``: una hoja por cada rol.
+        - ``"coordinator_role"``: una hoja por combinación coordinador-rol.
         - ``"none"``: lista única (no agrupar), hojas tituladas con el evento.
     - ``sort_by``:
         - ``"lastname"`` (default): ordenado por apellido.
@@ -946,6 +948,7 @@ async def download_planilla_coordinador(
             "address": operator.address or "",
             "phone": op_user.phone or "",
             "coordinator_name": coord_name,
+            "role_name": role.name if role else "Operador",
             "jacket_number": assignment.jacket_number or "",
             "cap_number": assignment.cap_number or "",
         })
@@ -975,6 +978,10 @@ async def download_planilla_coordinador(
     mode_suffix = ""
     if group_by == "none":
         mode_suffix = f"_por{'Cedula' if sort_by == 'document' else 'Apellido'}"
+    elif group_by == "role":
+        mode_suffix = f"_porRol{'Cedula' if sort_by == 'document' else 'Apellido'}"
+    elif group_by == "coordinator_role":
+        mode_suffix = f"_porCoordyRol{'Cedula' if sort_by == 'document' else 'Apellido'}"
     elif sort_by == "document":
         mode_suffix = "_porCedula"
     filename = f"Planilla_{safe_name}{mode_suffix}.xlsx"
