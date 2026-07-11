@@ -45,11 +45,10 @@ async def _resolve_staff_access(
     user: User,
     event_id,
     allow_checkin: bool = True,
-    allow_intendencia: bool = True,
 ):
     """Valida permisos de staff para un evento.
 
-    Roles base (admin/superadmin/coordinator y, segun flags, checkin/intendencia)
+    Roles base (admin/superadmin/coordinator y, segun flag, checkin)
     siempre tienen acceso. Los operadores deben tener un EventStaffAssignment
     activo en el evento con el staff_role correspondiente.
 
@@ -61,8 +60,6 @@ async def _resolve_staff_access(
     base_roles = {"admin", "superadmin", "coordinator"}
     if allow_checkin:
         base_roles.add("checkin")
-    if allow_intendencia:
-        base_roles.add("intendencia")
 
     if user.user_type in base_roles:
         return None
@@ -72,8 +69,6 @@ async def _resolve_staff_access(
         allowed = set()
         if allow_checkin:
             allowed.add("checkin")
-        if allow_intendencia:
-            allowed.add("intendencia")
         result = await db.execute(
             select(EventStaffAssignment.staff_role).where(
                 EventStaffAssignment.event_id == event_id,
@@ -92,12 +87,12 @@ async def _resolve_staff_access(
 def _can_manage_uniform(user: User, staff_role: Optional[str] = None) -> bool:
     """Determina si el usuario puede setear indumentaria.
 
-    Pueden: admin, superadmin, coordinator, intendencia (rol base), u operador
-    cuyo staff_role en el evento sea 'intendencia'.
+    Pueden: admin, superadmin, coordinator, checkin (rol base), u operador
+    cuyo staff_role en el evento sea 'checkin'.
     """
-    if user.user_type in ("admin", "superadmin", "coordinator", "intendencia"):
+    if user.user_type in ("admin", "superadmin", "coordinator", "checkin"):
         return True
-    if user.user_type == "operator" and staff_role == "intendencia":
+    if user.user_type == "operator" and staff_role == "checkin":
         return True
     return False
 
@@ -457,8 +452,7 @@ async def sync_attendance(
                     operator_id=operator_id,
                     assignment_id=assignment_id,
                     check_in_time=check_in_time,
-                    check_in_method=str(rec.get("check_in_method", "qr"))[:20],
-                    scanned_code=rec.get("scanned_code"),
+                    check_in_method=str(rec.get("check_in_method", "manual"))[:20],
                     verified_by=user.id,
                     sync_session_id=sync_session.id,
                     is_offline=True,
@@ -544,7 +538,7 @@ async def sync_status(
 ):
     """Get sync status for dashboard."""
     # Solo roles administrativos ven el historial de sincronización
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "intendencia", "operator"):
+    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "operator"):
         raise HTTPException(403, "Sin permisos")
 
     query = select(SyncSession)
@@ -615,16 +609,15 @@ async def check_in(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Single check-in (online) via QR scan or manual."""
+    """Single check-in (online) manual."""
     staff_role = await _resolve_staff_access(db, user, event_id)
 
     operator_id = _to_uuid(payload.get("operator_id"))
     assignment_id = _to_uuid(payload.get("assignment_id"))
     method = payload.get("method", "manual")
-    code = payload.get("scanned_code")
     # Coordinator que admite al operador (opcional, desde selector UI)
     coordinator = (payload.get("coordinator") or "").strip().upper() or None
-    # Optional uniform fields — solo intendencia/admin/coordinator pueden setearlos
+    # Optional uniform fields — solo checkin/admin/coordinator pueden setearlos
     can_set_uniform = _can_manage_uniform(user, staff_role)
     shirt_number = payload.get("shirt_number") if can_set_uniform else None
     jacket_number = payload.get("jacket_number") if can_set_uniform else None
@@ -678,7 +671,6 @@ async def check_in(
         assignment_id=assignment_id,
         check_in_time=datetime.utcnow(),
         check_in_method=method,
-        scanned_code=code,
         verified_by=user.id,
         is_offline=False,
     )
@@ -880,7 +872,7 @@ async def update_uniform(
         raise HTTPException(404, "Asignación no encontrada")
 
     staff_role = await _resolve_staff_access(
-        db, user, assignment.event_id, allow_checkin=False, allow_intendencia=True
+        db, user, assignment.event_id, allow_checkin=True
     )
     if not _can_manage_uniform(user, staff_role):
         raise HTTPException(403, "Sin permisos para editar indumentaria")
@@ -906,7 +898,7 @@ async def update_uniform(
     try:
         await db.commit()
     except IntegrityError as exc:
-        # Race condition: dos intendencia asignaron el mismo numero
+        # Race condition: dos staff asignaron el mismo numero
         await db.rollback()
         logger.warning("Conflicto de uniform (race condition) assignment=%s: %s", assignment_id, exc.orig)
         raise HTTPException(409, "Número de indumentaria ya asignado a otro operador (concurrencia)")

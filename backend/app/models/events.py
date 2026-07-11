@@ -189,10 +189,10 @@ class EventAssignment(BaseModel):
 
 
 class EventStaffAssignment(BaseModel):
-    """Asignación de personal del sistema (checkin/intendencia) a un evento.
+    """Asignación de personal del sistema (checkin) a un evento.
 
-    Permite que usuarios con user_type='checkin' o 'intendencia' solo vean
-    los eventos donde el superadmin los asignó explícitamente.
+    Permite que usuarios con user_type='checkin' solo vean los eventos donde
+    el superadmin los asignó explícitamente.
     """
     __tablename__ = "event_staff_assignments"
 
@@ -204,7 +204,7 @@ class EventStaffAssignment(BaseModel):
     )
     staff_role: Mapped[str] = mapped_column(
         String(20), nullable=False, index=True,
-        comment="checkin | intendencia",
+        comment="checkin",
     )
 
     # Relationships

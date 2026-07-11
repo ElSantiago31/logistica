@@ -29,7 +29,7 @@ router = APIRouter(prefix="/ws", tags=["WebSockets"])
 HEARTBEAT_INTERVAL_S = 25
 HEARTBEAT_TIMEOUT_S = 60
 
-VALID_CHANNELS = {"checkin", "intendencia", "payroll"}
+VALID_CHANNELS = {"checkin", "payroll"}
 
 
 async def _validate_ws_token(token: str) -> User | None:
@@ -113,7 +113,7 @@ async def ws_event_channel(
 
     Query params:
         token:   JWT de acceso (access_token).
-        channel: "checkin" | "intendencia" | "payroll".
+        channel: "checkin" | "payroll".
     """
     # 1) Validar canal
     if channel not in VALID_CHANNELS:

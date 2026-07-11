@@ -62,9 +62,8 @@ class AttendanceLog(BaseModel):
     check_out_time: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check_in_method: Mapped[str] = mapped_column(
         String(20), default="manual", nullable=False,
-        comment="qr | pdf417 | manual | nfc",
+        comment="manual | nfc",
     )
-    scanned_code: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="Código QR/PDF417 escaneado")
     verified_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
     )

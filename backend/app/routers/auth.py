@@ -366,7 +366,7 @@ async def create_admin(
             raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado")
 
     user_type = request.get("user_type", "coordinator")
-    if user_type not in ("superadmin", "coordinator", "checkin", "intendencia"):
+    if user_type not in ("superadmin", "coordinator", "checkin"):
         user_type = "coordinator"
 
     user = User(
@@ -400,7 +400,7 @@ async def list_admins(
 ):
     """List all admin users. Superadmin only."""
     result = await db.execute(
-        select(User).where(User.user_type.in_(["superadmin", "coordinator", "checkin", "intendencia"])).order_by(User.created_at.desc())
+        select(User).where(User.user_type.in_(["superadmin", "coordinator", "checkin"])).order_by(User.created_at.desc())
     )
     admins = result.scalars().all()
     return [{"id": str(a.id), "email": a.email, "first_name": a.first_name, "last_name": a.last_name,

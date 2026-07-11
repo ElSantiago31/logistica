@@ -216,15 +216,16 @@ async def admin_payroll(request: Request, event_id: str):
     })
 
 
-@app.get("/admin/events/{event_id}/intendencia", response_class=HTMLResponse)
-async def admin_intendencia(request: Request, event_id: str):
-    """Vista de intendencia: gestión de indumentaria del evento."""
-    return templates.TemplateResponse("admin/intendencia.html", {"request": request, "event_id": event_id})
+@app.get("/admin/events/{event_id}/intendencia")
+async def admin_intendencia(event_id: str):
+    """Redirección: intendencia quedó fusionada en check-in."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/admin/events/{event_id}/checkin", status_code=307)
 
 
 @app.get("/staff", response_class=HTMLResponse)
 async def staff_dashboard(request: Request):
-    """Dashboard para usuarios checkin/intendencia - solo sus eventos asignados."""
+    """Dashboard para usuarios checkin - solo sus eventos asignados."""
     return templates.TemplateResponse("admin/staff_dashboard.html", {"request": request})
 
 

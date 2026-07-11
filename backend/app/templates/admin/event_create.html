@@ -54,24 +54,18 @@
                     <textarea id="description" rows="3" class="w-full border rounded-lg px-3 py-2"></textarea>
                 </div>
             </div>
-            <!-- Staff System Assignments (checkin / intendencia) -->
+            <!-- Staff System Assignments (checkin — incluye gestión de indumentaria) -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <h2 class="text-lg font-semibold text-gray-800">Personal del Sistema</h2>
-                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in e Intendencia pueden ver este evento. También puedes buscar y agregar operadores.</p>
+                <p class="text-xs text-gray-500">Asigna qué usuarios de Check-in pueden ver este evento. El rol de Check-in también gestiona la indumentaria de los operadores. También puedes buscar y agregar operadores.</p>
                 <div class="relative mb-3">
                     <label class="block text-sm font-medium text-gray-700 mb-1">🔍 Buscar operador para asignar como staff</label>
                     <input type="text" id="opSearchInput" placeholder="Escribe nombre o cédula (mín. 2 caracteres)..." class="w-full border rounded-lg px-3 py-2 text-sm" autocomplete="off">
                     <div id="opSearchResults" class="hidden absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-72 overflow-y-auto"></div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">🟢 Check-in</label>
-                        <div id="checkinList" class="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">🟠 Intendencia</label>
-                        <div id="intendenciaList" class="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
-                    </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">🟢 Check-in (e Indumentaria)</label>
+                    <div id="checkinList" class="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
                 </div>
             </div>
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
@@ -125,7 +119,7 @@ async function loadStaffUsers(){
     const token=getToken();
     const res=await fetch('/api/auth/admins',{headers:{'Authorization':'Bearer '+token}});
     const admins=await res.json();
-    allStaffUsers=admins.filter(a=>a.user_type==='checkin'||a.user_type==='intendencia');
+    allStaffUsers=admins.filter(a=>a.user_type==='checkin');
     renderStaffLists();
 }
 function renderStaffLists(){
@@ -151,12 +145,11 @@ function renderStaffLists(){
             </label>`;
         });
         if(!users.length && !ops.length){
-            html='<p class="text-xs text-gray-400">No hay usuarios '+role+'. Créalos en Superadmin o busca un operador arriba.</p>';
+            html='<p class="text-xs text-gray-400">No hay usuarios checkin. Créalos en Superadmin o busca un operador arriba.</p>';
         }
         container.innerHTML=html;
     };
     render('checkinList','checkin');
-    render('intendenciaList','intendencia');
 }
 
 async function searchOperator(){
@@ -178,7 +171,6 @@ function renderSearchDropdown(){
     if(!lastSearchItems.length){box.innerHTML='<p class="px-3 py-2 text-xs text-gray-400">Sin resultados</p>';box.classList.remove('hidden');return}
     box.innerHTML=lastSearchItems.map(o=>{
         const inCheckin=addedOperators.find(a=>a.user_id===o.user_id&&a.staffRole==='checkin');
-        const inIntendencia=addedOperators.find(a=>a.user_id===o.user_id&&a.staffRole==='intendencia');
         const safeName=o.full_name.replace(/'/g,"\\'");
         const photoHtml=o.photo?`<img src="${o.photo}" class="w-6 h-6 rounded-full object-cover">`:'<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">👤</div>';
         return `<div class="px-3 py-2 border-b last:border-0">
@@ -188,8 +180,7 @@ function renderSearchDropdown(){
                 <span class="text-xs text-gray-400">${o.document_number}</span>
             </div>
             <div class="flex gap-2 ml-8">
-                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','checkin')" class="text-xs px-2 py-1 rounded ${inCheckin?'bg-green-100 text-green-700 border border-green-300':'bg-gray-100 hover:bg-gray-200'}">🟢 Check-in ${inCheckin?'✓':''}</button>
-                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','intendencia')" class="text-xs px-2 py-1 rounded ${inIntendencia?'bg-green-100 text-green-700 border border-green-300':'bg-gray-100 hover:bg-gray-200'}">🟠 Intendencia ${inIntendencia?'✓':''}</button>
+                <button type="button" onclick="toggleOperator('${o.user_id}','${safeName}','${o.document_number}','checkin')" class="text-xs px-2 py-1 rounded ${inCheckin?'bg-green-100 text-green-700 border border-green-300':'bg-gray-100 hover:bg-gray-200'}">🟢 Check-in (e Indumentaria) ${inCheckin?'✓':''}</button>
             </div>
         </div>`;
     }).join('');
@@ -202,7 +193,7 @@ function toggleOperator(user_id,full_name,document_number,staffRole){
         addedOperators=addedOperators.filter(a=>!(a.user_id===user_id&&a.staffRole===staffRole));
     }else{
         addedOperators.push({user_id,full_name,document_number,staffRole});
-        showToast(`Operador agregado a ${staffRole==='checkin'?'Check-in':'Intendencia'}`,'bg-green-500');
+        showToast(`Operador agregado a Check-in`,'bg-green-500');
     }
     renderStaffLists();
     renderSearchDropdown();
@@ -216,7 +207,7 @@ function removeOperator(user_id,role){
 async function saveStaffAssignments(eventId){
     const token=getToken();
     const collect=(containerId)=>Array.from(document.querySelectorAll(`#${containerId} input:checked`)).map(cb=>cb.value);
-    const body={checkin:collect('checkinList'),intendencia:collect('intendenciaList')};
+    const body={checkin:collect('checkinList')};
     try{
         await fetch(`/api/events/${eventId}/staff`,{
             method:'POST',

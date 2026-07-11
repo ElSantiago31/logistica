@@ -213,8 +213,8 @@ async def get_my_staff_events(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Lista los eventos donde el usuario actual estรก asignado como staff (checkin/intendencia).
-    Tambiรฉn incluye todos los eventos si es superadmin."""
+    """Lista los eventos donde el usuario actual está asignado como staff (checkin).
+    También incluye todos los eventos si es superadmin."""
     from sqlalchemy import select as sel
     from app.models.events import EventStaffAssignment, Event as EventModel
 
@@ -238,7 +238,7 @@ async def get_my_staff_events(
             for e in events
         ]
 
-    # checkin/intendencia: solo eventos asignados
+    # checkin: solo eventos asignados
     result = await db.execute(
         sel(EventModel, EventStaffAssignment)
         .join(EventStaffAssignment, EventStaffAssignment.event_id == EventModel.id)
@@ -270,8 +270,8 @@ async def get_assignments(
     user=Depends(get_current_user),
 ):
     """Get all assignments for an event.
-    Operadores asignados como staff (checkin/intendencia) también pueden verlas."""
-    if user.user_type not in ("superadmin", "coordinator", "checkin", "intendencia"):
+    Operadores asignados como staff (checkin) también pueden verlas."""
+    if user.user_type not in ("superadmin", "coordinator", "checkin"):
         # Operador: validar asignación de staff para este evento
         from sqlalchemy import select as sel
         from app.models.events import EventStaffAssignment
@@ -288,7 +288,7 @@ async def get_assignments(
 
 
 # ============================================================
-# STAFF ASSIGNMENTS (checkin / intendencia)
+# STAFF ASSIGNMENTS (checkin)
 # ============================================================
 
 @router.get("/{event_id}/staff")
@@ -297,7 +297,7 @@ async def get_event_staff(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Lista el personal (checkin/intendencia) asignado a un evento."""
+    """Lista el personal (checkin) asignado a un evento."""
     if user.user_type not in ("superadmin", "coordinator"):
         raise HTTPException(403, "Sin permisos")
     from sqlalchemy import select as sel
@@ -328,8 +328,8 @@ async def set_event_staff(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Reemplaza TODA la asignaciรณn de staff de un evento.
-    Body: {"checkin": [user_id, ...], "intendencia": [user_id, ...]}
+    """Reemplaza TODA la asignación de staff de un evento.
+    Body: {"checkin": [user_id, ...]}
     """
     if user.user_type not in ("superadmin", "coordinator"):
         raise HTTPException(403, "Sin permisos")
@@ -348,7 +348,7 @@ async def set_event_staff(
 
     created = 0
     for staff_role, user_ids in data.items():
-        if staff_role not in ("checkin", "intendencia"):
+        if staff_role not in ("checkin",):
             continue
         for uid_str in (user_ids or []):
             try:
@@ -411,23 +411,23 @@ async def update_assignment_uniform(
     user=Depends(get_current_user),
 ):
     """Actualiza campos de uniforme (shirt_number, jacket_number, cap_number).
-    Accesible para superadmin, coordinator, intendencia u operador asignado como intendencia."""
+    Accesible para superadmin, coordinator, checkin u operador asignado como checkin."""
     from sqlalchemy import select as sel
     from app.models.events import EventAssignment, EventStaffAssignment
 
     result = await db.execute(sel(EventAssignment).where(EventAssignment.id == assignment_id))
     assignment = result.scalar_one_or_none()
     if not assignment:
-        raise HTTPException(404, "Asignaciรณn no encontrada")
+        raise HTTPException(404, "Asignación no encontrada")
 
     # Validar permisos
-    if user.user_type not in ("superadmin", "coordinator", "intendencia"):
-        # Operador: debe tener asignaciรณn de staff intendencia para este evento
+    if user.user_type not in ("superadmin", "coordinator", "checkin"):
+        # Operador: debe tener asignación de staff checkin para este evento
         sa_r = await db.execute(
             sel(EventStaffAssignment).where(
                 EventStaffAssignment.event_id == assignment.event_id,
                 EventStaffAssignment.user_id == user.id,
-                EventStaffAssignment.staff_role == "intendencia",
+                EventStaffAssignment.staff_role == "checkin",
                 EventStaffAssignment.is_active == True,
             )
         )

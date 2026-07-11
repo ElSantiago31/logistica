@@ -4,11 +4,8 @@
 <script>window.OFFLINE_CAPABLE = true;</script>
     <script src="/static/js/auth.js?v=20260705"></script>
 <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
-<script src="/static/js/scanner.js"></script>
 <script src="/static/js/ws.js"></script>
 <style>
-    #scanner-container { width: 100%; max-width: 350px; margin: 0 auto; }
-    #scanner-container video { border-radius: 12px; }
     .operator-card { transition: all 0.2s; cursor: pointer; }
     .operator-card:hover { transform: translateY(-2px); }
     .operator-card.checked-in { border-left: 4px solid #22c55e; background: #f0fdf4; }
@@ -78,17 +75,8 @@
     </div>
 
     <div class="grid md:grid-cols-2 gap-6">
-        <!-- Left: Scanner + Search -->
+        <!-- Left: Search -->
         <div>
-            <!-- Scanner toggle -->
-            <button id="btn-scanner" onclick="toggleScanner()"
-                class="w-full py-3 rounded-xl font-bold text-white mb-4 transition"
-                style="background:#5d4224;">
-                📷 Activar Escáner QR
-            </button>
-
-            <div id="scanner-container" class="mb-4 hidden"></div>
-
             <!-- Manual search -->
             <div class="relative mb-4">
                 <input type="text" id="search-input" placeholder="Buscar por nombre o cédula..."
@@ -216,7 +204,6 @@
 <script>
 const EVENT_ID = "{{ event_id }}";
 let currentOperator = null;
-let scannerActive = false;
 let eventAssignments = [];
 let coordinatorQuotas = [];  // FASE 3: cupos por coordinador
 
@@ -232,18 +219,18 @@ function authHeaders() {
 // Auth guard
 (function() {
     const t = getToken(), u = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!t || !['superadmin', 'coordinator', 'checkin', 'intendencia', 'operator'].includes(u.user_type)) {
+    if (!t || !['superadmin', 'coordinator', 'checkin', 'operator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
 })();
 
-// Permiso: solo intendencia/admin/coordinator/superadmin pueden editar indumentaria.
-// El rol checkin NO debe poder setear camisa/chaqueta/gorra.
+// Permiso: superadmin/admin/coordinator/checkin pueden editar indumentaria
+// (intendencia quedó fusionada en check-in).
 function _canManageUniform() {
     try {
         const u = JSON.parse(localStorage.getItem('user') || '{}');
-        return ['superadmin', 'coordinator', 'intendencia', 'admin'].includes(u.user_type);
+        return ['superadmin', 'coordinator', 'checkin', 'admin'].includes(u.user_type);
     } catch(_) { return false; }
 }
 
@@ -495,27 +482,7 @@ async function updateSyncCount() {
     } catch(e) {}
 }
 
-function toggleScanner() {
-    if (scannerActive) {
-        Scanner.stop();
-        scannerActive = false;
-        document.getElementById('scanner-container').classList.add('hidden');
-        document.getElementById('btn-scanner').textContent = '📷 Activar Escáner QR';
-    } else {
-        document.getElementById('scanner-container').classList.remove('hidden');
-        Scanner.init('scanner-container', async (text) => {
-            const parsed = Scanner.parse(text);
-            if (parsed.type === 'assignment_id') {
-                await showOperator(parsed.value);
-            } else if (parsed.type === 'document_number') {
-                await searchOperator(parsed.value);
-            }
-            toggleScanner();
-        });
-        scannerActive = true;
-        document.getElementById('btn-scanner').textContent = '⏹ Detener Escáner';
-    }
-}
+// Escáner QR eliminado — check-in es 100% manual por búsqueda de nombre/cédula.
 
 async function searchOperator(query) {
     if (!query || query.length < 2) {
@@ -726,7 +693,7 @@ async function doCheckIn() {
                 body: JSON.stringify({
                     operator_id: currentOperator.operator_id || currentOperator.id,
                     assignment_id: currentOperator.id,
-                    method: scannerActive ? 'qr' : 'manual',
+                    method: 'manual',
                     coordinator: (document.getElementById('coordinator-select') || {}).value || null,
                     shirt_number: shirt || null,
                     jacket_number: jacket || null,
@@ -802,7 +769,7 @@ async function offlineCheckIn() {
             operator_id: currentOperator.operator_id || currentOperator.id,
             assignment_id: currentOperator.id,
             check_in_time: new Date().toISOString(),
-            check_in_method: scannerActive ? 'qr' : 'manual',
+            check_in_method: 'manual',
             sync_status: 'pending',
             coordinator: selCoord,
             shirt_number: shirt || null,
@@ -1289,7 +1256,7 @@ function startCheckinPolling() {
 
 async function pollCheckinStatus() {
     // No pollar si: offline, scanner activo, guardando, o sin datos
-    if (!_isOnline || scannerActive || _pollingInFlight || !eventAssignments.length) return;
+    if (!_isOnline || _pollingInFlight || !eventAssignments.length) return;
     const btnCk = document.getElementById('btn-checkin');
     const btnUn = document.getElementById('btn-save-uniform');
     if ((btnCk && btnCk.disabled) || (btnUn && btnUn.disabled)) return;

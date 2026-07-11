@@ -36,8 +36,8 @@
 (function(){
     const t = localStorage.getItem('access_token');
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    // Operadores asignados como checkin/intendencia también pueden acceder
-    if (!t || !['checkin', 'intendencia', 'superadmin', 'operator'].includes(u.user_type)) {
+    // Operadores asignados como checkin también pueden acceder
+    if (!t || !['checkin', 'superadmin', 'operator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
@@ -45,7 +45,6 @@
     const badge = document.getElementById('roleBadge');
     const roleMap = {
         checkin: {text: 'Check-in', bg: 'bg-green-600'},
-        intendencia: {text: 'Intendencia', bg: 'bg-amber-600'},
         superadmin: {text: 'Superadmin', bg: 'bg-purple-600'},
         operator: {text: 'Operador', bg: 'bg-blue-600'},
     };
@@ -77,11 +76,10 @@ async function loadEvents() {
             const st = statusMap[e.status] || e.status;
             const sc = statusCls[e.status] || '';
             const btns = [];
-            if (e.staff_role === 'checkin' || e.staff_role === 'superadmin') {
-                btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in</a>`);
-            }
-            if (e.staff_role === 'intendencia' || e.staff_role === 'superadmin') {
-                btns.push(`<a href="/admin/events/${e.id}/intendencia" class="inline-block bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700">👕 Indumentaria</a>`);
+            // Intendencia quedó fusionada en Check-in (que incluye gestión de
+            // indumentaria). Cualquier rol de staff accede por el mismo botón.
+            if (['checkin', 'intendencia', 'superadmin'].includes(e.staff_role)) {
+                btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in e Indumentaria</a>`);
             }
             return `<div class="bg-white rounded-lg shadow p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
