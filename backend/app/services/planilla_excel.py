@@ -323,7 +323,7 @@ def generate_planilla_xlsx(
             ``group_by="none"``. Cada op_data tiene las claves:
             full_name, document_number, address, phone,
             coordinator_name, jacket_number, cap_number.
-        group_by: ``"coordinator"`` o ``"none"``.
+        group_by: ``"coordinator"``, ``"role"``, ``"coordinator_role"`` o ``"none"``.
         sort_by: ``"lastname"`` o ``"document"``.
 
     Returns:
@@ -380,6 +380,50 @@ def generate_planilla_xlsx(
                     event_date=event_date,
                     event_location=event_location,
                     sheet_label=coord_name,
+                    operators=ops,
+                    sort_by=sort_by,
+                )
+            )
+    elif group_by == "role":
+        # Agrupar operadores por role_name (preservando el orden de
+        # aparición para títulos estables).
+        groups: dict[str, list[dict]] = {}
+        for op in operators:
+            role_name = op.get("role_name") or "OPERADOR"
+            groups.setdefault(role_name, []).append(op)
+
+        for role_name, ops in groups.items():
+            sheets_created.extend(
+                _render_pages(
+                    template_wb=template_wb,
+                    template_ws=template_ws,
+                    event_name=event_name,
+                    event_date=event_date,
+                    event_location=event_location,
+                    sheet_label=role_name,
+                    operators=ops,
+                    sort_by=sort_by,
+                )
+            )
+    elif group_by == "coordinator_role":
+        # Agrupar primero por coordinador y luego por rol dentro de cada
+        # coordinador. El título de la hoja es "COORDINADOR - ROL".
+        groups: dict[str, list[dict]] = {}
+        for op in operators:
+            coord_name = op.get("coordinator_name") or "SIN COORDINADOR"
+            role_name = op.get("role_name") or "OPERADOR"
+            label = f"{coord_name} - {role_name}"
+            groups.setdefault(label, []).append(op)
+
+        for label, ops in groups.items():
+            sheets_created.extend(
+                _render_pages(
+                    template_wb=template_wb,
+                    template_ws=template_ws,
+                    event_name=event_name,
+                    event_date=event_date,
+                    event_location=event_location,
+                    sheet_label=label,
                     operators=ops,
                     sort_by=sort_by,
                 )
