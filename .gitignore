@@ -44,6 +44,9 @@ backend/data/photos/
 # Test artifacts
 backend/test_invoice.pdf
 
+# Implementation plans (local docs, not for repo)
+implementation_plan.md
+
 # Logs
 *.log
 
