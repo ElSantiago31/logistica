@@ -2,9 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps
+# System deps + LibreOffice (para conversión XLSX → PDF de planillas)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc && \
+    libpq-dev gcc \
+    libreoffice-calc \
+    libreoffice-core && \
     rm -rf /var/lib/apt/lists/*
 
 # Python deps

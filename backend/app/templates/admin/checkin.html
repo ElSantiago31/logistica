@@ -166,6 +166,10 @@
 
                 <!-- Acciones post-checkin (solo visibles tras ingreso registrado) -->
                 <div id="post-checkin-actions" class="space-y-2 hidden">
+                    <button id="btn-change-coord" onclick="changeCoordinator()"
+                        class="w-full py-2 rounded-lg text-sm font-medium border border-blue-400 bg-blue-50 text-blue-700">
+                        🔁 Cambiar Coordinador
+                    </button>
                     <button id="btn-sin-acred" onclick="markSinAcreditacion()"
                         class="w-full py-2 rounded-lg text-sm font-medium border border-amber-400 bg-amber-50 text-amber-700">
                         ⚠️ Sin Acreditación
@@ -206,6 +210,8 @@ const EVENT_ID = "{{ event_id }}";
 let currentOperator = null;
 let eventAssignments = [];
 let coordinatorQuotas = [];  // FASE 3: cupos por coordinador
+let staffRole = null;            // staff_role del backend (ej: 'checkin')
+let canManageUniformBackend = null;  // bool del backend (null = no recibido)
 
 // --- Auth helpers ---
 function getToken() { return localStorage.getItem('access_token'); }
@@ -228,6 +234,9 @@ function authHeaders() {
 // Permiso: superadmin/admin/coordinator/checkin pueden editar indumentaria
 // (intendencia quedó fusionada en check-in).
 function _canManageUniform() {
+    if (canManageUniformBackend !== null && canManageUniformBackend !== undefined) {
+        return canManageUniformBackend;
+    }
     try {
         const u = JSON.parse(localStorage.getItem('user') || '{}');
         return ['superadmin', 'coordinator', 'checkin', 'admin'].includes(u.user_type);
@@ -415,6 +424,8 @@ async function loadEventData() {
                 document.getElementById('event-name').textContent = data.name;
                 eventAssignments = data.assignments || [];
                 coordinatorQuotas = data.coordinator_quotas || [];  // FASE 3
+                staffRole = data.staff_role || null;
+                canManageUniformBackend = data.can_manage_uniform;
                 renderQuotaCards(coordinatorQuotas);
                 populateCoordinatorSelect();  // Llenar selector con coordinadores
                 const total = countRelevantForCheckin(eventAssignments);
@@ -617,6 +628,65 @@ async function showOperator(assignmentId) {
         document.getElementById('uniform-jacket').value = operator.jacket_number || '';
         document.getElementById('uniform-cap').value = operator.cap_number || '';
         btnSaveUniform.classList.add('hidden');
+    }
+}
+
+// Cambia el coordinador (admitted_by) de un operador después del check-in.
+// Usa el endpoint /reassign con reason="Cambio manual post-checkin".
+async function changeCoordinator() {
+    if (!currentOperator) return;
+    const sel = document.getElementById('coordinator-select');
+    if (!sel) { alert('Selector de coordinador no disponible'); return; }
+    const newCoord = (sel.value || '').trim().toUpperCase();
+    const currentCoord = (currentOperator.admitted_by || currentOperator.programmed_by || '').toString().trim().toUpperCase();
+
+    if (!newCoord) {
+        alert('Selecciona un coordinador en el desplegable "Coordinador que lo admite".');
+        return;
+    }
+    if (newCoord === currentCoord) {
+        alert('El coordinador seleccionado ya es el actual.');
+        return;
+    }
+    if (!confirm(`¿Cambiar el coordinador de "${currentOperator.full_name}"?\n\n` +
+        `De: ${currentCoord || '(sin asignar)'}\nA: ${newCoord}`)) return;
+
+    try {
+        const resp = await Auth.apiFetch(`/api/sync/assignments/${currentOperator.id}/reassign`, {
+            method: 'PATCH',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                new_coordinator: newCoord,
+                reason: 'Cambio manual post-checkin'
+            })
+        });
+        if (resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            currentOperator.admitted_by = newCoord;
+            // Actualizar la etiqueta visual del coordinador
+            const coordEl = document.getElementById('op-coordinator');
+            if (coordEl) {
+                coordEl.textContent = '👔 Coordinador: ' + newCoord;
+                coordEl.classList.remove('hidden');
+            }
+            // Feedback sutil en el status box
+            const box = document.getElementById('op-status-box');
+            box.className = 'rounded-lg p-3 mb-4 text-center bg-blue-50 text-blue-700';
+            document.getElementById('op-status-text').textContent =
+                `🔁 Coordinador cambiado a ${newCoord}`;
+            pollQuotas();  // refrescar tarjetas de cupos
+        } else if (resp.status === 409) {
+            const errData = await resp.json().catch(() => ({}));
+            const msg = (errData.detail && errData.detail.message) || errData.detail || 'Cupo lleno';
+            alert('No se pudo reasignar: ' + msg);
+        } else {
+            const errText = await resp.text().catch(() => '');
+            alert('Error al cambiar coordinador (' + resp.status + ')');
+            console.error('changeCoordinator error', resp.status, errText);
+        }
+    } catch(e) {
+        console.error('changeCoordinator network error:', e);
+        alert('📴 Sin conexión: no se pudo cambiar el coordinador');
     }
 }
 

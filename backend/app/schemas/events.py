@@ -147,3 +147,27 @@ class AssignOperatorsRequest(BaseModel):
     rate_applied: Optional[float] = None
     # Operador-coordinador que programa/admite a estos operadores (nuevo flujo).
     programmed_by_operator_id: Optional[uuid.UUID] = None
+
+
+# --- Importación masiva desde Excel ---
+class ImportRowResult(BaseModel):
+    """Resultado de una fila del Excel de importación."""
+    row: int                                      # número de fila (1-based, sin header)
+    document_number: Optional[str] = None
+    full_name: Optional[str] = None
+    status: str                                   # created | existing | already_assigned | error
+    message: str                                  # descripción legible
+    operator_id: Optional[str] = None             # uuid si se procesó
+    warnings: List[str] = []                      # ej: "EPS no encontrada, queda NULL"
+
+
+class ImportSummary(BaseModel):
+    """Resumen de la importación masiva de operadores."""
+    total_rows: int
+    created: int                                  # operadores nuevos creados
+    existing: int                                 # operadores ya en BD, asignados ahora
+    already_assigned: int                         # operadores ya asignados a este evento
+    assigned: int                                 # = created + existing (asignaciones exitosas)
+    errors: int
+    duration_seconds: float
+    rows: List[ImportRowResult] = []              # detalle fila por fila

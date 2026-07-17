@@ -59,6 +59,7 @@ class OperatorResponse(BaseModel):
     is_verified: bool
     is_approved: bool
     is_active: bool
+    is_banned: bool = False
     last_login: Optional[str]
     notes: Optional[str]
 
@@ -109,6 +110,7 @@ class OperatorResponse(BaseModel):
                 'is_verified': data.is_verified,
                 'is_approved': data.is_approved,
                 'is_active': data.is_active,
+                'is_banned': getattr(profile, 'is_banned', False) if profile else False,
                 'last_login': str(data.last_login) if data.last_login else None,
                 'notes': getattr(profile, 'notes', None) if profile else None,
             }

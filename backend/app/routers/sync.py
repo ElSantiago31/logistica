@@ -104,7 +104,8 @@ async def get_offline_data(
     user=Depends(get_current_user),
 ):
     """Download event data for offline PWA use."""
-    await _resolve_staff_access(db, user, event_id)
+    staff_role = await _resolve_staff_access(db, user, event_id)
+    can_manage_uniform = _can_manage_uniform(user, staff_role)
 
     event = await db.get(Event, event_id)
     if not event:
@@ -185,6 +186,8 @@ async def get_offline_data(
         "description": event.description,
         "assignments": assignments,
         "coordinator_quotas": quotas,
+        "staff_role": staff_role,
+        "can_manage_uniform": can_manage_uniform,
     }
 
 
@@ -793,6 +796,9 @@ async def reassign_coordinator(
     if not new_coordinator:
         raise HTTPException(400, "new_coordinator requerido")
 
+    # reason opcional para el audit log (distingue cambios manuales post-checkin)
+    reason = (payload.get("reason") or "").strip() or "Cupo lleno - reasignación automática en check-in"
+
     assignment = await db.get(EventAssignment, assignment_id)
     if not assignment:
         raise HTTPException(404, "Asignación no encontrada")
@@ -828,7 +834,7 @@ async def reassign_coordinator(
                 "operator_id": str(assignment.operator_id),
                 "old_coordinator": old,
                 "new_coordinator": new_coordinator,
-                "reason": "Cupo lleno - reasignación automática en check-in",
+                "reason": reason,
             },
         )
         await db.commit()

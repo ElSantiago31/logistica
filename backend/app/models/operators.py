@@ -49,6 +49,11 @@ class Operator(BaseModel):
     total_events: Mapped[int] = mapped_column(default=0, nullable=False)
     experience_roles: Mapped[str | None] = mapped_column(Text, nullable=True, comment="JSON list of role IDs with experience")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Veto: snapshot del estado de veto para queries rápidas sin JOIN.
+    is_banned: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True,
+        comment="True si el operador está vetado (no puede iniciar sesión)",
+    )
 
     # Relationships
     user = relationship("User", back_populates="operator_profile")
@@ -66,6 +71,15 @@ class Operator(BaseModel):
     admitted_assignments = relationship(
         "EventAssignment", back_populates="admitted_by_operator",
         foreign_keys="EventAssignment.admitted_by_operator_id",
+    )
+    # Novedades y vetos del operador
+    incidents = relationship(
+        "OperatorIncident", back_populates="operator",
+        foreign_keys="OperatorIncident.operator_id", cascade="all, delete-orphan",
+    )
+    bans = relationship(
+        "OperatorBan", back_populates="operator",
+        foreign_keys="OperatorBan.operator_id", cascade="all, delete-orphan",
     )
 
     def __repr__(self):

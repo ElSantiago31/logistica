@@ -24,6 +24,9 @@ from app.models.sync import SyncSession, AttendanceLog
 # Payroll
 from app.models.payroll import Evaluation, PayrollRecord
 
+# Incidents / Bans
+from app.models.incidents import OperatorIncident, OperatorBan
+
 # Security / Audit
 from app.models.audit import AuditLog, RevokedToken
 from app.models.blocked_document import BlockedDocument
@@ -38,6 +41,7 @@ __all__ = [
     "WhatsAppOutboundQueue",
     "SyncSession", "AttendanceLog",
     "Evaluation", "PayrollRecord",
+    "OperatorIncident", "OperatorBan",
     "AuditLog", "RevokedToken",
     "BlockedDocument",
     "PasswordResetToken",

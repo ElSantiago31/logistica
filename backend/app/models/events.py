@@ -33,6 +33,7 @@ class Event(BaseModel):
 
     # Relationships
     creator = relationship("User", foreign_keys=[created_by])
+    incidents = relationship("OperatorIncident", back_populates="event", cascade="all, delete-orphan")
     staff_needs = relationship("EventStaffNeed", back_populates="event", cascade="all, delete-orphan")
     assignments = relationship("EventAssignment", back_populates="event", cascade="all, delete-orphan")
     staff_assignments = relationship("EventStaffAssignment", back_populates="event", cascade="all, delete-orphan")

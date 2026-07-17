@@ -31,14 +31,30 @@ Estructura de la plantilla (1 hoja "Planilla"):
 import io
 import re
 import copy as _copy
+import base64
 import logging
 import unicodedata
 from pathlib import Path
 from datetime import datetime
 
 import openpyxl
+from openpyxl.styles import PatternFill
+from openpyxl.drawing.image import Image as XlImage
+from openpyxl.drawing.spreadsheet_drawing import (
+    OneCellAnchor,
+    AnchorMarker,
+    XDRPositiveSize2D,
+)
 
 logger = logging.getLogger(__name__)
+
+# --- Colores para resaltar filas (novedades / vetos) ---
+# Tonos claros para mantener legibilidad al imprimir en blanco y negro.
+# Rojo claro (vetado) tiene prioridad sobre amarillo claro (novedad).
+BAN_FILL = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")  # red-200
+INCIDENT_FILL = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")  # amber-100
+# Última columna de datos en la plantilla (M=13). Se usa para pintar toda la fila.
+LAST_COL = 13
 
 # --- Configuración de la plantilla ---
 TEMPLATE_PATH = (
@@ -61,7 +77,8 @@ COL_CELULAR = 7      # G
 COL_COORDINADOR = 8  # H
 COL_CHAQ = 9         # I
 COL_GORRA = 10       # J
-# K=VALOR, L=FIRMA, M=No DSE → se dejan vacíos (no tenemos el dato)
+COL_FIRMA = 12       # L — columna donde van las firmas embebidas
+# K=VALOR, M=No DSE → se dejan vacíos (no tenemos el dato)
 
 # --- Celdas del encabezado (top-left de la celda combinada) ---
 CELL_COORD = "D5"
@@ -169,6 +186,139 @@ def _fmt_date(dt: datetime | None) -> str:
     return dt.strftime("%d/%m/%Y")
 
 
+# --- EMU (English Metric Units) para posicionamiento de imágenes ---
+# 1 píxel (a 96 DPI) = 9525 EMU. Se usa para anclar imágenes con precisión.
+_EMU_PER_PX = 9525
+# Alto de fila (en puntos) cuando la fila lleva una firma. Permite que la
+# firma sea legible y no quede comprimida.
+_SIGNATURE_ROW_HEIGHT_PT = 50
+
+
+def _decode_signature(signature_data: str | None) -> bytes | None:
+    """Decodifica un base64 PNG/JPG de firma a bytes crudos.
+
+    Maneja el prefijo ``data:image/png;base64,`` (firmas desde el navegador).
+    Reutiliza el patrón de ``app.services.invoice_pdf._decode_signature``.
+
+    Returns:
+        Bytes de la imagen, o ``None`` si la entrada es vacía/inválida.
+    """
+    if not signature_data:
+        return None
+    try:
+        raw = signature_data.strip()
+        if "," in raw and raw.startswith("data:image"):
+            raw = raw.split(",", 1)[1]
+        return base64.b64decode(raw)
+    except Exception as exc:
+        logger.warning("No se pudo decodificar la firma (base64): %s", exc)
+        return None
+
+
+def _get_image_size(img_bytes: bytes) -> tuple[int, int]:
+    """Devuelve ``(width_px, height_px)`` de una imagen usando PIL.
+
+    Returns:
+        Tupla con dimensiones en píxeles, o ``(0, 0)`` si no se puede leer.
+    """
+    try:
+        from PIL import Image as PILImage
+        pil = PILImage.open(io.BytesIO(img_bytes))
+        return (pil.width, pil.height)
+    except Exception as exc:
+        logger.warning("No se pudo leer el tamaño de la firma: %s", exc)
+        return (0, 0)
+
+
+def _col_letter(col: int) -> str:
+    """Convierte índice de columna (1-indexed) a letra (1→A, 12→L)."""
+    return openpyxl.utils.get_column_letter(col)
+
+
+def _add_centered_signature(
+    ws,
+    row: int,
+    col: int,
+    signature_data: str,
+    fill_ratio: float = 0.8,
+) -> bool:
+    """Embebe una firma centrada en la celda ``(row, col)``.
+
+    La firma se escala manteniendo el aspect ratio para que ocupe ``fill_ratio``
+    (80% por defecto) de la celda, de modo que se vean los bordes y no quede
+    pegada a los límites. Se centra horizontal y verticalmente usando un
+    ``OneCellAnchor`` con offsets en EMU.
+
+    Fórmulas de conversión (Excel → px → EMU):
+        - Ancho de columna: ``px = round(width_chars * 7) + 5``
+        - Alto de fila: ``px = round(height_pt * 96 / 72)``
+        - 1 px = 9525 EMU
+
+    Args:
+        ws: Worksheet de openpyxl.
+        row: Fila (1-indexed) de la celda destino.
+        col: Columna (1-indexed) de la celda destino.
+        signature_data: Firma en base64 PNG/JPG (con o sin prefijo data:).
+        fill_ratio: Fracción de la celda que ocupa la firma (0-1). Default 0.8.
+
+    Returns:
+        ``True`` si se embebió correctamente, ``False`` si la firma era
+        inválida o falló el posicionamiento.
+    """
+    sig_bytes = _decode_signature(signature_data)
+    if not sig_bytes:
+        return False
+
+    img_w, img_h = _get_image_size(sig_bytes)
+    if img_w <= 0 or img_h <= 0:
+        return False
+
+    # --- Dimensiones de la celda en píxeles ---
+    col_dim = ws.column_dimensions.get(_col_letter(col))
+    col_width_chars = col_dim.width if (col_dim and col_dim.width) else 8.43
+    col_w_px = round(col_width_chars * 7) + 5
+
+    row_dim = ws.row_dimensions.get(row)
+    row_height_pt = row_dim.height if (row_dim and row_dim.height) else 15
+    row_h_px = round(row_height_pt * 96 / 72)
+
+    # --- Tamaño objetivo (fill_ratio % de la celda) ---
+    target_w_px = col_w_px * fill_ratio
+    target_h_px = row_h_px * fill_ratio
+
+    # --- Escalar manteniendo aspect ratio ---
+    scale = min(target_w_px / img_w, target_h_px / img_h)
+    final_w_px = img_w * scale
+    final_h_px = img_h * scale
+
+    # --- Offsets de centrado (en px → EMU) ---
+    x_off_px = (col_w_px - final_w_px) / 2
+    y_off_px = (row_h_px - final_h_px) / 2
+    x_off_emu = int(max(0, x_off_px) * _EMU_PER_PX)
+    y_off_emu = int(max(0, y_off_px) * _EMU_PER_PX)
+
+    # --- Tamaño final en EMU ---
+    ext_w_emu = int(final_w_px * _EMU_PER_PX)
+    ext_h_emu = int(final_h_px * _EMU_PER_PX)
+
+    # --- Crear y anclar la imagen ---
+    try:
+        img = XlImage(io.BytesIO(sig_bytes))
+        # OneCellAnchor: la imagen parte de una celda con offsets fijos y
+        # tiene un tamaño absoluto (no se estira si la celda cambia).
+        marker = AnchorMarker(col=col - 1, colOff=x_off_emu, row=row - 1, rowOff=y_off_emu)
+        anchor = OneCellAnchor(
+            _from=marker,
+            ext=XDRPositiveSize2D(cx=ext_w_emu, cy=ext_h_emu),
+        )
+        img.anchor = anchor
+        ws.add_image(img)
+        return True
+    except Exception as exc:
+        logger.warning("No se pudo embeber la firma en celda (%s,%s): %s", row, col, exc)
+        return False
+
+
 def _copy_sheet_with_images(wb: openpyxl.Workbook, src_sheet: openpyxl.worksheet.worksheet.Worksheet, new_title: str):
     """Copia una hoja dentro del workbook preservando imágenes (logo).
 
@@ -199,12 +349,24 @@ def _fill_header(ws, *, coordinator: str, event_name: str, event_date, event_loc
     ws[CELL_LUGAR] = event_location or ""
 
 
-def _fill_operators(ws, operators: list[dict]):
+def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
     """Rellena las filas de operadores (a partir de la fila 9).
 
     ``operators`` es una lista de dicts con las claves:
         full_name, document_number, address, phone,
-        coordinator_name, jacket_number, cap_number
+        coordinator_name, jacket_number, cap_number,
+        is_banned (bool), has_incident (bool),
+        signature_data (str|None, base64 PNG — solo cuando with_signatures)
+
+    Resalta toda la fila de color según el estado del operador:
+        - **Rojo claro** si tiene veto activo (``is_banned=True``).
+        - **Amarillo claro** si tiene alguna novedad en el evento
+          (``has_incident=True``).
+        El veto (rojo) tiene prioridad visual sobre la novedad (amarillo).
+
+    Cuando ``with_signatures=True`` y el operador tiene ``signature_data``,
+    se aumenta la altura de la fila a ``_SIGNATURE_ROW_HEIGHT_PT`` (50pt) y
+    se embebe la firma centrada en la columna L (``COL_FIRMA``).
     """
     for idx, op in enumerate(operators):
         row = FIRST_DATA_ROW + idx
@@ -219,6 +381,27 @@ def _fill_operators(ws, operators: list[dict]):
         ws.cell(row=row, column=COL_COORDINADOR, value=op.get("coordinator_name", ""))
         ws.cell(row=row, column=COL_CHAQ, value=op.get("jacket_number", ""))
         ws.cell(row=row, column=COL_GORRA, value=op.get("cap_number", ""))
+
+        # --- Embeber firma (opcional) en la columna L ---
+        # Solo si with_signatures=True y el operador tiene signature_data.
+        # Se aumenta la altura de la fila ANTES de calcular el centrado,
+        # porque _add_centered_signature lee ws.row_dimensions[row].height.
+        sig_data = op.get("signature_data") if with_signatures else None
+        if sig_data:
+            ws.row_dimensions[row].height = _SIGNATURE_ROW_HEIGHT_PT
+            _add_centered_signature(ws, row, COL_FIRMA, sig_data)
+
+        # --- Resaltar fila completa si el operador tiene novedad o veto ---
+        # Prioridad: veto (rojo) > novedad (amarillo).
+        fill = None
+        if op.get("is_banned"):
+            fill = BAN_FILL
+        elif op.get("has_incident"):
+            fill = INCIDENT_FILL
+
+        if fill is not None:
+            for col in range(COL_NO, LAST_COL + 1):
+                ws.cell(row=row, column=col).fill = fill
 
 
 def _sort_operators(operators: list[dict], sort_by: str) -> list[dict]:
@@ -250,6 +433,7 @@ def _render_pages(
     sheet_label: str,
     operators: list[dict],
     sort_by: str = "lastname",
+    with_signatures: bool = False,
 ) -> list[str]:
     """Crea una o varias hojas (paginadas cada ROWS_PER_PAGE) para un grupo.
 
@@ -257,6 +441,8 @@ def _render_pages(
         sheet_label: Nombre base para las hojas (p.ej. nombre del coordinador
             o el nombre del evento cuando ``group_by="none"``).
         operators: Operadores del grupo (se ordenan aquí según ``sort_by``).
+        with_signatures: Si ``True``, embebe las firmas (clave ``signature_data``
+            de cada operador) centradas en la columna L.
 
     Returns:
         Lista con los títulos de las hojas creadas.
@@ -282,7 +468,7 @@ def _render_pages(
             event_date=event_date,
             event_location=event_location,
         )
-        _fill_operators(new_ws, page_ops)
+        _fill_operators(new_ws, page_ops, with_signatures=with_signatures)
         sheets_created.append(sheet_title)
 
     return sheets_created
@@ -297,6 +483,7 @@ def generate_planilla_xlsx(
     operators: list[dict] | None = None,
     group_by: str = "coordinator",
     sort_by: str = "lastname",
+    with_signatures: bool = False,
 ) -> bytes:
     """Genera el Excel de la planilla de pago.
 
@@ -382,6 +569,7 @@ def generate_planilla_xlsx(
                     sheet_label=coord_name,
                     operators=ops,
                     sort_by=sort_by,
+                    with_signatures=with_signatures,
                 )
             )
     elif group_by == "role":
@@ -403,6 +591,7 @@ def generate_planilla_xlsx(
                     sheet_label=role_name,
                     operators=ops,
                     sort_by=sort_by,
+                    with_signatures=with_signatures,
                 )
             )
     elif group_by == "coordinator_role":
@@ -426,6 +615,7 @@ def generate_planilla_xlsx(
                     sheet_label=label,
                     operators=ops,
                     sort_by=sort_by,
+                    with_signatures=with_signatures,
                 )
             )
     else:
@@ -440,6 +630,7 @@ def generate_planilla_xlsx(
                 sheet_label=event_name or "EVENTO",
                 operators=operators,
                 sort_by=sort_by,
+                with_signatures=with_signatures,
             )
         )
 

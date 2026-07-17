@@ -76,6 +76,18 @@ async def login(request: Request, body: LoginRequest = None, db: AsyncSession = 
             detail="Tu registro está pendiente de aprobación por el administrador. Inténtalo más tarde.",
         )
 
+    # Veto: si el operador está vetado, no puede iniciar sesión.
+    if user.user_type == "operator":
+        op_result = await db.execute(
+            select(Operator).where(Operator.user_id == user.id)
+        )
+        operator_profile = op_result.scalar_one_or_none()
+        if operator_profile and operator_profile.is_banned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu cuenta ha sido vetada. Contacta al administrador para más información.",
+            )
+
     # Update last login
     user.last_login = datetime.now(timezone.utc).isoformat()
     await db.commit()

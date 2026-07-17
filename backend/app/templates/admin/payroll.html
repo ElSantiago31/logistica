@@ -233,42 +233,88 @@
         </div>
         <div class="flex gap-2 items-center no-print">
             <div class="relative" id="planilla-dropdown-wrap">
-                <button onclick="togglePlanillaMenu(event)" class="btn btn-outline" title="Descargar planilla Excel (4 modos)">
+                <button onclick="togglePlanillaMenu(event)" class="btn btn-outline" title="Descargar planilla (Excel o PDF)">
                     📄 Planilla ▾
                 </button>
-                <div id="planilla-menu" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 z-50" style="min-width:18rem;">
-                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">Agrupado por coordinador</div>
-                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📋 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(una hoja por coordinador)</span>
-                    </a>
-                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(una hoja por coordinador)</span>
-                    </a>
-                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Agrupado por rol</div>
-                    <a href="#" onclick="downloadPlanillaCoordinador('role','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📋 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(una hoja por rol)</span>
-                    </a>
-                    <a href="#" onclick="downloadPlanillaCoordinador('role','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(una hoja por rol)</span>
-                    </a>
-                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Por coordinador y rol</div>
-                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator_role','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📋 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(hoja por coordinador y rol)</span>
-                    </a>
-                    <a href="#" onclick="downloadPlanillaCoordinador('coordinator_role','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📋 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(hoja por coordinador y rol)</span>
-                    </a>
-                    <div class="px-3 py-2 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Lista única</div>
-                    <a href="#" onclick="downloadPlanillaCoordinador('none','lastname'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📄 Por <b>Apellido</b> <span class="text-gray-400 text-xs">(lista única, no agrupar)</span>
-                    </a>
-                    <a href="#" onclick="downloadPlanillaCoordinador('none','document'); return false;" class="block px-4 py-2 text-sm hover:bg-amber-50 text-gray-700">
-                        📄 Por <b>Cédula</b> <span class="text-gray-400 text-xs">(lista única, no agrupar)</span>
-                    </a>
+                <div id="planilla-menu" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50" style="min-width:20rem; max-height:80vh; overflow-y:auto;">
+                    <div class="px-3 py-2 text-xs text-gray-500 border-b border-gray-100 flex gap-1 items-center">
+                        <span class="font-bold uppercase">Formato:</span>
+                        <span class="px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">📊 Excel</span>
+                        <span class="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs font-semibold">📕 PDF</span>
+                    </div>
+                    <!-- Toggle: embeber firmas digitalizadas en la columna L -->
+                    <label class="px-3 py-2 flex items-center gap-2 border-b border-gray-100 bg-amber-50 cursor-pointer hover:bg-amber-100">
+                        <input type="checkbox" id="planilla-with-signatures" class="w-4 h-4 accent-amber-600 cursor-pointer">
+                        <span class="text-xs text-gray-700 font-medium">✍️ Con firmas digitalizadas</span>
+                        <span class="ml-auto text-[10px] text-gray-400" title="Embebe las firmas guardadas en la columna FIRMA">(col L)</span>
+                    </label>
+                    <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">Por coordinador</div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📋 Por <b>Apellido</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('coordinator','lastname','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('coordinator','lastname','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📋 Por <b>Cédula</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('coordinator','document','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('coordinator','document','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Por rol</div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📋 Por <b>Apellido</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('role','lastname','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('role','lastname','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📋 Por <b>Cédula</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('role','document','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('role','document','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Por coordinador y rol</div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📋 Por <b>Apellido</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('coordinator_role','lastname','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('coordinator_role','lastname','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📋 Por <b>Cédula</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('coordinator_role','document','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('coordinator_role','document','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Lista única</div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📄 Por <b>Apellido</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('none','lastname','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('none','lastname','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">📄 Por <b>Cédula</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('none','document','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
+                            <button onclick="downloadPlanillaCoordinador('none','document','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
                 </div>
             </div>
             <button onclick="downloadInvoicesBulk()" class="btn btn-primary" title="Descargar ZIP con todas las facturas PDF (operadores pagados con firma)">
                 🗄️ Facturas PDF
+            </button>
+            <button onclick="downloadNovedadesExcel()" class="btn btn-outline" title="Descargar Excel con todas las novedades (incidencias y vetos) del evento">
+                ⚠️ Novedades Excel
             </button>
             <span id="viewers-badge" class="status-pill status-signed hidden" title="Personas viendo esta nómina">👥 1</span>
             <span id="online-badge" class="status-pill status-signed">🟢 Online</span>
@@ -656,7 +702,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
-async function downloadPlanillaCoordinador(groupBy = 'coordinator', sortBy = 'lastname') {
+async function downloadPlanillaCoordinador(groupBy = 'coordinator', sortBy = 'lastname', format = 'xlsx') {
     // Cerrar el menú al seleccionar
     const menu = document.getElementById('planilla-menu');
     if (menu) menu.classList.add('hidden');
@@ -666,8 +712,13 @@ async function downloadPlanillaCoordinador(groupBy = 'coordinator', sortBy = 'la
     const originalText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
 
+    // ¿Modo con firmas embebidas? (checkbox en el menú desplegable)
+    const sigCheckbox = document.getElementById('planilla-with-signatures');
+    const withSignatures = sigCheckbox ? sigCheckbox.checked : false;
+
     try {
-        const params = new URLSearchParams({ group_by: groupBy, sort_by: sortBy });
+        const params = new URLSearchParams({ group_by: groupBy, sort_by: sortBy, format: format });
+        if (withSignatures) params.append('with_signatures', 'true');
         const resp = await fetch(
             `/api/payroll/events/${EVENT_ID}/planilla-coordinador?${params.toString()}`,
             { headers: authHeaders() }
@@ -684,7 +735,8 @@ async function downloadPlanillaCoordinador(groupBy = 'coordinator', sortBy = 'la
         a.href = url;
         const disposition = resp.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename="?([^"]+)"?/);
-        a.download = match ? match[1] : `Planilla_${EVENT_ID}.xlsx`;
+        const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+        a.download = match ? match[1] : `Planilla_${EVENT_ID}.${ext}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -736,6 +788,49 @@ async function downloadInvoicesBulk(btn) {
         if (button) {
             button.disabled = false;
             button.textContent = originalText || '🗄️ Facturas PDF';
+        }
+    }
+}
+
+// ============================================================
+// DESCARGAR EXCEL DE NOVEDADES (Incidencias y vetos)
+// ============================================================
+async function downloadNovedadesExcel(btn) {
+    const button = btn || (event && event.target) || null;
+    const originalText = button ? button.textContent : '';
+    try {
+        if (button) {
+            button.disabled = true;
+            button.textContent = '⏳ Generando...';
+        }
+
+        const resp = await fetch(`/api/payroll/events/${EVENT_ID}/novedades-excel`, {
+            headers: authHeaders()
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert('❌ Error al generar el Excel de novedades: ' + (err.detail || resp.status));
+            return;
+        }
+        // Crear blob y disparar descarga del XLSX
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const disposition = resp.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : `Novedades_${EVENT_ID}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch(e) {
+        console.error('downloadNovedadesExcel error:', e);
+        alert('❌ Error de red: ' + e.message);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText || '⚠️ Novedades Excel';
         }
     }
 }

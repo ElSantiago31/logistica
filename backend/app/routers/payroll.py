@@ -47,6 +47,7 @@ from app.dependencies.auth import get_current_user
 from app.models.events import Event, EventAssignment, EventStaffNeed
 from app.models.operators import Operator
 from app.models.payroll import Evaluation, PayrollRecord
+from app.models.incidents import OperatorIncident, OperatorBan
 from app.models.roles import Role
 from app.models.users import User
 from app.websockets.manager import manager as ws_manager
@@ -871,13 +872,18 @@ async def download_planilla_coordinador(
     event_id: uuid.UUID,
     group_by: str = "coordinator",
     sort_by: str = "lastname",
+    format: str = "xlsx",
+    with_signatures: bool = False,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Descarga la planilla de pago en Excel (.xlsx).
+    """Descarga la planilla de pago en Excel (.xlsx) o PDF (.pdf).
 
     Modos (combinables):
 
+    - ``format``:
+        - ``"xlsx"`` (default): Excel con plantilla corporativa.
+        - ``"pdf"``: PDF horizontal (una página por cada 20 operadores).
     - ``group_by``:
         - ``"coordinator"`` (default): una hoja por coordinador.
         - ``"role"``: una hoja por cada rol.
@@ -886,15 +892,21 @@ async def download_planilla_coordinador(
     - ``sort_by``:
         - ``"lastname"`` (default): ordenado por apellido.
         - ``"document"``: ordenado por número de cédula.
+    - ``with_signatures``:
+        - ``true``: embebe las firmas (base64 PNG de ``PayrollRecord``) en la
+          columna L de cada operador que tenga firma. Las filas con firma
+          aumentan de altura para que la imagen sea legible.
+        - ``false`` (default): columna L en blanco (planilla para firmar a mano).
 
     Solo incluye operadores con ``status='checked_in'``. Si una hoja tiene
-    más de 20 operadores, se generan hojas adicionales paginadas.
+    más de 20 operadores, se generan hojas/páginas adicionales paginadas.
 
     Requiere permisos admin/superadmin/coordinator.
     """
     # Validar parámetros (defensa en profundidad)
     group_by = (group_by or "coordinator").strip().lower()
     sort_by = (sort_by or "lastname").strip().lower()
+    format = (format or "xlsx").strip().lower()
     if group_by not in _PLANILLA_GROUP_BY:
         raise HTTPException(
             400,
@@ -906,6 +918,11 @@ async def download_planilla_coordinador(
             400,
             f"sort_by inválido '{sort_by}'. Valores válidos: "
             f"{sorted(_PLANILLA_SORT_BY)}",
+        )
+    if format not in ("xlsx", "pdf"):
+        raise HTTPException(
+            400,
+            f"format inválido '{format}'. Valores válidos: ['pdf', 'xlsx']",
         )
 
     if user.user_type not in _PERMITTED:
@@ -931,6 +948,40 @@ async def download_planilla_coordinador(
     # Mapear áreas a coordinadores del evento
     area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
 
+    # --- Consultar novedades y vetos para resaltar filas en la planilla ---
+    # Operadores con alguna novedad (incident) en ESTE evento → fila amarilla.
+    inc_result = await db.execute(
+        select(OperatorIncident.operator_id)
+        .where(OperatorIncident.event_id == event_id)
+        .distinct()
+    )
+    ops_with_incident = {str(oid) for (oid,) in inc_result.all()}
+
+    # Operadores con veto ACTIVO (cualquier evento) → fila roja.
+    ban_result = await db.execute(
+        select(OperatorBan.operator_id)
+        .where(OperatorBan.is_active.is_(True))
+        .distinct()
+    )
+    banned_ops = {str(oid) for (oid,) in ban_result.all()}
+
+    # --- Consultar firmas de nómina (solo si with_signatures=True) ---
+    # [OPTIMIZACIÓN] Solo se carga el blob signature_data (base64 PNG ~50KB)
+    # cuando el usuario pidió expresamente el modo con firmas. En la planilla
+    # normal (para firmar a mano) no se transfiere ningún blob.
+    signatures_by_op: dict[str, str | None] = {}
+    if with_signatures:
+        sig_result = await db.execute(
+            select(PayrollRecord.operator_id, PayrollRecord.signature_data)
+            .where(
+                PayrollRecord.event_id == event_id,
+                PayrollRecord.signature_data.is_not(None),
+            )
+        )
+        signatures_by_op = {
+            str(oid): sig for (oid, sig) in sig_result.all()
+        }
+
     # Construir lista plana de operadores (con su coordinator_name)
     operators: list[dict] = []
     for assignment, operator, op_user, role in rows:
@@ -942,6 +993,7 @@ async def download_planilla_coordinador(
             if role and role.area and role.area in area_to_coord:
                 coord_name = area_to_coord[role.area][0]
 
+        op_id_str = str(operator.id)
         operators.append({
             "full_name": f"{op_user.first_name} {op_user.last_name}",
             "document_number": op_user.document_number or "",
@@ -951,26 +1003,19 @@ async def download_planilla_coordinador(
             "role_name": role.name if role else "Operador",
             "jacket_number": assignment.jacket_number or "",
             "cap_number": assignment.cap_number or "",
+            # Flags para resaltar filas en la planilla impresa:
+            #   rojo = vetado (is_banned), amarillo = tiene novedad (has_incident).
+            # El veto tiene prioridad visual sobre la novedad.
+            "is_banned": op_id_str in banned_ops,
+            "has_incident": op_id_str in ops_with_incident,
+            # Firma base64 PNG (solo presente cuando with_signatures=True y
+            # el operador tiene un PayrollRecord con firma guardada).
+            "signature_data": signatures_by_op.get(op_id_str),
         })
 
-    # Generar el Excel
-    from app.services.planilla_excel import generate_planilla_xlsx
-
-    try:
-        xlsx_bytes = generate_planilla_xlsx(
-            event_name=event.name,
-            event_date=event.start_date,
-            event_location=event.location,
-            operators=operators,
-            group_by=group_by,
-            sort_by=sort_by,
-        )
-    except FileNotFoundError as exc:
-        logger.error("Plantilla no encontrada: %s", exc)
-        raise HTTPException(500, "Plantilla de planilla no encontrada en el servidor")
-    except Exception as exc:
-        logger.error("Error generando planilla: %s", exc)
-        raise HTTPException(500, f"Error al generar la planilla: {exc}")
+    # --- Generar el archivo (Excel o PDF según ``format``) ---
+    # Ambos formatos comparten la MISMA lógica de agrupación/ordenamiento,
+    # por lo que el contenido y orden de operadores es idéntico.
 
     # Sanitizar nombre del evento para el filename
     safe_name = _sanitize_event_name(event.name)
@@ -984,11 +1029,54 @@ async def download_planilla_coordinador(
         mode_suffix = f"_porCoordyRol{'Cedula' if sort_by == 'document' else 'Apellido'}"
     elif sort_by == "document":
         mode_suffix = "_porCedula"
-    filename = f"Planilla_{safe_name}{mode_suffix}.xlsx"
+
+    if format == "pdf":
+        # --- Generar PDF ---
+        from app.services.planilla_pdf import generate_planilla_pdf
+
+        try:
+            file_bytes = generate_planilla_pdf(
+                event_name=event.name,
+                event_date=event.start_date,
+                event_location=event.location,
+                operators=operators,
+                group_by=group_by,
+                sort_by=sort_by,
+                with_signatures=with_signatures,
+            )
+        except Exception as exc:
+            logger.error("Error generando planilla PDF: %s", exc)
+            raise HTTPException(500, f"Error al generar la planilla PDF: {exc}")
+
+        filename = f"Planilla_{safe_name}{mode_suffix}.pdf"
+        media_type = "application/pdf"
+    else:
+        # --- Generar Excel (default) ---
+        from app.services.planilla_excel import generate_planilla_xlsx
+
+        try:
+            file_bytes = generate_planilla_xlsx(
+                event_name=event.name,
+                event_date=event.start_date,
+                event_location=event.location,
+                operators=operators,
+                group_by=group_by,
+                sort_by=sort_by,
+                with_signatures=with_signatures,
+            )
+        except FileNotFoundError as exc:
+            logger.error("Plantilla no encontrada: %s", exc)
+            raise HTTPException(500, "Plantilla de planilla no encontrada en el servidor")
+        except Exception as exc:
+            logger.error("Error generando planilla Excel: %s", exc)
+            raise HTTPException(500, f"Error al generar la planilla: {exc}")
+
+        filename = f"Planilla_{safe_name}{mode_suffix}.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
     return StreamingResponse(
-        iter([xlsx_bytes]),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        iter([file_bytes]),
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -1070,5 +1158,88 @@ async def download_invoices_bulk(
     return StreamingResponse(
         iter([zip_bytes]),
         media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ============================================================
+# EXCEL DE NOVEDADES (Incidencias del evento)
+# ============================================================
+# Genera un Excel plano (.xlsx) con todas las novedades registradas para el
+# evento, listo para imprimir y llevar registro físico.
+
+@router.get("/events/{event_id}/novedades-excel")
+async def download_novedades_excel(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Descarga un Excel con todas las novedades (incidencias) del evento.
+
+    Incluye novedades operativas y vetos marcados desde el módulo de
+    incidencias. Ordenado por fecha ascendente (las más antiguas primero).
+
+    Requiere permisos admin/superadmin/coordinator.
+    """
+    if user.user_type not in _PERMITTED:
+        raise HTTPException(403, "Sin permisos")
+
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
+    # Consultar todas las novedades del evento con datos del operador y
+    # del usuario que registró la novedad. Usamos alias porque User aparece
+    # dos veces (usuario del operador vs. usuario que registró la novedad).
+    from sqlalchemy.orm import aliased
+    OpUser = aliased(User)
+    RecorderUser = aliased(User)
+
+    result = await db.execute(
+        select(OperatorIncident, Operator, OpUser, RecorderUser)
+        .join(Operator, Operator.id == OperatorIncident.operator_id)
+        .join(OpUser, OpUser.id == Operator.user_id)
+        .outerjoin(RecorderUser, RecorderUser.id == OperatorIncident.recorded_by)
+        .where(OperatorIncident.event_id == event_id)
+        .order_by(OperatorIncident.created_at.asc())
+    )
+    rows = result.all()
+
+    # Construir lista de novedades para el Excel
+    novedades: list[dict] = []
+    for inc, operator, op_user, recorder_user in rows:
+        novedades.append({
+            "created_at": inc.created_at,
+            "operator_name": f"{op_user.first_name} {op_user.last_name}".strip() if op_user else "—",
+            "operator_document": op_user.document_number if op_user else "",
+            "incident_type": inc.incident_type,
+            "description": inc.description or "",
+            "recorder_name": (
+                f"{recorder_user.first_name} {recorder_user.last_name}".strip()
+                if recorder_user else None
+            ),
+            "is_veto": inc.is_veto,
+        })
+
+    # Generar el Excel
+    from app.services.novedades_excel import generate_novedades_xlsx
+
+    try:
+        xlsx_bytes = generate_novedades_xlsx(
+            event_name=event.name,
+            event_date=event.start_date,
+            event_location=event.location,
+            novedades=novedades,
+        )
+    except Exception as exc:
+        logger.error("Error generando Excel de novedades: %s", exc)
+        raise HTTPException(500, f"Error al generar el Excel de novedades: {exc}")
+
+    safe_name = _sanitize_event_name(event.name)
+    filename = f"Novedades_{safe_name}.xlsx"
+
+    return StreamingResponse(
+        iter([xlsx_bytes]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -1,0 +1,668 @@
+{% set active_page = 'events' %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incidencias y Vetos · A&C Logística</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="icon" href="/static/frontend/logo.jpeg" type="image/jpeg">
+    <style>
+        [x-cloak] { display: none !important; }
+        .modal-backdrop { background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+        .badge-veto { background:#fee2e2; color:#b91c1c; }
+        .badge-doble { background:#dbeafe; color:#1e40af; }
+        .badge-tarde { background:#fef3c7; color:#92400e; }
+        .badge-salida { background:#fef3c7; color:#92400e; }
+        .badge-incumplimiento { background:#fee2e2; color:#b91c1c; }
+        .badge-llamado { background:#ffedd5; color:#9a3412; }
+        .badge-observacion { background:#f3f4f6; color:#374151; }
+        .badge-otro { background:#f3f4f6; color:#374151; }
+        [data-theme="dark"] .badge-veto { background:rgba(239,68,68,0.15); color:#f87171; }
+        [data-theme="dark"] .badge-doble { background:rgba(59,130,246,0.15); color:#60a5fa; }
+        [data-theme="dark"] .badge-tarde { background:rgba(245,158,11,0.15); color:#fbbf24; }
+        [data-theme="dark"] .badge-salida { background:rgba(245,158,11,0.15); color:#fbbf24; }
+        [data-theme="dark"] .badge-incumplimiento { background:rgba(239,68,68,0.15); color:#f87171; }
+        [data-theme="dark"] .badge-llamado { background:rgba(249,115,22,0.15); color:#fb923c; }
+        [data-theme="dark"] .badge-observacion { background:rgba(55,65,81,0.2); color:#9ca3af; }
+        [data-theme="dark"] .badge-otro { background:rgba(55,65,81,0.2); color:#9ca3af; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    {% include "admin/_admin_nav.html" %}
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">⚠️ Incidencias y Vetos</h1>
+                <p id="context-subtitle" class="text-sm text-gray-500 mt-1">Registro de novedades operativas y gestión de vetos</p>
+            </div>
+            <div class="flex gap-2">
+                <a href="/admin/events/" class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white border border-gray-300 shadow-sm hover:bg-gray-50 inline-flex items-center">← Eventos</a>
+                <button onclick="openIncidentModal()" class="px-4 py-2 rounded-lg text-sm font-semibold text-white shadow" style="background:#5d4224;">+ Nueva Novedad</button>
+                <button onclick="openBanModal()" class="px-4 py-2 rounded-lg text-sm font-semibold text-white shadow bg-red-600 hover:bg-red-700">🚫 Vetar Operador</button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-4 overflow-x-auto">
+            <button id="tab-incidents" onclick="switchTab('incidents')" class="px-4 py-2 text-sm font-semibold border-b-2" style="border-color:#cf9b62;color:#5d4224;">Novedades</button>
+            <button id="tab-bans" onclick="switchTab('bans')" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">Vetos</button>
+        </div>
+
+        <!-- ==================== TAB: INCIDENTS ==================== -->
+        <div id="panel-incidents">
+            <!-- Filtros -->
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div id="filter-event-wrap">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Evento</label>
+                        <select id="filter-event" onchange="loadIncidents()" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                        <select id="filter-type" onchange="loadIncidents()" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                            <option value="">Todos</option>
+                            <option value="doble_turno">Doble turno</option>
+                            <option value="llegada_tarde">Llegada tarde</option>
+                            <option value="salida_anticipada">Salida anticipada</option>
+                            <option value="incumplimiento">Incumplimiento</option>
+                            <option value="llamado_atencion">Llamado de atención</option>
+                            <option value="observacion">Observación</option>
+                            <option value="otro">Otro</option>
+                            <option value="veto">Veto</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar operador</label>
+                        <input id="filter-operator" type="text" placeholder="Nombre o cédula..." oninput="debouncedLoad()" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="clearFilters()" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Limpiar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de novedades -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Fecha</th>
+                                <th id="th-event" class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Evento</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Operador</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Tipo</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Descripción</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Registró</th>
+                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incidents-tbody" class="divide-y divide-gray-100">
+                            <tr><td colspan="7" class="text-center py-8 text-gray-400">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB: BANS ==================== -->
+        <div id="panel-bans" class="hidden">
+            <!-- Resumen -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-sm text-gray-500">Vetos activos</p>
+                    <p id="stat-active" class="text-2xl font-bold text-red-600">—</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-sm text-gray-500">Históricos totales</p>
+                    <p id="stat-total" class="text-2xl font-bold text-gray-700">—</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <p class="text-sm text-gray-500">Reactivados</p>
+                    <p id="stat-reactivated" class="text-2xl font-bold text-green-600">—</p>
+                </div>
+            </div>
+
+            <!-- Filtro -->
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Estado</label>
+                <select id="filter-ban-active" onchange="loadBans()" class="text-sm border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="">Todos</option>
+                    <option value="true">Solo activos</option>
+                    <option value="false">Solo reactivados</option>
+                </select>
+            </div>
+
+            <!-- Tabla de vetos -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Fecha</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Operador</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Motivo</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Estado</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Vetado por</th>
+                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bans-tbody" class="divide-y divide-gray-100">
+                            <tr><td colspan="6" class="text-center py-8 text-gray-400">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Crear novedad ==================== -->
+    <div id="modal-incident" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800">Registrar Novedad</h3>
+                <button onclick="closeModal('modal-incident')" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form id="form-incident" onsubmit="submitIncident(event)" class="p-6 space-y-4">
+                <div id="inc-event-wrap">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Evento *</label>
+                    <select id="inc-event" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Operador *</label>
+                    <select id="inc-operator" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Tipo de novedad *</label>
+                    <select id="inc-type" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="doble_turno">Doble turno</option>
+                        <option value="llegada_tarde">Llegada tarde</option>
+                        <option value="salida_anticipada">Salida anticipada</option>
+                        <option value="incumplimiento">Incumplimiento</option>
+                        <option value="llamado_atencion">Llamado de atención</option>
+                        <option value="observacion">Observación</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Descripción *</label>
+                    <textarea id="inc-description" required minlength="3" maxlength="2000" rows="3"
+                        placeholder="Describa la novedad..."
+                        class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-incident')" class="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-semibold text-white rounded-lg" style="background:#5d4224;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Vetar operador ==================== -->
+    <div id="modal-ban" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            <div class="px-6 py-4 border-b border-red-200 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-red-700">🚫 Vetar Operador</h3>
+                <button onclick="closeModal('modal-ban')" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form id="form-ban" onsubmit="submitBan(event)" class="p-6 space-y-4">
+                <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                    ⚠️ El operador vetado <strong>no podrá iniciar sesión</strong> hasta que sea reactivado.
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Operador *</label>
+                    <select id="ban-operator" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+                <div id="ban-event-wrap">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Evento (opcional)</label>
+                    <select id="ban-event" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Sin evento asociado</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Motivo del veto *</label>
+                    <textarea id="ban-reason" required minlength="3" maxlength="1000" rows="2"
+                        placeholder="Motivo del veto..."
+                        class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Observaciones</label>
+                    <textarea id="ban-observations" maxlength="2000" rows="2"
+                        placeholder="Observaciones adicionales (opcional)..."
+                        class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-ban')" class="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-semibold text-white rounded-lg bg-red-600 hover:bg-red-700">Vetar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<script>
+// ============================================================================
+// Estado global
+// ============================================================================
+// EVENT_ID inyectado por el servidor (ruta /admin/events/{event_id}/incidencias).
+// Si está vacío, se accedió por la ruta legacy sin evento asociado.
+const EVENT_ID = '{{ event_id | default("", true) }}';
+
+let allIncidents = [];
+let allBans = [];
+let allEvents = [];
+let allOperators = [];
+let debounceTimer = null;
+
+const TYPE_LABELS = {
+    doble_turno: 'Doble turno', llegada_tarde: 'Llegada tarde',
+    salida_anticipada: 'Salida anticipada', incumplimiento: 'Incumplimiento',
+    llamado_atencion: 'Llamado atención', observacion: 'Observación',
+    otro: 'Otro', veto: 'Veto',
+};
+
+// ============================================================================
+// Init
+// ============================================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    // Guard de autenticación: redirige al login correcto según el tipo de usuario.
+    if (!Auth.getToken()) {
+        Auth.redirectToLogin();
+        return;
+    }
+    if (EVENT_ID) {
+        // Modo scoped por evento: el evento ya está implícito.
+        // Ocultar selects de evento y mostrar el nombre del evento en el header.
+        applyEventScopedUI();
+        await loadEventName();
+    } else {
+        // Modo global (ruta legacy sin evento): cargar todos los eventos.
+        await loadEvents();
+    }
+    await loadOperators();
+    await loadIncidents();
+});
+
+// Cuando hay EVENT_ID, las incidencias pertenecen al evento actual.
+// Se ocultan los selects de evento (filtro + modales) y la columna "Evento".
+function applyEventScopedUI() {
+    ['filter-event-wrap', 'inc-event-wrap', 'ban-event-wrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+    // Quitar `required` de los selects ocultos para evitar el error
+    // "An invalid form control with name='' is not focusable" al submit.
+    // En modo scoped el evento ya está implícito en EVENT_ID.
+    ['inc-event'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.removeAttribute('required');
+            el.value = EVENT_ID;
+        }
+    });
+    // Ocultar también la columna "Evento" de la tabla (es redundante).
+    const th = document.getElementById('th-event');
+    if (th) th.classList.add('hidden');
+}
+
+async function loadEventName() {
+    try {
+        const ev = await apiFetch('/api/events/' + EVENT_ID);
+        const subtitle = document.getElementById('context-subtitle');
+        if (subtitle && ev && ev.name) {
+            subtitle.innerHTML = 'Evento: <strong class="text-gray-700">' + ev.name + '</strong>';
+        }
+    } catch (e) { console.error('loadEventName', e); }
+}
+
+async function apiFetch(url, opts = {}) {
+    const token = localStorage.getItem('access_token');
+    const res = await fetch(url, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', ...(opts.headers || {}), ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Error' }));
+        throw new Error(err.detail || 'HTTP ' + res.status);
+    }
+    return res.status === 204 ? null : res.json();
+}
+
+// ============================================================================
+// Carga de datos
+// ============================================================================
+async function loadEvents() {
+    try {
+        const data = await apiFetch('/api/events/?limit=100');
+        allEvents = data.items || data || [];
+        const eventSelects = ['filter-event', 'inc-event', 'ban-event'];
+        eventSelects.forEach(id => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const current = sel.value;
+            const first = sel.querySelector('option');
+            sel.innerHTML = '';
+            if (first) sel.appendChild(first);
+            allEvents.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.id;
+                opt.textContent = e.name;
+                sel.appendChild(opt);
+            });
+            sel.value = current;
+        });
+    } catch (e) { console.error('loadEvents', e); }
+}
+
+async function loadOperators() {
+    try {
+        if (EVENT_ID) {
+            // Modo scoped: cargar solo operadores asignados a este evento.
+            const assignments = await apiFetch('/api/events/' + EVENT_ID + '/assignments');
+            // Normalizar a formato {id, first_name, last_name, document_number}
+            allOperators = (assignments || [])
+                .filter(a => a.operator_id)
+                .map(a => ({
+                    id: a.operator_id,
+                    first_name: a.operator_first_name || '',
+                    last_name: a.operator_last_name || '',
+                    document_number: a.operator_document_number || '',
+                }));
+        } else {
+            // Modo global: cargar todos los operadores.
+            const data = await apiFetch('/api/operators?limit=500');
+            allOperators = data.items || data || [];
+        }
+        const opSelects = ['inc-operator', 'ban-operator'];
+        opSelects.forEach(id => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            sel.innerHTML = '<option value="">Seleccione...</option>';
+            if (allOperators.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.disabled = true;
+                opt.textContent = 'Sin operadores asignados';
+                sel.appendChild(opt);
+                return;
+            }
+            allOperators.forEach(op => {
+                const opt = document.createElement('option');
+                opt.value = op.id;
+                const fullName = (op.first_name + ' ' + (op.last_name || '')).trim();
+                opt.textContent = fullName + ' — ' + (op.document_number || 's/d');
+                sel.appendChild(opt);
+            });
+        });
+    } catch (e) { console.error('loadOperators', e); }
+}
+
+async function loadIncidents() {
+    const params = new URLSearchParams();
+    if (EVENT_ID) {
+        params.set('event_id', EVENT_ID);
+    } else {
+        const ev = document.getElementById('filter-event').value;
+        if (ev) params.set('event_id', ev);
+    }
+    const type = document.getElementById('filter-type').value;
+    if (type) params.set('incident_type', type);
+
+    try {
+        allIncidents = await apiFetch('/api/incidents?' + params);
+        renderIncidents();
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function loadBans() {
+    const params = new URLSearchParams();
+    const active = document.getElementById('filter-ban-active').value;
+    if (active) params.set('is_active', active);
+
+    try {
+        allBans = await apiFetch('/api/incidents/bans?' + params);
+        renderBans();
+        updateBanStats();
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+// ============================================================================
+// Render
+// ============================================================================
+function renderIncidents() {
+    const tbody = document.getElementById('incidents-tbody');
+    const opFilter = (document.getElementById('filter-operator').value || '').toLowerCase();
+
+    let filtered = allIncidents;
+    if (opFilter) {
+        filtered = allIncidents.filter(i =>
+            (i.operator_name || '').toLowerCase().includes(opFilter) ||
+            (i.operator_document || '').includes(opFilter)
+        );
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No hay novedades registradas</td></tr>';
+        return;
+    }
+
+    const isScoped = !!EVENT_ID;
+    tbody.innerHTML = filtered.map(i => {
+        const date = new Date(i.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+        const badge = 'badge-' + i.incident_type;
+        const label = TYPE_LABELS[i.incident_type] || i.incident_type;
+        const vetoIcon = i.is_veto ? '🚫 ' : '';
+        const eventCell = isScoped ? '' : '<td class="px-4 py-3 text-sm text-gray-600">' + (i.event_name || '—') + '</td>';
+        return '<tr class="hover:bg-gray-50">' +
+            '<td class="px-4 py-3 text-sm text-gray-600">' + date + '</td>' +
+            eventCell +
+            '<td class="px-4 py-3 text-sm">' +
+                '<div class="font-medium text-gray-800">' + (i.operator_name || '—') + '</div>' +
+                '<div class="text-xs text-gray-400">' + (i.operator_document || '') + '</div>' +
+            '</td>' +
+            '<td class="px-4 py-3 text-sm"><span class="inline-block px-2 py-1 rounded text-xs font-semibold ' + badge + '">' + vetoIcon + label + '</span></td>' +
+            '<td class="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title="' + (i.description || '') + '">' + (i.description || '') + '</td>' +
+            '<td class="px-4 py-3 text-sm text-gray-500">' + (i.recorder_name || '—') + '</td>' +
+            '<td class="px-4 py-3 text-right">' +
+                '<button onclick="deleteIncident(\'' + i.id + '\')" class="text-red-500 hover:text-red-700 text-xs font-semibold">Eliminar</button>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+function renderBans() {
+    const tbody = document.getElementById('bans-tbody');
+    if (allBans.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-400">No hay vetos registrados</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = allBans.map(b => {
+        const date = new Date(b.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+        const isActive = b.is_active;
+        const statusBadge = isActive
+            ? '<span class="inline-block px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-700">🚫 Activo</span>'
+            : '<span class="inline-block px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700">✅ Reactivado</span>';
+        let extraInfo = '';
+        if (!isActive && b.unbanned_at) {
+            const unbanDate = new Date(b.unbanned_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+            extraInfo = '<div class="text-xs text-gray-400 mt-1">Reactivado: ' + unbanDate + (b.unban_reason ? ' — ' + b.unban_reason : '') + '</div>';
+        }
+        return '<tr class="hover:bg-gray-50">' +
+            '<td class="px-4 py-3 text-sm text-gray-600">' + date + '</td>' +
+            '<td class="px-4 py-3 text-sm">' +
+                '<div class="font-medium text-gray-800">' + (b.operator_name || '—') + '</div>' +
+                '<div class="text-xs text-gray-400">' + (b.operator_document || '') + '</div>' +
+            '</td>' +
+            '<td class="px-4 py-3 text-sm text-gray-600 max-w-xs">' + b.reason +
+                (b.observations ? '<div class="text-xs text-gray-400 mt-1">' + b.observations + '</div>' : '') +
+            '</td>' +
+            '<td class="px-4 py-3 text-sm">' + statusBadge + extraInfo + '</td>' +
+            '<td class="px-4 py-3 text-sm text-gray-500">' + (b.banner_name || '—') + '</td>' +
+            '<td class="px-4 py-3 text-right">' +
+                (isActive ? '<button onclick="reactivateOperator(\'' + b.operator_id + '\')" class="text-green-600 hover:text-green-800 text-xs font-semibold">Reactivar</button>' : '') +
+            '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+function updateBanStats() {
+    document.getElementById('stat-active').textContent = allBans.filter(b => b.is_active).length;
+    document.getElementById('stat-total').textContent = allBans.length;
+    document.getElementById('stat-reactivated').textContent = allBans.filter(b => !b.is_active).length;
+}
+
+// ============================================================================
+// Tabs
+// ============================================================================
+function switchTab(tab) {
+    const tabs = ['incidents', 'bans'];
+    tabs.forEach(t => {
+        document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById('tab-' + t);
+        if (t === tab) {
+            btn.style.borderColor = '#cf9b62';
+            btn.style.color = '#5d4224';
+            btn.classList.remove('text-gray-500', 'border-transparent');
+        } else {
+            btn.style.borderColor = '';
+            btn.style.color = '';
+            btn.classList.add('text-gray-500', 'border-transparent');
+        }
+    });
+    if (tab === 'bans' && allBans.length === 0) loadBans();
+}
+
+// ============================================================================
+// Modales
+// ============================================================================
+function openIncidentModal() {
+    document.getElementById('form-incident').reset();
+    document.getElementById('modal-incident').classList.remove('hidden');
+    document.getElementById('modal-incident').classList.add('flex');
+}
+
+function openBanModal() {
+    document.getElementById('form-ban').reset();
+    document.getElementById('modal-ban').classList.remove('hidden');
+    document.getElementById('modal-ban').classList.add('flex');
+}
+
+function closeModal(id) {
+    const el = document.getElementById(id);
+    el.classList.add('hidden');
+    el.classList.remove('flex');
+}
+
+// ============================================================================
+// Acciones
+// ============================================================================
+async function submitIncident(e) {
+    e.preventDefault();
+    const payload = {
+        event_id: EVENT_ID || document.getElementById('inc-event').value,
+        operator_id: document.getElementById('inc-operator').value,
+        incident_type: document.getElementById('inc-type').value,
+        description: document.getElementById('inc-description').value,
+    };
+    try {
+        await apiFetch('/api/incidents', { method: 'POST', body: JSON.stringify(payload) });
+        closeModal('modal-incident');
+        await loadIncidents();
+        Swal.fire({ icon: 'success', title: 'Novedad registrada', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+        Swal.fire('Error', err.message, 'error');
+    }
+}
+
+async function deleteIncident(id) {
+    const result = await Swal.fire({
+        title: '¿Eliminar novedad?',
+        text: 'Esta acción no se puede deshacer.',
+        icon: 'warning', showCancelButton: true,
+        confirmButtonColor: '#d33', confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!result.isConfirmed) return;
+    try {
+        await apiFetch('/api/incidents/' + id, { method: 'DELETE' });
+        await loadIncidents();
+        Swal.fire({ icon: 'success', title: 'Eliminada', timer: 1200, showConfirmButton: false });
+    } catch (err) { Swal.fire('Error', err.message, 'error'); }
+}
+
+async function submitBan(e) {
+    e.preventDefault();
+    const payload = {
+        operator_id: document.getElementById('ban-operator').value,
+        reason: document.getElementById('ban-reason').value,
+        observations: document.getElementById('ban-observations').value || null,
+    };
+    if (EVENT_ID) {
+        payload.event_id = EVENT_ID;
+    } else {
+        const eventVal = document.getElementById('ban-event').value;
+        if (eventVal) payload.event_id = eventVal;
+    }
+
+    try {
+        await apiFetch('/api/incidents/bans', { method: 'POST', body: JSON.stringify(payload) });
+        closeModal('modal-ban');
+        await loadBans();
+        await loadIncidents();
+        Swal.fire({ icon: 'success', title: 'Operador vetado', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+        Swal.fire('Error', err.message, 'error');
+    }
+}
+
+async function reactivateOperator(operatorId) {
+    const result = await Swal.fire({
+        title: '¿Reactivar operador?',
+        text: 'El operador podrá volver a iniciar sesión.',
+        icon: 'question', showCancelButton: true,
+        confirmButtonText: 'Sí, reactivar', cancelButtonText: 'Cancelar',
+        input: 'text', inputPlaceholder: 'Motivo de reactivación (opcional)',
+    });
+    if (!result.isConfirmed) return;
+    try {
+        const params = new URLSearchParams({ operator_id: operatorId });
+        await apiFetch('/api/incidents/bans/reactivate?' + params, {
+            method: 'POST',
+            body: JSON.stringify({ unban_reason: result.value || null }),
+        });
+        await loadBans();
+        await loadIncidents();
+        Swal.fire({ icon: 'success', title: 'Operador reactivado', timer: 1500, showConfirmButton: false });
+    } catch (err) { Swal.fire('Error', err.message, 'error'); }
+}
+
+// ============================================================================
+// Filtros
+// ============================================================================
+function clearFilters() {
+    if (!EVENT_ID) document.getElementById('filter-event').value = '';
+    document.getElementById('filter-type').value = '';
+    document.getElementById('filter-operator').value = '';
+    loadIncidents();
+}
+
+function debouncedLoad() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => renderIncidents(), 300);
+}
+</script>
+</body>
+</html>

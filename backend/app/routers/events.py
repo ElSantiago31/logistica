@@ -2,7 +2,7 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -11,8 +11,10 @@ from app.models.users import User
 from app.schemas.events import (
     EventCreate, EventUpdate, EventResponse, EventListResponse,
     AssignmentResponse, AssignOperatorsRequest,
+    ImportSummary,
 )
 from app.services import events as svc
+from app.services import operator_import as imp_svc
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -91,6 +93,60 @@ async def delete_event(
     if not ok:
         raise HTTPException(404, "Evento no encontrado")
     return {"message": "Evento eliminado"}
+
+
+# ============================================================
+# IMPORTACIÓN MASIVA DESDE EXCEL
+# ============================================================
+
+@router.get("/import/template")
+async def download_import_template(
+    user=Depends(get_current_user),
+):
+    """Descarga la plantilla Excel (.xlsx) para importación masiva de operadores."""
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    file_bytes = imp_svc.build_template()
+    return Response(
+        content=file_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="plantilla_operadores.xlsx"',
+        },
+    )
+
+
+@router.post("/{event_id}/import-operators", response_model=ImportSummary)
+async def import_operators_excel(
+    event_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Importa operadores masivamente desde un Excel (.xlsx).
+
+    - Crea usuarios + perfiles para operadores nuevos.
+    - Asigna (nuevos y existentes) al evento con status='confirmed'.
+    - Resuelve coordinador contra cupos del evento.
+    - Devuelve ImportSummary con métricas y detalle fila por fila.
+    """
+    if user.user_type not in ("superadmin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    event = await svc.get_event(db, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
+    # Validar extensión
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        raise HTTPException(400, "El archivo debe ser .xlsx")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(400, "Archivo vacío")
+
+    summary = await imp_svc.import_operators_from_excel(db, file_bytes, event_id)
+    return summary
 
 
 @router.post("/{event_id}/assign")
@@ -218,6 +274,9 @@ async def get_my_staff_events(
     from sqlalchemy import select as sel
     from app.models.events import EventStaffAssignment, Event as EventModel
 
+    from app.models.events import EventCoordinatorQuota
+    from app.models.operators import Operator as OpModel
+
     # Superadmin ve todos los eventos
     if user.user_type == "superadmin":
         result = await db.execute(
@@ -238,7 +297,67 @@ async def get_my_staff_events(
             for e in events
         ]
 
-    # checkin: solo eventos asignados
+    # Coordinador: eventos donde tiene cupo (EventCoordinatorQuota) +
+    # eventos asignados como staff (checkin).
+    if user.user_type == "coordinator":
+        # Buscar el Operator asociado a este usuario (coordinador-operador)
+        op_r = await db.execute(sel(OpModel).where(OpModel.user_id == user.id))
+        my_operator = op_r.scalar_one_or_none()
+
+        seen_event_ids = set()
+        out = []
+
+        # 1) Eventos donde tengo cupo de coordinador
+        if my_operator:
+            q_r = await db.execute(
+                sel(EventModel, EventCoordinatorQuota)
+                .join(EventCoordinatorQuota, EventCoordinatorQuota.event_id == EventModel.id)
+                .where(
+                    EventCoordinatorQuota.coordinator_operator_id == my_operator.id,
+                    EventModel.is_active == True,
+                    EventModel.status.in_(["draft", "published", "in_progress"]),
+                )
+                .order_by(EventModel.start_date.desc())
+            )
+            for e, q in q_r.all():
+                if e.id in seen_event_ids:
+                    continue
+                seen_event_ids.add(e.id)
+                out.append({
+                    "id": str(e.id),
+                    "name": e.name,
+                    "location": e.location,
+                    "start_date": e.start_date.isoformat() if e.start_date else None,
+                    "status": e.status,
+                    "staff_role": "coordinator",
+                })
+
+        # 2) Eventos asignados como staff (checkin)
+        sa_r = await db.execute(
+            sel(EventModel, EventStaffAssignment)
+            .join(EventStaffAssignment, EventStaffAssignment.event_id == EventModel.id)
+            .where(
+                EventStaffAssignment.user_id == user.id,
+                EventStaffAssignment.is_active == True,
+                EventModel.is_active == True,
+            )
+            .order_by(EventModel.start_date.desc())
+        )
+        for e, sa in sa_r.all():
+            if e.id in seen_event_ids:
+                continue
+            seen_event_ids.add(e.id)
+            out.append({
+                "id": str(e.id),
+                "name": e.name,
+                "location": e.location,
+                "start_date": e.start_date.isoformat() if e.start_date else None,
+                "status": e.status,
+                "staff_role": sa.staff_role,
+            })
+        return out
+
+    # checkin / operator: solo eventos asignados como staff
     result = await db.execute(
         sel(EventModel, EventStaffAssignment)
         .join(EventStaffAssignment, EventStaffAssignment.event_id == EventModel.id)

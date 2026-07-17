@@ -21,6 +21,7 @@ from app.routers import sync as sync_router
 from app.routers import payroll as payroll_router
 from app.routers import reports as reports_router
 from app.routers import coordinator as coordinator_router
+from app.routers import incidents as incidents_router
 from app.websockets import router as ws_router
 
 
@@ -55,6 +56,7 @@ app.include_router(sync_router.router)
 app.include_router(payroll_router.router)
 app.include_router(reports_router.router)
 app.include_router(coordinator_router.router)
+app.include_router(incidents_router.router)
 app.include_router(ws_router.router)
 
 # Templates Jinja2
@@ -185,6 +187,19 @@ async def admin_superadmin(request: Request):
 @app.get("/admin/events", response_class=HTMLResponse)
 async def admin_events(request: Request):
     return templates.TemplateResponse("admin/events.html", {"request": request})
+
+
+@app.get("/admin/events/{event_id}/incidencias", response_class=HTMLResponse)
+async def admin_incidents(request: Request, event_id: str):
+    """Módulo de incidencias y vetos asociado a un evento."""
+    return templates.TemplateResponse("admin/incidents.html", {"request": request, "event_id": event_id})
+
+
+@app.get("/admin/incidencias", response_class=HTMLResponse)
+async def admin_incidents_legacy(request: Request):
+    """Redirección de compatibilidad: las incidencias ahora viven dentro del evento."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin/events", status_code=307)
 
 
 @app.get("/admin/events/create", response_class=HTMLResponse)
