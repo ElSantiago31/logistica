@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mis Eventos - Staff</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,8 +38,9 @@
 (function(){
     const t = localStorage.getItem('access_token');
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    // Operadores asignados como checkin también pueden acceder
-    if (!t || !['checkin', 'superadmin', 'operator'].includes(u.user_type)) {
+    // Operadores asignados como checkin también pueden acceder.
+    // Coordinadores con cupos también usan esta vista (reportar novedades/vetos).
+    if (!t || !['checkin', 'superadmin', 'operator', 'coordinator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
@@ -47,6 +50,7 @@
         checkin: {text: 'Check-in', bg: 'bg-green-600'},
         superadmin: {text: 'Superadmin', bg: 'bg-purple-600'},
         operator: {text: 'Operador', bg: 'bg-blue-600'},
+        coordinator: {text: 'Coordinador', bg: 'bg-amber-600'},
     };
     const r = roleMap[u.user_type] || roleMap.checkin;
     badge.textContent = r.text;
@@ -58,6 +62,9 @@ function authH() { return {'Authorization': 'Bearer ' + localStorage.getItem('ac
 
 async function loadEvents() {
     const container = document.getElementById('eventsList');
+    // user_type se necesita para mostrar/ocultar el botón de Incidencias
+    // (solo superadmin). Se lee aquí para no depender del scope de la IIFE.
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
     try {
         const res = await fetch('/api/events/my-events/staff', {headers: authH()});
         if (!res.ok) {
@@ -80,6 +87,10 @@ async function loadEvents() {
             // indumentaria). Cualquier rol de staff accede por el mismo botón.
             if (['checkin', 'intendencia', 'superadmin'].includes(e.staff_role)) {
                 btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in e Indumentaria</a>`);
+            }
+            // Incidencias y vetos: superadmin o coordinador (con cupo en el evento).
+            if (u.user_type === 'superadmin' || u.user_type === 'coordinator') {
+                btns.push(`<a href="/admin/events/${e.id}/incidencias" class="inline-block bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">⚠️ Incidencias</a>`);
             }
             return `<div class="bg-white rounded-lg shadow p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>

@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Operadores - Logística Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -141,13 +143,14 @@
                 const statusBadge = op.is_active
                     ? '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">Activo</span>'
                     : '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">Bloqueado</span>';
+                const banBadge = op.is_banned ? ' <span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white">🚫 Vetado</span>' : '';
                 const docDisplay = (op.document_type||'')+' '+(op.document_number||'-');
                 const blocked = !op.is_active;
 
                 html += '<div class="op-card flex items-center gap-3 px-4 py-3 cursor-pointer '+(blocked?'bg-red-50/50':'')+'" onclick="viewOp(\''+op.id+'\')">';
                 html += avatar;
                 html += '<div class="flex-1 min-w-0">';
-                html += '<div class="flex items-center gap-2"><span class="text-sm font-semibold text-gray-900 truncate">'+name.trim()+'</span>'+statusBadge+'</div>';
+                html += '<div class="flex items-center gap-2 flex-wrap"><span class="text-sm font-semibold text-gray-900 truncate">'+name.trim()+'</span>'+statusBadge+banBadge+'</div>';
                 html += '<div class="text-xs text-gray-500 truncate">'+docDisplay+' · '+(op.phone||'-')+' · '+(op.city||'-')+'</div>';
                 html += '</div>';
                 html += '<svg class="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
@@ -163,8 +166,9 @@
                 const name = (op.first_name||'')+' '+(op.last_name||'');
                 const avatar = op.photo_thumbnail_path ? '<img src="'+op.photo_thumbnail_path+'" class="w-9 h-9 rounded-full object-cover border-2 border-gray-200">' : '<div class="w-9 h-9 rounded-full bg-primary-200 flex items-center justify-center text-primary-700 font-bold text-sm">'+(op.first_name?op.first_name[0]:'')+(op.last_name?op.last_name[0]:'')+'</div>';
                 const statusBadge = op.is_active ? '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">Activo</span>' : '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">Bloqueado</span>';
+                const banBadge = op.is_banned ? '<br><span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white">🚫 Vetado</span>' : '';
                 const docDisplay = (op.document_type||'')+' '+(op.document_number||'-');
-                html += '<tr id="row-'+op.id+'" class="hover:bg-gray-50 '+(op.is_active?'':'bg-red-50/50')+'"><td class="px-4 py-3">'+avatar+'</td><td class="px-4 py-3 text-sm font-medium text-gray-900">'+name.trim()+'</td><td class="px-4 py-3 text-sm text-gray-500">'+docDisplay+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.phone||'-')+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.city||'-')+'</td><td class="px-4 py-3 text-center">'+statusBadge+'</td><td class="px-4 py-3 text-center space-x-1"><button onclick="viewOp(\''+op.id+'\')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition">👁 Ver</button>'+(op.is_active ? '<button onclick="deleteOp(\''+op.id+'\',\''+name.trim().replace(/'/g,"\\'")+'\')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition">🗑</button>' : '')+'</td></tr>';
+                html += '<tr id="row-'+op.id+'" class="hover:bg-gray-50 '+(op.is_active?'':'bg-red-50/50')+'"><td class="px-4 py-3">'+avatar+'</td><td class="px-4 py-3 text-sm font-medium text-gray-900">'+name.trim()+'</td><td class="px-4 py-3 text-sm text-gray-500">'+docDisplay+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.phone||'-')+'</td><td class="px-4 py-3 text-sm text-gray-500">'+(op.city||'-')+'</td><td class="px-4 py-3 text-center">'+statusBadge+banBadge+'</td><td class="px-4 py-3 text-center space-x-1"><button onclick="viewOp(\''+op.id+'\')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition">👁 Ver</button>'+(op.is_active ? '<button onclick="deleteOp(\''+op.id+'\',\''+name.trim().replace(/'/g,"\\'")+'\')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition">🗑</button>' : '')+'</td></tr>';
             });
             html += '</tbody></table>';
             container.innerHTML = html;

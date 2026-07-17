@@ -3,6 +3,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalle Evento - Logística Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -47,9 +49,11 @@
                 <h3 class="text-base sm:text-lg font-semibold text-gray-800">Asignaciones</h3>
                 <div class="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button onclick="showAssignModal()" class="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">+ Asignar</button>
+                    <button onclick="showImportModal()" class="bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-indigo-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">📥 Importar Excel</button>
                     <button onclick="sendInvitations()" class="bg-emerald-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-emerald-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">📱 Invitar WA</button>
                     <a href="/admin/events/{{ event_id }}/checkin" class="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 text-xs sm:text-sm flex-1 sm:flex-none text-center block">📷 Check-in</a>
                     <a href="/admin/events/{{ event_id }}/payroll" class="bg-amber-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-amber-700 text-xs sm:text-sm flex-1 sm:flex-none text-center block">💰 Nómina</a>
+                    <a href="/admin/events/{{ event_id }}/incidencias" class="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 text-xs sm:text-sm flex-1 sm:flex-none text-center block">⚠️ Incidencias</a>
                 </div>
             </div>
             <div class="overflow-x-auto -mx-4 sm:mx-0">
@@ -99,6 +103,50 @@
         </div>
     </div>
     <div id="toast" class="hidden fixed bottom-4 right-4 left-4 sm:left-auto px-4 py-2 rounded-lg text-white z-50 text-center sm:text-left text-sm"></div>
+
+    <!-- Import Excel Modal -->
+    <div id="importModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50">
+        <div class="bg-white rounded-t-lg sm:rounded-lg p-4 sm:p-6 w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base sm:text-lg font-semibold">📥 Importar Operadores desde Excel</h3>
+                <button onclick="closeImportModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+
+            <!-- Step 1: Download + Upload -->
+            <div id="importStep1" class="space-y-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                    <p class="font-medium mb-1">📋 Instrucciones:</p>
+                    <ol class="list-decimal list-inside space-y-1 text-xs sm:text-sm">
+                        <li>Descarga la plantilla oficial con el botón <strong>Descargar plantilla</strong>.</li>
+                        <li>Llena las filas (una operador por fila). La columna <strong>NÚMERO CÉDULA</strong> es obligatoria.</li>
+                        <li>El nombre del coordinador debe coincidir con los cupos asignados al evento.</li>
+                        <li>Sube el archivo .xlsx con el botón <strong>Subir y procesar</strong>.</li>
+                    </ol>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button onclick="downloadTemplate()" class="bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 text-sm flex-1 text-center">⬇️ Descargar plantilla</button>
+                    <label class="bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 text-sm flex-1 text-center cursor-pointer">
+                        ⬆️ Subir y procesar
+                        <input type="file" id="importFileInput" accept=".xlsx" class="hidden" onchange="handleImportFile(event)">
+                    </label>
+                </div>
+                <div id="importProgress" class="hidden text-center py-4">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    <p class="text-sm text-gray-600 mt-2">Procesando Excel...</p>
+                </div>
+            </div>
+
+            <!-- Step 2: Results -->
+            <div id="importStep2" class="hidden space-y-4">
+                <div id="importSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+                <div class="flex flex-wrap gap-2 items-center justify-between">
+                    <input type="text" id="importFilter" placeholder="🔍 Filtrar por nombre, documento o estado..." class="flex-1 border rounded-lg px-3 py-2 text-sm min-w-[200px]" oninput="renderImportRows()">
+                    <button onclick="closeImportModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">Cerrar</button>
+                </div>
+                <div id="importRows" class="border rounded-lg max-h-80 overflow-y-auto divide-y"></div>
+            </div>
+        </div>
+    </div>
 
 <script>
 (function(){
@@ -507,6 +555,110 @@ async function loadAuditLogs(){
 }
 
 loadEvent();loadAuditLogs();
+
+// ============================================================
+// IMPORTACIÓN MASIVA DESDE EXCEL
+// ============================================================
+let _importSummary=null;
+
+function showImportModal(){
+    document.getElementById('importStep1').classList.remove('hidden');
+    document.getElementById('importStep2').classList.add('hidden');
+    document.getElementById('importProgress').classList.add('hidden');
+    document.getElementById('importFileInput').value='';
+    _importSummary=null;
+    document.getElementById('importModal').classList.remove('hidden');
+}
+function closeImportModal(){document.getElementById('importModal').classList.add('hidden')}
+
+async function downloadTemplate(){
+    const token=getToken();
+    try{
+        const res=await fetch('/api/events/import/template',{headers:{'Authorization':'Bearer '+token}});
+        if(!res.ok){showToast('Error descargando plantilla','bg-red-500');return}
+        const blob=await res.blob();
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;a.download='plantilla_operadores.xlsx';
+        document.body.appendChild(a);a.click();a.remove();
+        URL.revokeObjectURL(url);
+        showToast('Plantilla descargada','bg-green-500');
+    }catch(e){showToast('Error: '+e.message,'bg-red-500')}
+}
+
+async function handleImportFile(ev){
+    const file=ev.target.files[0];
+    if(!file)return;
+    if(!file.name.toLowerCase().endsWith('.xlsx')){showToast('El archivo debe ser .xlsx','bg-red-500');return}
+    document.getElementById('importProgress').classList.remove('hidden');
+    const token=getToken();
+    const fd=new FormData();
+    fd.append('file',file);
+    try{
+        const res=await fetch(`/api/events/${EVENT_ID}/import-operators`,{
+            method:'POST',headers:{'Authorization':'Bearer '+token},body:fd
+        });
+        document.getElementById('importProgress').classList.add('hidden');
+        if(!res.ok){
+            let msg='Error al importar';
+            try{const d=await res.json();msg=d.detail||msg}catch(_){}
+            showToast(msg,'bg-red-500');return;
+        }
+        const summary=await res.json();
+        _importSummary=summary;
+        renderImportSummary();
+        renderImportRows();
+        document.getElementById('importStep1').classList.add('hidden');
+        document.getElementById('importStep2').classList.remove('hidden');
+        showToast(`Importación: ${summary.created} nuevos, ${summary.existing} existentes`,'bg-green-500');
+        // Recargar asignaciones del evento
+        loadEvent();
+    }catch(e){
+        document.getElementById('importProgress').classList.add('hidden');
+        showToast('Error: '+e.message,'bg-red-500');
+    }
+}
+
+function renderImportSummary(){
+    const s=_importSummary;if(!s)return;
+    const cards=[
+        {label:'Creados',val:s.created,cls:'bg-green-100 text-green-800'},
+        {label:'Existentes asignados',val:s.existing,cls:'bg-blue-100 text-blue-800'},
+        {label:'Ya asignados',val:s.already_assigned,cls:'bg-gray-100 text-gray-800'},
+        {label:'Errores',val:s.errors,cls:s.errors?'bg-red-100 text-red-800':'bg-gray-100 text-gray-800'},
+    ];
+    document.getElementById('importSummary').innerHTML=cards.map(c=>
+        `<div class="${c.cls} rounded-lg p-3 text-center"><div class="text-2xl font-bold">${c.val}</div><div class="text-xs font-medium">${c.label}</div></div>`
+    ).join('')+`<div class="col-span-2 sm:col-span-4 text-xs text-gray-500 text-center">Total filas: ${s.total_rows} · Tiempo: ${s.duration_seconds}s · Asignaciones exitosas: ${s.assigned}</div>`;
+}
+
+function renderImportRows(){
+    const s=_importSummary;if(!s)return;
+    const q=(document.getElementById('importFilter').value||'').toLowerCase().trim();
+    let rows=s.rows||[];
+    if(q){rows=rows.filter(r=>(r.full_name||'').toLowerCase().includes(q)||(r.document_number||'').includes(q)||(r.status||'').toLowerCase().includes(q)||(r.message||'').toLowerCase().includes(q))}
+    const STATUS_BADGE={
+        created:{label:'Creado',cls:'bg-green-100 text-green-800'},
+        existing:{label:'Existente',cls:'bg-blue-100 text-blue-800'},
+        already_assigned:{label:'Ya asignado',cls:'bg-gray-100 text-gray-800'},
+        error:{label:'Error',cls:'bg-red-100 text-red-800'},
+    };
+    const div=document.getElementById('importRows');
+    if(!rows.length){div.innerHTML='<p class="text-gray-400 text-sm p-4 text-center">Sin resultados</p>';return}
+    div.innerHTML=rows.map(r=>{
+        const b=STATUS_BADGE[r.status]||{label:r.status,cls:'bg-gray-100'};
+        const warn=(r.warnings&&r.warnings.length)?`<div class="text-xs text-amber-600 mt-1">⚠️ ${r.warnings.join('; ')}</div>`:'';
+        return `<div class="p-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+            <span class="text-xs text-gray-400 w-10 flex-shrink-0">F${r.row}</span>
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium ${b.cls} flex-shrink-0">${b.label}</span>
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium truncate">${r.full_name||'-'}</div>
+                <div class="text-xs text-gray-500">${r.document_number||''} · ${r.message}</div>
+                ${warn}
+            </div>
+        </div>`;
+    }).join('');
+}
 </script>
 </body>
 </html>
