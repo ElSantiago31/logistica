@@ -11,6 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.core.errors import register_exception_handlers
 from app.dependencies.rate_limit import limiter
 from app.routers import auth as auth_router
 from app.routers import operators as operators_router
@@ -46,6 +47,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Seguridad: registrar handlers globales que evitan filtrar stack traces
+# e información interna en las respuestas HTTP (500 genérico controlado).
+register_exception_handlers(app)
+
 # Register routers
 app.include_router(auth_router.router)
 app.include_router(operators_router.router)
@@ -63,7 +68,15 @@ app.include_router(ws_router.router)
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+# Inyectar sufijo de versión de JS en TODOS los templates:
+# - Producción (DEBUG=False): sirve *.min.js (minificados/ofuscados)
+# - Desarrollo (DEBUG=True): sirve *.js originales (legibles para debug)
+# Uso en templates: <script src="/static/js/auth{{ js_suffix }}.js"></script>
+templates.env.globals["js_suffix"] = settings.JS_SUFFIX
+
 # Frontend static dirs
+# Apuntan a /frontend/ en la RAÍZ del repo (fuente única de verdad).
+# En Docker, el Dockerfile copia frontend/js/ completa a /app/frontend/js/.
 FRONTEND_PUBLIC = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "public")
 FRONTEND_JS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "js")
 os.makedirs(FRONTEND_PUBLIC, exist_ok=True)
@@ -113,12 +126,18 @@ async def add_security_headers(request, call_next):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-    }
+    """Health check endpoint.
+
+    En producción (DEBUG=False) NO expone el nombre ni la versión de la app
+    para no revelar información del stack a posibles atacantes.
+    """
+    if settings.DEBUG:
+        return {
+            "status": "healthy",
+            "app": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+        }
+    return {"status": "healthy"}
 
 
 # --- HTML Routes ---

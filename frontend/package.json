@@ -1,0 +1,13 @@
+{
+  "name": "logistica-frontend",
+  "version": "1.0.0",
+  "description": "Assets JS del frontend (PWA). Se minifican en build de producción.",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "dev": "echo \"En desarrollo se sirven los .js originales (no se minifica).\""
+  },
+  "devDependencies": {
+    "terser": "^5.31.0"
+  }
+}

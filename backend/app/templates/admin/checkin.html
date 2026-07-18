@@ -2,9 +2,9 @@
 {% block title %}Check-in — A&C Eventos{% endblock %}
 {% block head %}
 <script>window.OFFLINE_CAPABLE = true;</script>
-    <script src="/static/js/auth.js?v=20260705"></script>
+    <script src="/static/js/auth{{ js_suffix }}.js?v=20260705"></script>
 <script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
-<script src="/static/js/ws.js"></script>
+<script src="/static/js/ws{{ js_suffix }}.js"></script>
 <style>
     .operator-card { transition: all 0.2s; cursor: pointer; }
     .operator-card:hover { transform: translateY(-2px); }
