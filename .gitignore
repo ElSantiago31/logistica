@@ -63,6 +63,7 @@ frontend/node_modules/
 **/*.min.js
 **/*.min.js.map
 frontend/public/tailwind.css
+backend/frontend/public/tailwind.css
 
 # Alembic
 backend/alembic/versions/__pycache__/

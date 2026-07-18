@@ -24,6 +24,11 @@ const PUBLIC_DIR = path.join(ROOT, "public");
 const TAILWIND_INPUT = path.join(ROOT, "tailwind.input.css");
 const TAILWIND_OUTPUT = path.join(PUBLIC_DIR, "tailwind.css");
 
+// En desarrollo local, main.py (backend/app/main.py) resuelve FRONTEND_PUBLIC
+// como backend/frontend/public/. Copiamos ahí también para que el dev local
+// sirva el CSS sin necesidad de Docker.
+const BACKEND_FRONTEND_PUBLIC = path.join(ROOT, "..", "backend", "frontend", "public");
+
 // ----------------------------------------------------------------
 //  Fase 1: Tailwind CSS (compilar + purge + minificar)
 // ----------------------------------------------------------------
@@ -56,6 +61,18 @@ function buildTailwind() {
   if (fs.existsSync(TAILWIND_OUTPUT)) {
     const sizeKB = (fs.statSync(TAILWIND_OUTPUT).size / 1024).toFixed(1);
     console.log(`  ✓ tailwind.css generado (${sizeKB} KB) → public/tailwind.css`);
+
+    // Copiar al espejo backend/frontend/public/ para que el servidor de
+    // desarrollo local (uvicorn en backend/) pueda servirlo en
+    // /static/frontend/tailwind.css sin necesidad de Docker.
+    try {
+      if (fs.existsSync(BACKEND_FRONTEND_PUBLIC)) {
+        fs.copyFileSync(TAILWIND_OUTPUT, path.join(BACKEND_FRONTEND_PUBLIC, "tailwind.css"));
+        console.log(`  ✓ copia espejo → backend/frontend/public/tailwind.css`);
+      }
+    } catch (e) {
+      console.warn(`  ⚠ No se pudo copiar al espejo backend/frontend/public/: ${e.message}`);
+    }
   } else {
     console.error("  ✗ No se generó public/tailwind.css");
     process.exit(1);
