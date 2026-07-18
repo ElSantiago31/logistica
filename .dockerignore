@@ -1,0 +1,75 @@
+# ============================================================
+# .dockerignore (RAÍZ del repo)
+#
+# El build context de docker-compose.prod.yml ahora es "." (repo root)
+# para que el Dockerfile multi-stage pueda acceder a frontend/js/ y
+# frontend/build.js (Stage 1: Node/Terser).
+#
+# Este archivo evita enviar archivos innecesarios al daemon de Docker,
+# acelerando el build y reduciendo el tamaño del contexto.
+# ============================================================
+
+# --- Secrets & environment (NUNCA al contexto de build) ---
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+
+# --- Node.js (frontend) ---
+frontend/node_modules/
+frontend/package-lock.json
+
+# --- Python ---
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.egg-info/
+**/.Python
+**/venv/
+**/.venv/
+**/env/
+**/.eggs/
+
+# --- Testing & CI ---
+**/tests/
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/.tox/
+
+# --- IDE / Editor ---
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+
+# --- Docker (evitar recursión) ---
+**/Dockerfile
+**/.dockerignore
+**/docker-compose*.yml
+
+# --- Data & uploads ---
+backend/data/photos/
+!backend/data/photos/.gitkeep
+
+# --- Git ---
+.git/
+**/.gitignore
+
+# --- OS ---
+**/.DS_Store
+**/Thumbs.db
+
+# --- Docs (no necesarias en runtime) ---
+docs/
+**/*.md
+!backend/requirements.txt
+
+# --- Scripts de análisis temporales ---
+backend/_dups_analysis.py
+backend/_dups_report.txt
+
+# --- Build artifacts JS (se regeneran en Stage 1) ---
+frontend/js/*.min.js

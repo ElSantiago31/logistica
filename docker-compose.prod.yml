@@ -21,14 +21,19 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Context RAÍZ del repo: el Dockerfile multi-stage necesita acceso a
+      # frontend/js/ y frontend/build.js (Stage 1: Node/Terser minificación).
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: logistica_backend
     restart: unless-stopped
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      # En producción, servir *.min.js (minificados en build de Docker).
+      # En desarrollo local, JS_SUFFIX="" → sirve los *.js originales.
+      JS_SUFFIX: ".min"
     volumes:
       - photo_data:/app/data/photos
     depends_on:
