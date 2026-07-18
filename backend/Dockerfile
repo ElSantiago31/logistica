@@ -8,13 +8,13 @@
 # Stage 1 pueda acceder a frontend/js/ y frontend/build.js.
 # ============================================================
 
-# ---- Stage 1: JS minification ----
+# ---- Stage 1: JS minification + Tailwind CSS build ----
 FROM node:20-alpine AS js-builder
 WORKDIR /build
 
-# Instalar Terser. IMPORTANTE: terser es devDependency, así que NO usar
-# --production (excluiría devDeps). En un stage de BUILD se necesitan las
-# herramientas de build. --include=dev asegura instalarlas sin importar NODE_ENV.
+# Instalar deps (Terser + Tailwind). IMPORTANTE: son devDependencies, así que
+# NO usar --production (excluiría devDeps). En un stage de BUILD se necesitan
+# las herramientas de build. --include=dev asegura instalarlas sin importar NODE_ENV.
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --include=dev --no-audit --no-fund
 
@@ -22,8 +22,18 @@ RUN npm install --include=dev --no-audit --no-fund
 COPY frontend/build.js ./
 COPY frontend/js ./js
 
-# Ejecutar minificación: genera *.min.js junto a los *.js originales
-RUN node build.js && ls -la js/
+# Copiar config de Tailwind y CSS de entrada
+COPY frontend/tailwind.config.js frontend/tailwind.input.css ./
+
+# Copiar templates HTML (fuente para el purge de Tailwind).
+# tailwind.config.js apunta a './templates/**/*.html' (relativo a /build).
+COPY backend/app/templates ./templates
+
+# Crear directorio public/ (Tailwind no lo crea solo)
+RUN mkdir -p public
+
+# Ejecutar build: genera js/*.min.js (Terser) + public/tailwind.css (Tailwind)
+RUN node build.js && ls -la js/ && ls -la public/
 
 # ---- Stage 2: Python runtime ----
 FROM python:3.11-slim
@@ -51,6 +61,10 @@ COPY frontend/js/ /app/frontend/js/
 
 # Sobreescribir/asegurar *.min.js desde Stage 1 (siempre frescos del build).
 COPY --from=js-builder /build/js/*.min.js /app/frontend/js/
+
+# Tailwind CSS compilado en Stage 1 (purge automático, minificado).
+# Se sirve en /static/frontend/tailwind.css (montado en main.py).
+COPY --from=js-builder /build/public/tailwind.css /app/frontend/public/tailwind.css
 
 # Entrypoint permissions
 RUN chmod +x /app/entrypoint.sh

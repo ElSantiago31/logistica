@@ -12,40 +12,15 @@
     <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
     <title>{% block title %}AyC Eventos{% endblock %}</title>
 
+    <!-- Tailwind CSS (compilado en build time, purge automático, ~15-30 KB) -->
+    <link rel="stylesheet" href="/static/frontend/tailwind.css?v=20260718">
+
     <!-- Auth interceptor: parchea window.fetch para refresh automático de token.
          Debe cargarse PRIMERO, antes que cualquier script que use fetch. -->
     <script src="/static/js/auth{{ js_suffix }}.js?v=20260705"></script>
 
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-
-    <!-- Tailwind custom config -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#fff2e4',
-                            100: '#ffebd6',
-                            200: '#f8d9b6',
-                            300: '#e3be95',
-                            400: '#d5aa7b',
-                            500: '#cf9b62',
-                            600: '#b48450',
-                            700: '#976e41',
-                            800: '#785631',
-                            900: '#5d4224',
-                        },
-                        brand: '#cf9b62',
-                    }
-                }
-            }
-        }
-    </script>
 
     <style>
         .toast {

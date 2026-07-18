@@ -1,23 +1,73 @@
 /**
- * build.js — Pipeline de minificación de assets JS.
+ * build.js — Pipeline de build de assets frontend.
  *
- * Recorre todos los *.js en frontend/js/, los minifica con Terser (renombrando
- * variables locales, eliminando comentarios y espacios) y escribe el resultado
- * en frontend/js/*.min.js.
+ * Dos fases:
+ *   1. Tailwind CSS: compila tailwind.input.css → public/tailwind.css (minificado,
+ *      con purge automático usando los templates HTML como source).
+ *   2. Terser JS:    minifica cada *.js en frontend/js/ → frontend/js/*.min.js.
  *
- * En producción, los templates sirven los *.min.js (vía la variable js_suffix).
- * En desarrollo, los templates sirven los *.js originales (legibles para debug).
+ * En producción, los templates sirven los *.min.js (vía js_suffix) y el
+ * tailwind.css compilado. En desarrollo se sirven los .js originales y el
+ * CSS se puede generar con `npm run build:css` (o usar el CDN temporalmente).
  *
  * Uso:
  *   cd frontend && npm install && npm run build
  */
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const Terser = require("terser");
 
-const JS_DIR = path.join(__dirname, "js");
+const ROOT = __dirname;
+const JS_DIR = path.join(ROOT, "js");
+const PUBLIC_DIR = path.join(ROOT, "public");
+const TAILWIND_INPUT = path.join(ROOT, "tailwind.input.css");
+const TAILWIND_OUTPUT = path.join(PUBLIC_DIR, "tailwind.css");
 
-async function build() {
+// ----------------------------------------------------------------
+//  Fase 1: Tailwind CSS (compilar + purge + minificar)
+// ----------------------------------------------------------------
+function buildTailwind() {
+  console.log("\n=== Fase 1: Tailwind CSS ===");
+
+  if (!fs.existsSync(TAILWIND_INPUT)) {
+    console.warn(`  ⚠ Falta ${TAILWIND_INPUT} — se omite el build de CSS.`);
+    console.warn("    (los templates seguirán cargando el CSS existente o el CDN)");
+    return;
+  }
+
+  // Asegurar que public/ exista (Tailwind no lo crea solo)
+  fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+
+  // Invocar el CLI de Tailwind directamente vía node (evita problemas de spawn
+  // con .cmd en Windows). Resolvemos el CLI desde node_modules locales.
+  const tailwindCli = path.join(ROOT, "node_modules", "tailwindcss", "lib", "cli.js");
+  try {
+    execFileSync(
+      process.execPath, // ruta al binario de node
+      [tailwindCli, "-i", TAILWIND_INPUT, "-o", TAILWIND_OUTPUT, "--minify"],
+      { cwd: ROOT, stdio: "inherit" }
+    );
+  } catch (e) {
+    console.error("  ✗ Tailwind CSS build fallido:", e.message);
+    process.exit(1);
+  }
+
+  if (fs.existsSync(TAILWIND_OUTPUT)) {
+    const sizeKB = (fs.statSync(TAILWIND_OUTPUT).size / 1024).toFixed(1);
+    console.log(`  ✓ tailwind.css generado (${sizeKB} KB) → public/tailwind.css`);
+  } else {
+    console.error("  ✗ No se generó public/tailwind.css");
+    process.exit(1);
+  }
+}
+
+// ----------------------------------------------------------------
+//  Fase 2: Terser JS (minificar *.js → *.min.js)
+// ----------------------------------------------------------------
+async function buildJs() {
+  console.log("\n=== Fase 2: Terser JS ===");
+
   if (!fs.existsSync(JS_DIR)) {
     console.error(`Directorio no encontrado: ${JS_DIR}`);
     process.exit(1);
@@ -66,8 +116,16 @@ async function build() {
     }
   }
 
-  console.log(`\nDone: ${ok} OK, ${fail} fallidos.`);
+  console.log(`\nDone JS: ${ok} OK, ${fail} fallidos.`);
   if (fail > 0) process.exit(1);
 }
 
-build();
+// ----------------------------------------------------------------
+//  Orquestador
+// ----------------------------------------------------------------
+(async function main() {
+  console.log("🔨 Build de assets frontend (Tailwind CSS + Terser JS)\n");
+  buildTailwind();
+  await buildJs();
+  console.log("\n✅ Build completo.");
+})();

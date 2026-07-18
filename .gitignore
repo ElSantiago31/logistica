@@ -57,11 +57,12 @@ htmlcov/
 
 # --- Node.js (frontend build) ---
 # node_modules: dependencias locales, no se commitean (npm install las recrea).
-# *.min.js: build artifacts generados por Terser (npm run build).
+# *.min.js + tailwind.css: build artifacts generados por `npm run build`.
 #           En desarrollo se usan los .js originales; en Docker se regeneran.
 frontend/node_modules/
 **/*.min.js
 **/*.min.js.map
+frontend/public/tailwind.css
 
 # Alembic
 backend/alembic/versions/__pycache__/

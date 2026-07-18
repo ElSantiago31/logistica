@@ -1,0 +1,13 @@
+/*
+ * tailwind.input.css — Punto de entrada para el build de Tailwind.
+ *
+ * Tailwind CLI procesa este archivo y genera `public/tailwind.css` con:
+ *   - base:      reset/normalize (Preflight)
+ *   - components: clases de componentes (.btn, .card, etc. si se usan)
+ *   - utilities: el 99% del uso (flex, grid, text-*, bg-*, etc.)
+ *
+ * Si en el futuro se necesitan clases @layer custom, se añaden aquí.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
