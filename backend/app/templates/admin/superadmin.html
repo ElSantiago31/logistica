@@ -92,7 +92,10 @@
             admins.forEach(a=>{
                 const role=roleMap[a.user_type]||roleMap.coordinator;
                 const status=a.is_active?'<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Activo</span>':'<span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Inactivo</span>';
-                h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${a.is_active?`<button onclick="deactivateAdmin('${a.id}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`:''}</td></tr>`;
+                const toggleBtn=a.is_active
+                    ?`<button onclick="deactivateAdmin('${a.id}')" title="Desactivar" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`
+                    :`<button onclick="activateAdmin('${a.id}')" title="Reactivar" class="bg-green-500 text-white px-3 py-1 rounded text-xs">✅</button>`;
+                h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${toggleBtn}</td></tr>`;
             });
             h+='</tbody></table>';
             container.innerHTML=h;
@@ -142,8 +145,17 @@
     }
 
     async function deactivateAdmin(id){
-        if(!confirm('¿Desactivar este administrador?'))return;
-        try{const r=await fetch('/api/auth/admins/'+id,{method:'DELETE',headers:authH()});if(r.ok||r.status===204){toast('Desactivado','success');loadAdmins()}else toast('Error','error')}catch(e){toast('Error','error')}
+        if(!confirm('¿Desactivar este administrador? No podrá iniciar sesión hasta que se reactive.'))return;
+        try{const r=await fetch('/api/auth/admins/'+id,{method:'DELETE',headers:authH()});if(r.ok||r.status===204){toast('Administrador desactivado','success');loadAdmins()}else toast('Error','error')}catch(e){toast('Error','error')}
+    }
+
+    async function activateAdmin(id){
+        if(!confirm('¿Reactivar este administrador? Podrá iniciar sesión inmediatamente.'))return;
+        try{
+            const r=await fetch('/api/auth/admins/'+id,{method:'PUT',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify({is_active:true})});
+            if(r.ok){toast('Administrador reactivado','success');loadAdmins()}
+            else{const e=await r.json();toast(e.detail||'Error','error')}
+        }catch(e){toast('Error','error')}
     }
 
     // ===== SOLICITUDES PENDIENTES (con paginación client-side) =====
