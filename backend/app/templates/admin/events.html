@@ -91,15 +91,21 @@
         empty.classList.add('hidden');
         tbody.innerHTML = items.map(e => {
             const d = new Date(e.start_date).toLocaleDateString('es-CO');
+            // Porcentaje real (puede >100% si se programa más del cupo) y porcentaje
+            // visual limitado a 100% para que la barra no se desborde.
             const pct = e.total_staff_needed ? Math.round(e.total_confirmed/e.total_staff_needed*100) : 0;
+            const barPct = Math.min(pct, 100);
+            // Color ámbar cuando hay sobreprogramación (más personal que el cupo).
+            const barColor = pct > 100 ? 'bg-amber-500' : 'bg-blue-600';
+            const overBadge = pct > 100 ? ` <span class="text-amber-600 font-medium">(+${e.total_confirmed-e.total_staff_needed})</span>` : '';
             return `<tr class="hover:bg-gray-50">
                 <td class="px-4 py-3"><div class="font-medium text-gray-900">${e.name}</div>
                     ${e.client_name?`<div class="text-xs text-gray-500">Cliente: ${e.client_name}</div>`:''}</td>
                 <td class="px-4 py-3 text-sm text-gray-600">${e.city||e.location}</td>
                 <td class="px-4 py-3 text-sm text-gray-600">${d}</td>
                 <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[e.status]||'bg-gray-100'}">${STATUS_LABELS[e.status]||e.status}</span></td>
-                <td class="px-4 py-3 text-sm">${e.total_confirmed}/${e.total_staff_needed}
-                    <div class="w-16 bg-gray-200 rounded-full h-1.5 mt-1"><div class="bg-blue-600 h-1.5 rounded-full" style="width:${pct}%"></div></div></td>
+                <td class="px-4 py-3 text-sm">${e.total_confirmed}/${e.total_staff_needed}${overBadge}
+                    <div class="w-16 bg-gray-200 rounded-full h-1.5 mt-1"><div class="${barColor} h-1.5 rounded-full" style="width:${barPct}%"></div></div></td>
                 <td class="px-4 py-3"><a href="/admin/events/${e.id}" class="text-blue-600 hover:underline text-sm">Ver detalle</a></td>
             </tr>`;
         }).join('');
@@ -112,7 +118,13 @@
         empty.classList.add('hidden');
         container.innerHTML = items.map(e => {
             const d = new Date(e.start_date).toLocaleDateString('es-CO');
+            // Porcentaje real (puede >100% si se programa más del cupo) y porcentaje
+            // visual limitado a 100% para que la barra no se desborde.
             const pct = e.total_staff_needed ? Math.round(e.total_confirmed/e.total_staff_needed*100) : 0;
+            const barPct = Math.min(pct, 100);
+            // Color ámbar cuando hay sobreprogramación (más personal que el cupo).
+            const barColor = pct > 100 ? 'bg-amber-500' : 'bg-blue-600';
+            const overBadge = pct > 100 ? ` <span class="text-amber-600 font-medium">(+${e.total_confirmed-e.total_staff_needed})</span>` : '';
             return `<a href="/admin/events/${e.id}" class="block bg-white rounded-xl shadow p-4 hover:shadow-md transition">
                 <div class="flex justify-between items-start mb-2">
                     <div>
@@ -126,8 +138,8 @@
                     <span>📅 ${d}</span>
                 </div>
                 <div class="flex items-center justify-between">
-                    <span class="text-xs text-gray-600">Personal: ${e.total_confirmed}/${e.total_staff_needed}</span>
-                    <div class="w-20 bg-gray-200 rounded-full h-1.5"><div class="bg-blue-600 h-1.5 rounded-full" style="width:${pct}%"></div></div>
+                    <span class="text-xs text-gray-600">Personal: ${e.total_confirmed}/${e.total_staff_needed}${overBadge}</span>
+                    <div class="w-20 bg-gray-200 rounded-full h-1.5"><div class="${barColor} h-1.5 rounded-full" style="width:${barPct}%"></div></div>
                 </div>
             </a>`;
         }).join('');
