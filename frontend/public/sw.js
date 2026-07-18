@@ -4,7 +4,7 @@ const STATIC_ASSETS = [
   '/',
   '/enrolamiento/login',
   '/static/frontend/logo.jpeg',
-  '/manifest.json',
+  '/static/frontend/manifest.json',
 ];
 
 // Install — cache shell
