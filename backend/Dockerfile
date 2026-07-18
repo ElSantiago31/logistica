@@ -12,9 +12,11 @@
 FROM node:20-alpine AS js-builder
 WORKDIR /build
 
-# Instalar Terser (cache layer: solo se re-ejecuta si cambia package.json)
+# Instalar Terser. IMPORTANTE: terser es devDependency, así que NO usar
+# --production (excluiría devDeps). En un stage de BUILD se necesitan las
+# herramientas de build. --include=dev asegura instalarlas sin importar NODE_ENV.
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --production --no-audit --no-fund
+RUN npm install --include=dev --no-audit --no-fund
 
 # Copiar build script y código fuente JS
 COPY frontend/build.js ./
