@@ -82,6 +82,10 @@
         localStorage.removeItem(ACCESS_KEY);
         localStorage.removeItem(REFRESH_KEY);
         localStorage.removeItem(USER_KEY);
+        // 🐛 FIX: limpiar la marca de actividad para que la próxima sesión
+        // arranque con un contador fresco y no herede inactividad vieja.
+        localStorage.removeItem(IDLE_ACTIVITY_KEY);
+        lastTouchWriteAt = 0;
         if (proactiveTimer) {
             clearTimeout(proactiveTimer);
             proactiveTimer = null;
@@ -253,10 +257,13 @@
         if (idleTrackingStarted) return;
         idleTrackingStarted = true;
 
-        // Si no hay marca de actividad previa (primera vez tras login),
-        // inicializarla ahora. No la reseteamos si ya existe, para respetar
-        // la inactividad real acumulada (ej. refresh no "falsea" actividad).
-        if (!localStorage.getItem(IDLE_ACTIVITY_KEY)) {
+        // 🐛 FIX: Si no hay marca de actividad previa (primera vez tras login)
+        // O si la marca existente es stale (más vieja que el límite de idle,
+        // producto de una sesión anterior que no limpió localStorage),
+        // inicializarla AHORA para arrancar con contador fresco.
+        const storedActivity = parseInt(localStorage.getItem(IDLE_ACTIVITY_KEY), 10);
+        const isStale = isNaN(storedActivity) || (Date.now() - storedActivity) > IDLE_WARNING_MS;
+        if (isStale) {
             const now = Date.now();
             localStorage.setItem(IDLE_ACTIVITY_KEY, String(now));
             lastTouchWriteAt = now;
