@@ -42,6 +42,7 @@ def _to_bogota_iso(dt) -> str | None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(BOGOTA_TZ).isoformat()
 
+from app.core.errors import safe_http_error  # noqa: E402
 from app.database import get_db  # noqa: E402
 from app.dependencies.auth import get_current_user
 from app.models.events import Event, EventAssignment, EventStaffNeed
@@ -349,8 +350,12 @@ async def sign_payroll(
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.error("Error al firmar nómina: %s", exc)
-        raise HTTPException(500, f"Error al guardar firma: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error al firmar nómina",
+            exc=exc,
+        )
 
     # --- Notificar por WebSocket (firma de nómina) ---
     try:
@@ -507,8 +512,12 @@ async def pay_payroll(
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.error("Error al pagar nómina: %s", exc)
-        raise HTTPException(500, f"Error al generar factura: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error al pagar nómina / generar factura",
+            exc=exc,
+        )
 
     # --- Notificar por WebSocket (pago de nómina) ---
     try:
@@ -662,7 +671,11 @@ async def sync_payroll_offline(
             synced += 1
         except Exception as exc:
             await db.rollback()
-            logger.error("Error sincronizando payroll record #%d: %s — %s", idx, exc, rec)
+            # Log sin exponer el payload completo (rec puede contener signature_data base64)
+            logger.error(
+                "Error sincronizando payroll record #%d (assignment_id=%s): %s",
+                idx, assignment_id, exc,
+            )
             failed += 1
 
     # --- Notificar por WebSocket (batch sync offline de nómina) ---
@@ -1045,8 +1058,12 @@ async def download_planilla_coordinador(
                 with_signatures=with_signatures,
             )
         except Exception as exc:
-            logger.error("Error generando planilla PDF: %s", exc)
-            raise HTTPException(500, f"Error al generar la planilla PDF: {exc}")
+            safe_http_error(
+                status_code=500,
+                client_message="Error al generar la planilla PDF",
+                log_detail="Error generando planilla PDF",
+                exc=exc,
+            )
 
         filename = f"Planilla_{safe_name}{mode_suffix}.pdf"
         media_type = "application/pdf"
@@ -1068,8 +1085,12 @@ async def download_planilla_coordinador(
             logger.error("Plantilla no encontrada: %s", exc)
             raise HTTPException(500, "Plantilla de planilla no encontrada en el servidor")
         except Exception as exc:
-            logger.error("Error generando planilla Excel: %s", exc)
-            raise HTTPException(500, f"Error al generar la planilla: {exc}")
+            safe_http_error(
+                status_code=500,
+                client_message="Error al generar la planilla",
+                log_detail="Error generando planilla Excel",
+                exc=exc,
+            )
 
         filename = f"Planilla_{safe_name}{mode_suffix}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1149,8 +1170,12 @@ async def download_invoices_bulk(
             invoices_data, event_name=event.name,
         )
     except Exception as exc:
-        logger.error("Error generando ZIP de facturas: %s", exc)
-        raise HTTPException(500, f"Error al generar las facturas: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error al generar las facturas",
+            log_detail="Error generando ZIP de facturas",
+            exc=exc,
+        )
 
     safe_name = _sanitize_event_name(event.name)
     filename = f"Recibos_de_Caja_{safe_name}.zip"
@@ -1232,8 +1257,12 @@ async def download_novedades_excel(
             novedades=novedades,
         )
     except Exception as exc:
-        logger.error("Error generando Excel de novedades: %s", exc)
-        raise HTTPException(500, f"Error al generar el Excel de novedades: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error al generar el Excel de novedades",
+            log_detail="Error generando Excel de novedades",
+            exc=exc,
+        )
 
     safe_name = _sanitize_event_name(event.name)
     filename = f"Novedades_{safe_name}.xlsx"

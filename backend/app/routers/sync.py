@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import safe_http_error
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.events import Event, EventAssignment, EventStaffNeed, EventCoordinatorQuota
@@ -421,8 +422,12 @@ async def sync_attendance(
             await db.flush()
     except Exception as exc:
         await db.rollback()
-        logger.error("Error creando sync_session: %s", exc)
-        raise HTTPException(500, f"Error en sync session: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error creando sync_session",
+            exc=exc,
+        )
 
     # Procesar cada record en su propio savepoint
     for idx, rec in enumerate(records):
@@ -432,7 +437,7 @@ async def sync_attendance(
             assignment_id = _to_uuid(rec.get("assignment_id"))
 
             if not operator_id or not event_id:
-                logger.warning("Record #%d sin IDs válidos: %s", idx, rec)
+                logger.warning("Record #%d sin IDs válidos (operator_id/event_id faltantes)", idx)
                 failed += 1
                 continue
 
@@ -493,7 +498,11 @@ async def sync_attendance(
             logger.warning("Record #%d duplicado (race condition): %s", idx, exc.orig)
             failed += 1
         except Exception as exc:
-            logger.error("Error procesando record #%d: %s - %s", idx, exc, rec)
+            # Log sin exponer el payload completo (puede contener PII o internals)
+            logger.error(
+                "Error procesando record #%d (event_id=%s, operator_id=%s): %s",
+                idx, event_id, operator_id, exc,
+            )
             failed += 1
 
     # Actualizar sync_session
@@ -727,8 +736,12 @@ async def check_in(
         raise HTTPException(409, "Operador ya registrado (concurrencia)")
     except Exception as exc:
         await db.rollback()
-        logger.error("Error en check-in: %s", exc)
-        raise HTTPException(500, f"Error al guardar check-in: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error al guardar check-in",
+            exc=exc,
+        )
 
     # --- Notificar por WebSocket a las vistas en tiempo real ---
     try:
@@ -818,8 +831,12 @@ async def reassign_coordinator(
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.error("Error en reasignación: %s", exc)
-        raise HTTPException(500, f"Error al reasignar: {exc}")
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error en reasignación de coordinador",
+            exc=exc,
+        )
 
     # --- Registrar cesión en audit log ---
     try:

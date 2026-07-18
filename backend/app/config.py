@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
@@ -14,8 +15,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     TEST_DATABASE_URL: str = ""
 
-    # JWT
-    JWT_SECRET_KEY: str = "change-me-in-production"
+    # JWT — vacío por defecto: fail-safe si falta la variable de entorno en producción
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -35,11 +36,18 @@ class Settings(BaseSettings):
     ZENVIA_CONFIRM_KEYWORDS: str = "CONFIRMAR,SI,SÍ,CONFIRMO,CONFIRM"
     ZENVIA_REJECT_KEYWORDS: str = "RECHAZAR,NO,RECHAZO,REJECT"
 
-    # App
+    # App — DEBUG=False por defecto (fail-safe: producción segura salvo que se indique lo contrario)
     APP_NAME: str = "Logistica"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: bool = False
     ALLOWED_ORIGINS: str = "http://localhost:8000"
+
+    # JS_SUFFIX se deriva AUTOMÁTICAMENTE de DEBUG (fail-safe):
+    #   - DEBUG=True  → ""     (sirve auth.js legible, ideal para depurar en dev)
+    #   - DEBUG=False → ".min" (sirve auth.min.js minificado/ofuscado en prod)
+    # Se puede sobreescribir explícitamente con JS_SUFFIX en .env, pero si queda
+    # vacío, la regla de DEBUG prevalece para evitar exponer código legible en prod.
+    JS_SUFFIX: str = ""
 
     # Feature flags
     FEATURE_PAYROLL_ENABLED: bool = True
@@ -56,10 +64,32 @@ class Settings(BaseSettings):
     RUT_COMPRESS_DPI: int = 150
     RUT_COMPRESS_QUALITY: int = 75
 
-    # pgAdmin
+    # pgAdmin — password vacío por defecto (fail-safe)
     PGADMIN_EMAIL: str = "admin@logistica.com"
-    PGADMIN_PASSWORD: str = "admin123"
+    PGADMIN_PASSWORD: str = ""
     PGADMIN_PORT: int = 5050
+
+    @model_validator(mode="after")
+    def _derive_js_suffix(self):
+        """Deriva JS_SUFFIX automáticamente de DEBUG si no se seteó explícitamente.
+
+        Fail-safe: en producción (DEBUG=False) sin JS_SUFFIX, fuerza ".min" para
+        servir siempre los assets minificados/ofuscados, evitando exponer código
+        JS legible con comentarios y nombres de variables en el navegador.
+        """
+        if not self.JS_SUFFIX:
+            # Solo setear el sufijo si los .min.js existen en el directorio JS.
+            # Evita 404 en entornos donde no se ejecutó `npm run build`.
+            import os
+            _js_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "..", "frontend", "js",
+            )
+            _has_min = os.path.isdir(_js_dir) and any(
+                f.endswith(".min.js") for f in os.listdir(_js_dir)
+            )
+            self.JS_SUFFIX = ".min" if (not self.DEBUG and _has_min) else ""
+        return self
 
     @property
     def allowed_origins_list(self) -> List[str]:
@@ -89,5 +119,30 @@ class Settings(BaseSettings):
         case_sensitive=True,
     )
 
+    # Placeholders conocidos que NUNCA deben usarse en producción
+    _INSECURE_JWT_PLACEHOLDERS = frozenset({
+        "",
+        "change-me-in-production",
+        "changeme",
+        "secret",
+    })
+
+    def validate_for_production(self) -> None:
+        """Fail-safe: impide arrancar en producción con secretos débiles o ausentes.
+
+        Se invoca al importar el módulo. Si DEBUG=False (producción) y el
+        JWT_SECRET_KEY está vacío o es un placeholder conocido, lanza RuntimeError
+        con un mensaje claro en lugar de arrancar con un secreto predecible.
+        """
+        if self.DEBUG:
+            return
+        if self.JWT_SECRET_KEY in self._INSECURE_JWT_PLACEHOLDERS:
+            raise RuntimeError(
+                "JWT_SECRET_KEY no está configurado o usa un valor inseguro. "
+                "Genera uno con: python -c \"import secrets; print(secrets.token_hex(32))\" "
+                "y defínelo en el archivo .env antes de arrancar en producción."
+            )
+
 
 settings = Settings()
+settings.validate_for_production()
