@@ -35,7 +35,7 @@ def _csv_response(data, filename, fieldnames):
 
 @router.get("/events/{event_id}/attendance.csv")
 async def export_attendance_csv(event_id: uuid.UUID, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin"):
         raise HTTPException(403)
     event = await db.get(Event, event_id)
     if not event:
@@ -83,7 +83,7 @@ async def export_payroll_csv(event_id: uuid.UUID, db: AsyncSession = Depends(get
 
 @router.get("/events/{event_id}/evaluations.csv")
 async def export_evaluations_csv(event_id: uuid.UUID, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin"):
         raise HTTPException(403)
     result = await db.execute(
         select(Evaluation, Operator, User)

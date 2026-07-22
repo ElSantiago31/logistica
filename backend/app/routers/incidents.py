@@ -17,7 +17,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies.auth import require_coordinator as require_superadmin
+from app.dependencies.auth import require_superadmin_or_admin
 from app.models.incidents import OperatorIncident, OperatorBan
 from app.models.operators import Operator
 from app.models.events import Event
@@ -77,7 +77,7 @@ async def list_incidents(
     incident_type: str | None = Query(None),
     limit: int = Query(200, le=500),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Lista novedades con filtros opcionales."""
     stmt = (
@@ -120,7 +120,7 @@ async def list_incidents(
 async def create_incident(
     payload: IncidentCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Crea una novedad."""
     # Validar existencia de evento y operador
@@ -166,7 +166,7 @@ async def create_incident(
 async def delete_incident(
     incident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Elimina una novedad."""
     inc = await db.get(OperatorIncident, incident_id)
@@ -185,7 +185,7 @@ async def list_bans(
     is_active: bool | None = Query(None),
     limit: int = Query(200, le=500),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Lista vetos (opcionalmente solo activos)."""
     stmt = (
@@ -223,7 +223,7 @@ async def list_bans(
 async def ban_operator(
     payload: BanCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Veta a un operador.
 
@@ -301,7 +301,7 @@ async def reactivate_operator(
     payload: BanReactivateRequest,
     operator_id: uuid.UUID = Query(..., description="ID del operador a reactivar"),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Reactiva a un operador vetado (quita el veto activo)."""
     result = await db.execute(
@@ -350,7 +350,7 @@ async def reactivate_operator(
 async def get_ban_status(
     operator_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin),
+    user: User = Depends(require_superadmin_or_admin),
 ):
     """Estado de veto de un operador."""
     operator = await db.get(Operator, operator_id)

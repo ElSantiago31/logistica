@@ -58,7 +58,7 @@ async def _resolve_staff_access(
     Raises:
         HTTPException(403) si no tiene permisos.
     """
-    base_roles = {"admin", "superadmin", "coordinator"}
+    base_roles = {"admin", "superadmin"}
     if allow_checkin:
         base_roles.add("checkin")
 
@@ -91,7 +91,7 @@ def _can_manage_uniform(user: User, staff_role: Optional[str] = None) -> bool:
     Pueden: admin, superadmin, coordinator, checkin (rol base), u operador
     cuyo staff_role en el evento sea 'checkin'.
     """
-    if user.user_type in ("admin", "superadmin", "coordinator", "checkin"):
+    if user.user_type in ("admin", "superadmin", "checkin"):
         return True
     if user.user_type == "operator" and staff_role == "checkin":
         return True
@@ -550,7 +550,7 @@ async def sync_status(
 ):
     """Get sync status for dashboard."""
     # Solo roles administrativos ven el historial de sincronización
-    if user.user_type not in ("admin", "superadmin", "coordinator", "checkin", "operator"):
+    if user.user_type not in ("admin", "superadmin", "checkin", "operator"):
         raise HTTPException(403, "Sin permisos")
 
     query = select(SyncSession)

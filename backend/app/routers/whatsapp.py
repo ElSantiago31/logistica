@@ -41,7 +41,7 @@ async def send_invitations(
     user=Depends(get_current_user),
 ):
     """Queue/send WhatsApp invitations for invited operators."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin"):
         raise HTTPException(403, "Sin permisos")
     messages = await svc.queue_invitations(db, event_id)
     mode = "zenvia" if svc._is_configured() else "simulation"
@@ -56,7 +56,7 @@ async def send_reminder(
     user=Depends(get_current_user),
 ):
     """Queue/send WhatsApp reminders for confirmed operators."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin"):
         raise HTTPException(403, "Sin permisos")
     messages = await svc.queue_reminder(db, event_id, message_type)
     mode = "zenvia" if svc._is_configured() else "simulation"
@@ -86,7 +86,7 @@ async def get_queue(
     user=Depends(get_current_user),
 ):
     """Get WhatsApp message queue."""
-    if user.user_type not in ("admin", "superadmin", "coordinator"):
+    if user.user_type not in ("admin", "superadmin"):
         raise HTTPException(403, "Sin permisos")
     items, total = await svc.get_queue(db, event_id, status, limit, offset)
     return {"items": items, "total": total}

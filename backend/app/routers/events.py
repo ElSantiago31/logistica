@@ -26,7 +26,7 @@ async def create_event(
     user=Depends(get_current_user),
 ):
     """Create a new event with staff needs."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos para crear eventos")
     event = await svc.create_event(db, data, user.id)
     result = await svc.get_event(db, event.id)
@@ -42,7 +42,7 @@ async def list_events(
     user=Depends(get_current_user),
 ):
     """List events with optional status filter."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     items, total = await svc.list_events(db, status=status, limit=limit, offset=offset)
     return EventListResponse(items=items, total=total)
@@ -55,7 +55,7 @@ async def get_event(
     user=Depends(get_current_user),
 ):
     """Get event detail."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     result = await svc.get_event(db, event_id)
     if not result:
@@ -71,7 +71,7 @@ async def update_event(
     user=Depends(get_current_user),
 ):
     """Update an event."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     event = await svc.update_event(db, event_id, data, user_id=user.id)
     if not event:
@@ -87,7 +87,7 @@ async def delete_event(
     user=Depends(get_current_user),
 ):
     """Delete an event."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     ok = await svc.delete_event(db, event_id)
     if not ok:
@@ -104,7 +104,7 @@ async def download_import_template(
     user=Depends(get_current_user),
 ):
     """Descarga la plantilla Excel (.xlsx) para importación masiva de operadores."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     file_bytes = imp_svc.build_template()
     return Response(
@@ -130,7 +130,7 @@ async def import_operators_excel(
     - Resuelve coordinador contra cupos del evento.
     - Devuelve ImportSummary con métricas y detalle fila por fila.
     """
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     event = await svc.get_event(db, event_id)
     if not event:
@@ -157,7 +157,7 @@ async def assign_operators(
     user=Depends(get_current_user),
 ):
     """Assign operators to an event."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     # Verify event exists
     event = await svc.get_event(db, event_id)
@@ -181,7 +181,7 @@ async def get_event_coordinators(
 ):
     """Lista los coordinadores asignados a un evento con su cupo/ocupado.
     Devuelve el EventCoordinatorQuota con conteos calculados."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     event = await svc.get_event(db, event_id)
     if not event:
@@ -197,7 +197,7 @@ async def check_availability(
     user=Depends(get_current_user),
 ):
     """Check which operators are available for an event (no double-booking)."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     event = await svc.get_event(db, event_id)
     if not event:
@@ -258,7 +258,7 @@ async def get_audit_logs(
     user=Depends(get_current_user),
 ):
     """Get audit logs for an event."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     return await svc.get_audit_logs(db, event_id, limit=limit)
 
@@ -277,8 +277,8 @@ async def get_my_staff_events(
     from app.models.events import EventCoordinatorQuota
     from app.models.operators import Operator as OpModel
 
-    # Superadmin ve todos los eventos
-    if user.user_type == "superadmin":
+    # Superadmin y admin (management) ven todos los eventos
+    if user.user_type in ("superadmin", "admin"):
         result = await db.execute(
             sel(EventModel)
             .where(EventModel.is_active == True, EventModel.status.in_(["draft", "published", "in_progress"]))
@@ -390,7 +390,7 @@ async def get_assignments(
 ):
     """Get all assignments for an event.
     Operadores asignados como staff (checkin) también pueden verlas."""
-    if user.user_type not in ("superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("superadmin", "admin", "checkin"):
         # Operador: validar asignación de staff para este evento
         from sqlalchemy import select as sel
         from app.models.events import EventStaffAssignment
@@ -417,7 +417,7 @@ async def get_event_staff(
     user=Depends(get_current_user),
 ):
     """Lista el personal (checkin) asignado a un evento."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     from sqlalchemy import select as sel
     from app.models.events import EventStaffAssignment
@@ -450,7 +450,7 @@ async def set_event_staff(
     """Reemplaza TODA la asignación de staff de un evento.
     Body: {"checkin": [user_id, ...]}
     """
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     from sqlalchemy import select as sel, delete
     from app.models.events import EventStaffAssignment
@@ -494,7 +494,7 @@ async def delete_assignment(
 ):
     """Elimina (desasigna) un operador de un evento.
     Solo superadmin/coordinator. Borra el registro de asignaciรณn."""
-    if user.user_type not in ("superadmin", "coordinator"):
+    if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     from sqlalchemy import select as sel
     from app.models.events import EventAssignment
@@ -540,7 +540,7 @@ async def update_assignment_uniform(
         raise HTTPException(404, "Asignación no encontrada")
 
     # Validar permisos
-    if user.user_type not in ("superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("superadmin", "admin", "checkin"):
         # Operador: debe tener asignación de staff checkin para este evento
         sa_r = await db.execute(
             sel(EventStaffAssignment).where(
@@ -579,7 +579,7 @@ async def checkin_assignment(
         raise HTTPException(404, "Asignaciรณn no encontrada")
 
     # Validar permisos
-    if user.user_type not in ("superadmin", "coordinator", "checkin"):
+    if user.user_type not in ("superadmin", "admin", "checkin"):
         # Operador: debe tener asignaciรณn de staff checkin para este evento
         sa_r = await db.execute(
             sel(EventStaffAssignment).where(

@@ -29,7 +29,12 @@ from app.services.auth import (
 )
 from app.services.photos import save_operator_photo
 from app.services.documents import save_rut_pdf
-from app.dependencies.auth import get_current_user, get_current_active_user, require_superadmin
+from app.dependencies.auth import (
+    get_current_user,
+    get_current_active_user,
+    require_superadmin,
+    require_superadmin_or_admin,
+)
 from app.dependencies.rate_limit import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -349,10 +354,14 @@ async def change_password(
 @router.post("/admins", status_code=status.HTTP_201_CREATED)
 async def create_admin(
     request: dict,
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new admin/coordinator user. Superadmin only."""
+    """Create a new staff user.
+
+    - SuperAdmin may create: admin, checkin.
+    - Admin may create: checkin only.
+    """
     required = ["first_name", "last_name", "document_number", "password"]
     for f in required:
         if not request.get(f):
@@ -377,9 +386,17 @@ async def create_admin(
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado")
 
-    user_type = request.get("user_type", "coordinator")
-    if user_type not in ("superadmin", "coordinator", "checkin"):
-        user_type = "coordinator"
+    # New admin/coordinator accounts default to checkin (lowest staff role).
+    # Only superadmin may create an "admin"; admin may only create checkin.
+    from app import permissions
+    requested_type = request.get("user_type", permissions.CHECKIN)
+    if permissions.is_superadmin(current_user):
+        allowed_create = permissions.CREATABLE_BY_SUPERADMIN  # {admin, checkin}
+    elif permissions.is_admin(current_user):
+        allowed_create = permissions.CREATABLE_BY_ADMIN       # {checkin}
+    else:
+        allowed_create = set()
+    user_type = requested_type if requested_type in allowed_create else permissions.CHECKIN
 
     user = User(
         email=request.get("email", f"{request['document_number']}@logistica.local"),
@@ -407,12 +424,17 @@ async def create_admin(
 
 @router.get("/admins")
 async def list_admins(
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all admin users. Superadmin only."""
+    """List all staff users.
+
+    - SuperAdmin: sees everyone (superadmin, admin, checkin).
+    - Admin: sees everyone too (needed to manage checkin users), but the
+      frontend hides edit/delete actions on admin/superadmin rows.
+    """
     result = await db.execute(
-        select(User).where(User.user_type.in_(["superadmin", "coordinator", "checkin"])).order_by(User.created_at.desc())
+        select(User).where(User.user_type.in_(["superadmin", "admin", "checkin"])).order_by(User.created_at.desc())
     )
     admins = result.scalars().all()
     return [{"id": str(a.id), "email": a.email, "first_name": a.first_name, "last_name": a.last_name,
@@ -424,16 +446,43 @@ async def list_admins(
 async def update_admin(
     admin_id: uuid.UUID,
     request: dict,
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update an admin user. Superadmin only."""
+    """Update a staff user.
+
+    - SuperAdmin may edit any staff user and set roles to admin/checkin.
+    - Admin may ONLY edit checkin users (cannot touch admin/superadmin).
+    - Nobody can self-promote to "superadmin" via this endpoint.
+    """
+    from app import permissions
+
     result = await db.execute(select(User).where(User.id == admin_id))
     admin = result.scalar_one_or_none()
     if not admin:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    for field in ["first_name", "last_name", "phone", "user_type", "is_active"]:
+    # Admin can only modify checkin users (never admin/superadmin).
+    if permissions.is_admin(current_user) and admin.user_type not in (permissions.CHECKIN,):
+        raise HTTPException(status_code=403, detail="Solo puedes editar usuarios checkin")
+
+    # SECURITY: validate user_type changes to prevent privilege escalation.
+    if "user_type" in request:
+        new_type = request["user_type"]
+        if permissions.is_superadmin(current_user):
+            allowed_update = permissions.CREATABLE_BY_SUPERADMIN | {permissions.ADMIN}
+        elif permissions.is_admin(current_user):
+            allowed_update = permissions.CREATABLE_BY_ADMIN  # {checkin}
+        else:
+            allowed_update = set()
+        # Block any attempt to set superadmin (only seed/DB can create superadmin)
+        if new_type == permissions.SUPERADMIN:
+            raise HTTPException(status_code=403, detail="No se puede asignar el rol SuperAdmin")
+        if new_type not in allowed_update:
+            raise HTTPException(status_code=403, detail=f"No tienes permiso para asignar el rol '{new_type}'")
+        admin.user_type = new_type
+
+    for field in ["first_name", "last_name", "phone", "is_active"]:
         if field in request:
             setattr(admin, field, request[field])
 
@@ -449,17 +498,34 @@ async def update_admin(
 @router.delete("/admins/{admin_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_admin(
     admin_id: uuid.UUID,
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Deactivate an admin user. Superadmin only. Cannot delete self."""
-    if admin_id == current_user.id:
-        raise HTTPException(status_code=400, detail="No puedes desactivarte a ti mismo")
+    """Deactivate a staff user.
+
+    Reglas:
+    - Un superadmin NO puede eliminar a OTRO superadmin (solo a sí mismo).
+    - Un superadmin SÍ puede autoeliminarse (desactivar su propia cuenta).
+    - Un admin solo puede desactivar usuarios checkin.
+    """
+    from app import permissions
 
     result = await db.execute(select(User).where(User.id == admin_id))
     admin = result.scalar_one_or_none()
     if not admin:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # Un superadmin no puede eliminar a OTRO superadmin.
+    # Solo puede desactivar su propia cuenta (autoeliminación).
+    if permissions.is_superadmin(admin) and admin.id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="No puedes eliminar a otro superadmin. Solo puedes eliminar tu propia cuenta.",
+        )
+
+    # Admin can only deactivate checkin users.
+    if permissions.is_admin(current_user) and admin.user_type != permissions.CHECKIN:
+        raise HTTPException(status_code=403, detail="Solo puedes desactivar usuarios checkin")
 
     admin.is_active = False
     await db.commit()

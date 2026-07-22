@@ -18,7 +18,7 @@ from app.services.operators import (
 from app.services.photos import save_operator_photo_bytes, delete_operator_photos
 from app.services.documents import delete_rut_pdf
 from app.models.audit import AuditLog
-from app.dependencies.auth import get_current_active_user, require_admin_or_coordinator, require_superadmin
+from app.dependencies.auth import get_current_active_user, require_superadmin_or_admin, require_superadmin
 
 router = APIRouter(prefix="/api/operators", tags=["Operators"])
 
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/operators", tags=["Operators"])
 
 @router.get("/dashboard/stats")
 async def dashboard_stats(
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Get dashboard statistics: active events, total operators, operators grouped by role."""
@@ -333,7 +333,7 @@ async def reject_operator(
 @router.get("/blocked/search")
 async def search_blocked(
     search: Optional[str] = Query(None, min_length=1),
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Search blocked documents."""
@@ -345,7 +345,7 @@ async def search_blocked(
 async def search_operators_for_staff(
     q: str = Query(..., min_length=2, description="Buscar por nombre o cédula"),
     limit: int = Query(10, ge=1, le=50),
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Busca operadores por nombre o cédula.
@@ -388,7 +388,7 @@ async def search_operators_for_staff(
 
 @router.get("/coordinators")
 async def list_coordinators(
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Lista coordinadores y operadores aptos para recibir cupos de coordinación.
@@ -437,7 +437,7 @@ async def list_operators(
     city: Optional[str] = Query(None, description="Filtrar por ciudad del operador"),
     education_level: Optional[str] = Query(None, description="Filtrar por nivel educativo minimo"),
     exclude_event_id: Optional[str] = Query(None, description="Excluir operadores ya asignados a este evento"),
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """List all operators. Supports search, city filter, education level filter, and role filter."""
@@ -453,7 +453,7 @@ async def list_operators(
 @router.get("/{user_id}/block-info")
 async def get_block_info(
     user_id: uuid.UUID,
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Get block information for a specific operator."""
@@ -490,10 +490,10 @@ async def get_operator_details(
     db: AsyncSession = Depends(get_db)
 ):
     """Get details of a specific operator."""
-    is_admin = current_user.user_type in ["superadmin", "coordinator"]
+    is_admin = current_user.user_type in ("superadmin", "admin")
     if not is_admin and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-        
+
     # Admins can see inactive (blocked) operators
     operator = await get_operator(db, user_id, include_inactive=is_admin)
     if not operator:
@@ -509,7 +509,7 @@ async def update_operator_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """Update operator profile. Admins can update more fields than the operator themselves."""
-    is_admin = current_user.user_type in ["superadmin", "coordinator"]
+    is_admin = current_user.user_type in ("superadmin", "admin")
     if not is_admin and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
@@ -524,10 +524,10 @@ async def update_operator_profile(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_operator(
     user_id: uuid.UUID,
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Soft delete an operator. Requires admin/coordinator role."""
+    """Soft delete an operator. Requires admin role."""
     success = await delete_operator(db, user_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found")
@@ -543,7 +543,7 @@ async def upload_photo(
     import os
     from app.config import settings
 
-    if current_user.user_type not in ["superadmin", "coordinator"] and current_user.id != user_id:
+    if current_user.user_type not in ("superadmin", "admin") and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
     # Get operator profile directly
@@ -582,10 +582,10 @@ async def upload_photo(
 @router.delete("/{user_id}/photo", status_code=status.HTTP_200_OK)
 async def delete_operator_photo(
     user_id: uuid.UUID,
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete an operator's profile photo (admin/coordinator only).
+    """Delete an operator's profile photo (admin only).
 
     Removes the photo + thumbnail files from disk and clears the DB fields.
     Useful when an operator uploads an incorrect or inappropriate photo.
@@ -616,7 +616,7 @@ async def delete_operator_photo(
 async def block_operator_endpoint(
     user_id: uuid.UUID,
     request: dict,
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Block an operator — adds their document to the blocked list and deactivates them."""
@@ -630,7 +630,7 @@ async def block_operator_endpoint(
 @router.post("/{user_id}/unblock")
 async def unblock_operator_endpoint(
     user_id: uuid.UUID,
-    current_user: User = Depends(require_admin_or_coordinator),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Unblock a previously blocked operator — reactivates their account."""

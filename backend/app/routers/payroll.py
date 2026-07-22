@@ -56,7 +56,7 @@ from app.websockets.manager import manager as ws_manager
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/payroll", tags=["Payroll"])
 
-_PERMITTED = ("admin", "superadmin", "coordinator")
+_PERMITTED = ("admin", "superadmin")
 
 
 def _to_uuid(val):
@@ -914,7 +914,7 @@ async def download_planilla_coordinador(
     Solo incluye operadores con ``status='checked_in'``. Si una hoja tiene
     más de 20 operadores, se generan hojas/páginas adicionales paginadas.
 
-    Requiere permisos admin/superadmin/coordinator.
+    Requiere permisos admin/superadmin.
     """
     # Validar parámetros (defensa en profundidad)
     group_by = (group_by or "coordinator").strip().lower()
@@ -1117,7 +1117,7 @@ async def download_invoices_bulk(
     """Descarga un ZIP con todas las facturas PDF del evento.
 
     Filtro: status='paid' AND signature_data IS NOT NULL.
-    Requiere permisos admin/superadmin/coordinator.
+    Requiere permisos admin/superadmin.
     """
     if user.user_type not in _PERMITTED:
         raise HTTPException(403, "Sin permisos")
@@ -1204,7 +1204,7 @@ async def download_novedades_excel(
     Incluye novedades operativas y vetos marcados desde el módulo de
     incidencias. Ordenado por fecha ascendente (las más antiguas primero).
 
-    Requiere permisos admin/superadmin/coordinator.
+    Requiere permisos admin/superadmin.
     """
     if user.user_type not in _PERMITTED:
         raise HTTPException(403, "Sin permisos")

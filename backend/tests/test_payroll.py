@@ -121,7 +121,7 @@ async def setup_payroll_event(db: AsyncSession):
         password_hash=hash_password("password"),
         first_name="Carlos",
         last_name="Coordinador",
-        user_type="coordinator",
+        user_type="admin",
         document_number="77777",
         is_verified=True,
         is_approved=True

@@ -99,6 +99,5 @@ def require_roles(*allowed_roles: str):
 
 # Convenience dependencies
 require_superadmin = require_roles("superadmin")
-require_coordinator = require_roles("superadmin", "coordinator")
-require_admin_or_coordinator = require_roles("superadmin", "coordinator")
-require_any_role = require_roles("superadmin", "coordinator", "operator")
+require_superadmin_or_admin = require_roles("superadmin", "admin")
+require_any_role = require_roles("superadmin", "admin", "checkin", "operator")
