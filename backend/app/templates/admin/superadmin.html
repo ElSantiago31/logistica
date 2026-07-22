@@ -60,7 +60,7 @@
                 <div><label class="text-xs text-gray-500">Email (opcional)</label><input id="email" type="email" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="correo@ejemplo.com"></div>
                 <div><label class="text-xs text-gray-500">Teléfono</label><input id="phone" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
                 <div><label class="text-xs text-gray-500">Contraseña*</label><input id="password" type="password" required class="w-full px-3 py-2 border rounded-lg text-sm" minlength="8"></div>
-<div><label class="text-xs text-gray-500">Rol</label><select id="userType" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="superadmin">Superadmin</option><option value="checkin">Check-in (e Indumentaria)</option></select></div>
+<div><label class="text-xs text-gray-500">Rol</label><select id="userType" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="superadmin">Superadmin (acceso total)</option><option value="admin">Admin (gestión operativa)</option><option value="checkin">Check-in (e Indumentaria)</option></select></div>
                 <div class="flex gap-3 pt-2">
                     <button type="button" onclick="saveAdmin()" class="flex-1 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">Guardar</button>
                     <button type="button" onclick="closeModal()" class="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-200 text-gray-700">Cancelar</button>
@@ -84,6 +84,7 @@
             let h='<table class="w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Documento</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th></tr></thead><tbody class="divide-y">';
             const roleMap={
                 superadmin:'<span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-semibold">Superadmin</span>',
+                admin:'<span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-semibold">Admin</span>',
                 checkin:'<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">Check-in</span>',
                 intendencia:'<span class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-semibold">Intendencia</span>',
                 coordinator:'<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">Coordinador</span>'
@@ -91,9 +92,13 @@
             admins.forEach(a=>{
                 const role=roleMap[a.user_type]||'<span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-semibold">'+(a.user_type||'Desconocido')+'</span>';
                 const status=a.is_active?'<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Activo</span>':'<span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Inactivo</span>';
-                const toggleBtn=a.is_active
-                    ?`<button onclick="deactivateAdmin('${a.id}')" title="Desactivar" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`
-                    :`<button onclick="activateAdmin('${a.id}')" title="Reactivar" class="bg-green-500 text-white px-3 py-1 rounded text-xs">✅</button>`;
+                const me=JSON.parse(localStorage.getItem('user')||'{}');
+                const isOtherSuperadmin=a.user_type==='superadmin'&&a.id!==me.id;
+                const toggleBtn=isOtherSuperadmin
+                    ?''  // Otro superadmin: ocultar botón (no se puede eliminar)
+                    :(a.is_active
+                        ?`<button onclick="deactivateAdmin('${a.id}')" title="Desactivar" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`
+                        :`<button onclick="activateAdmin('${a.id}')" title="Reactivar" class="bg-green-500 text-white px-3 py-1 rounded text-xs">✅</button>`);
                 h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${toggleBtn}</td></tr>`;
             });
             h+='</tbody></table>';
@@ -144,8 +149,13 @@
     }
 
     async function deactivateAdmin(id){
-        if(!confirm('¿Desactivar este administrador? No podrá iniciar sesión hasta que se reactive.'))return;
-        try{const r=await fetch('/api/auth/admins/'+id,{method:'DELETE',headers:authH()});if(r.ok||r.status===204){toast('Administrador desactivado','success');loadAdmins()}else toast('Error','error')}catch(e){toast('Error','error')}
+        const me=JSON.parse(localStorage.getItem('user')||'{}');
+        const isSelf=id===me.id;
+        const msg=isSelf
+            ?'⚠️ Vas a DESACTIVAR TU PROPIA cuenta. Tras esto no podrás iniciar sesión hasta que otro superadmin te reactive. ¿Confirmar?'
+            :'¿Desactivar este administrador? No podrá iniciar sesión hasta que se reactive.';
+        if(!confirm(msg))return;
+        try{const r=await fetch('/api/auth/admins/'+id,{method:'DELETE',headers:authH()});if(r.ok||r.status===204){toast('Administrador desactivado','success');loadAdmins()}else{const e=await r.json().catch((()=>({})));toast(e.detail||'Error','error')}}catch(e){toast('Error','error')}
     }
 
     async function activateAdmin(id){

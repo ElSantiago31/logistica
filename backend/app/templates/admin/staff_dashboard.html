@@ -39,7 +39,7 @@
     const u = JSON.parse(localStorage.getItem('user') || '{}');
     // Operadores asignados como checkin también pueden acceder.
     // Coordinadores con cupos también usan esta vista (reportar novedades/vetos).
-    if (!t || !['checkin', 'superadmin', 'operator', 'coordinator'].includes(u.user_type)) {
+    if (!t || !['checkin', 'superadmin', 'admin', 'operator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
@@ -88,7 +88,7 @@ async function loadEvents() {
                 btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in e Indumentaria</a>`);
             }
             // Incidencias y vetos: superadmin o coordinador (con cupo en el evento).
-            if (u.user_type === 'superadmin' || u.user_type === 'coordinator') {
+            if (u.user_type === 'superadmin' || u.user_type === 'admin') {
                 btns.push(`<a href="/admin/events/${e.id}/incidencias" class="inline-block bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">⚠️ Incidencias</a>`);
             }
             return `<div class="bg-white rounded-lg shadow p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

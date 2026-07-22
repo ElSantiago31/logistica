@@ -150,7 +150,7 @@
 <script>
 (function(){
     const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
-    if(!t||!['superadmin','coordinator'].includes(u.user_type)){location.href='/admin/login';return}
+    if(!t||!['superadmin','admin'].includes(u.user_type)){location.href='/admin/login';return}
 })();
 const EVENT_ID='{{ event_id }}';
 function getToken(){return localStorage.getItem('access_token');}

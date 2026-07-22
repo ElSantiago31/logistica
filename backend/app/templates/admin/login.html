@@ -95,9 +95,9 @@
             const token = localStorage.getItem('access_token');
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             if (token && user.user_type) {
-                if (['superadmin', 'coordinator'].includes(user.user_type)) {
+                if (['superadmin', 'admin'].includes(user.user_type)) {
                     window.location.href = '/admin';
-                } else if (['checkin', 'intendencia'].includes(user.user_type)) {
+                } else if (user.user_type === 'checkin') {
                     window.location.href = '/staff';
                 } else if (user.user_type === 'operator') {
                     window.location.href = '/enrolamiento/perfil';
@@ -159,7 +159,7 @@
                     // Redirect based on user role
                     const userType = data.user.user_type;
                     let redirectUrl = '/admin';
-                    if (['checkin', 'intendencia'].includes(userType)) {
+                    if (userType === 'checkin') {
                         redirectUrl = '/staff';
                     } else if (userType === 'operator') {
                         redirectUrl = '/enrolamiento/perfil';

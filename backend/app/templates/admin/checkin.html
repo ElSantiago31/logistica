@@ -225,7 +225,7 @@ function authHeaders() {
 // Auth guard
 (function() {
     const t = getToken(), u = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!t || !['superadmin', 'coordinator', 'checkin', 'operator'].includes(u.user_type)) {
+    if (!t || !['superadmin', 'admin', 'checkin', 'operator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
@@ -239,7 +239,7 @@ function _canManageUniform() {
     }
     try {
         const u = JSON.parse(localStorage.getItem('user') || '{}');
-        return ['superadmin', 'coordinator', 'checkin', 'admin'].includes(u.user_type);
+        return ['superadmin', 'admin', 'checkin'].includes(u.user_type);
     } catch(_) { return false; }
 }
 
