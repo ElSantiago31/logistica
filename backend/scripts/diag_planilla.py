@@ -42,8 +42,7 @@ async def main(event_id_str: str):
     print(f"Event ID: {event_id}\n")
 
     # Imports diferidos para no fallar si hay errores de import
-    from app.database import async_engine
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.database import AsyncSessionLocal
     from sqlalchemy import select
     from app.models.events import Event, EventAssignment
     from app.models.operators import Operator
@@ -51,7 +50,7 @@ async def main(event_id_str: str):
     from app.models.roles import Role
     from app.models.incidents import OperatorIncident, OperatorBan
 
-    async with AsyncSession(async_engine) as db:
+    async with AsyncSessionLocal() as db:
         # Paso 1: obtener evento
         print(f"{BOLD}[1/8] Obtener evento{RESET}")
         try:
