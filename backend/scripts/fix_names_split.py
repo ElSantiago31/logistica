@@ -203,6 +203,8 @@ async def main():
     )
     parser.add_argument("--apply", action="store_true",
                         help="Aplica los cambios (sin esto, solo muestra el dry-run).")
+    parser.add_argument("--yes", "-y", action="store_true",
+                        help="Salta la confirmacion interactiva (ideal para Docker / CI).")
     parser.add_argument("--event-id", default=None,
                         help="Filtra por evento (solo operadores asignados a ese evento).")
     parser.add_argument("--doc", default=None,
@@ -297,11 +299,14 @@ async def main():
         # --- Aplicar si se solicito ---
         if args.apply and to_fix:
             print("\n" + "=" * 80)
-            confirm = input(f"Aplicar {len(to_fix)} correcciones? Escriba 'SI' para confirmar: ")
-            if confirm.strip().upper() != "SI":
-                print("[X] Cancelado por el usuario. No se aplicaron cambios.")
-                await engine.dispose()
-                return
+            if not args.yes:
+                confirm = input(f"Aplicar {len(to_fix)} correcciones? Escriba 'SI' para confirmar: ")
+                if confirm.strip().upper() != "SI":
+                    print("[X] Cancelado por el usuario. No se aplicaron cambios.")
+                    await engine.dispose()
+                    return
+            else:
+                print(f"[--yes] Confirmando automaticamente {len(to_fix)} correcciones...")
 
             applied = 0
             for u in to_fix:
