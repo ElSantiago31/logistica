@@ -106,7 +106,9 @@ async def _save_coordinator_quotas(
 
 
 async def _count_used_by_coordinator(
-    db: AsyncSession, event_id: uuid.UUID, operator_id: uuid.UUID,
+    db: AsyncSession, event_id: uuid.UUID,
+    operator_id: uuid.UUID = None,
+    coordinator_name: str = None,
 ) -> int:
     """Cuenta cuántos operadores confirmados/activos admitió este coordinador.
 
@@ -114,17 +116,40 @@ async def _count_used_by_coordinator(
     inactivas) lo que inflaba el "usado" del cupo. Ahora solo cuenta las que
     realmente ocupan el cupo: status IN ('confirmed', 'checked_in') y activas.
     Esto se alinea con cómo se calcula quantity_confirmed en event_staff_needs.
+
+    Soporta dos modos de matching:
+      - operator_id (FK): cuenta por admitted_by_operator_id (flujo nuevo).
+      - coordinator_name (legacy): cuenta por admitted_by ILIKE (coordinadores
+        antiguos que solo tienen texto libre, sin FK).
+    Si se pasa operator_id, se usa la FK (más confiable). Si solo se pasa
+    coordinator_name, se cuenta por nombre (mayúsculas, comparación ILIKE).
     """
-    result = await db.execute(
-        select(func.count()).select_from(EventAssignment)
-        .where(
-            EventAssignment.event_id == event_id,
-            EventAssignment.admitted_by_operator_id == operator_id,
-            EventAssignment.status.in_(["confirmed", "checked_in"]),
-            EventAssignment.is_active == True,
+    if operator_id:
+        result = await db.execute(
+            select(func.count()).select_from(EventAssignment)
+            .where(
+                EventAssignment.event_id == event_id,
+                EventAssignment.admitted_by_operator_id == operator_id,
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+                EventAssignment.is_active == True,
+            )
         )
-    )
-    return int(result.scalar() or 0)
+        return int(result.scalar() or 0)
+
+    # Fallback legacy: contar por admitted_by (texto libre).
+    if coordinator_name:
+        result = await db.execute(
+            select(func.count()).select_from(EventAssignment)
+            .where(
+                EventAssignment.event_id == event_id,
+                func.upper(func.coalesce(EventAssignment.admitted_by, "")).ilike(coordinator_name.upper()),
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+                EventAssignment.is_active == True,
+            )
+        )
+        return int(result.scalar() or 0)
+
+    return 0
 
 
 async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) -> Event:
@@ -372,10 +397,15 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
     )
     coordinator_quotas = []
     for q in coord_quotas_r.scalars().all():
-        used = 0
+        # Conteo de "usados": por FK (flujo nuevo) o por nombre (legacy).
         if q.coordinator_operator_id:
             used = await _count_used_by_coordinator(db, event_id, q.coordinator_operator_id)
-        available = (q.quota - used) if q.coordinator_operator_id else None
+        elif q.coordinator:
+            # Coordinador legacy (sin FK) → contar por admitted_by ILIKE.
+            used = await _count_used_by_coordinator(db, event_id, coordinator_name=q.coordinator)
+        else:
+            used = 0
+        available = (q.quota - used) if q.quota is not None else None
         coordinator_quotas.append({
             "id": q.id,
             "event_id": event_id,
