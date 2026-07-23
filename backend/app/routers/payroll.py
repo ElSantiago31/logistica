@@ -1008,10 +1008,15 @@ async def download_planilla_coordinador(
 
         op_id_str = str(operator.id)
         operators.append({
+            # Campos separados (first_name/last_name) para que la planilla
+            # los use directamente SIN tener que re-dividir full_name (lo cual
+            # rompía los nombres compuestos: "Ronald Santiago" → "Ronald").
+            "first_name": op_user.first_name or "",
+            "last_name": op_user.last_name or "",
             "full_name": f"{op_user.first_name} {op_user.last_name}",
             "document_number": op_user.document_number or "",
             "address": operator.address or "",
-            "phone": op_user.phone or "",
+            "phone": operator.phone or "",
             "coordinator_name": coord_name,
             "role_name": role.name if role else "Operador",
             "jacket_number": assignment.jacket_number or "",

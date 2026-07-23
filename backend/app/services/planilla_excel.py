@@ -102,6 +102,17 @@ def _split_name(full_name: str) -> tuple[str, str]:
     return (parts[0], parts[1])
 
 
+def _norm_sort_text(text: str) -> str:
+    """Normaliza texto para ordenamiento: quita acentos y pasa a mayúsculas.
+
+    Ej: "Pérez Gómez" → "PEREZ GOMEZ"
+    """
+    if not text:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", text)
+    return nfkd.encode("ascii", "ignore").decode("ascii").upper().strip()
+
+
 def _sort_key_by_lastname(full_name: str) -> tuple[str, str]:
     """Clave de ordenamiento por APELLIDO (case-insensitive, sin acentos).
 
@@ -118,16 +129,12 @@ def _sort_key_by_lastname(full_name: str) -> tuple[str, str]:
     """
     nombres, apellidos = _split_name(full_name)
 
-    def _norm(text: str) -> str:
-        """Normaliza: quita acentos y pasa a mayúsculas para orden estable."""
-        if not text:
-            return ""
-        nfkd = unicodedata.normalize("NFKD", text)
-        return nfkd.encode("ascii", "ignore").decode("ascii").upper().strip()
-
     # Si no hay apellido (un solo token), usar el nombre como apellido
     # para que se ubique alfabéticamente en lugar de quedar agrupado al final.
-    return (_norm(apellidos) or _norm(nombres), _norm(nombres))
+    return (
+        _norm_sort_text(apellidos) or _norm_sort_text(nombres),
+        _norm_sort_text(nombres),
+    )
 
 
 def _sort_key_by_document(op: dict) -> tuple:
@@ -372,7 +379,12 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
         row = FIRST_DATA_ROW + idx
         if row > LAST_DATA_ROW:
             break  # seguridad — el paginado ya fragmentó en bloques de 20
-        nombres, apellidos = _split_name(op.get("full_name", ""))
+        # Usar first_name/last_name directamente (campos separados de la BD).
+        # Fallback a _split_name(full_name) solo si no vienen (retrocompatibilidad).
+        nombres = (op.get("first_name") or "").strip()
+        apellidos = (op.get("last_name") or "").strip()
+        if not nombres and not apellidos:
+            nombres, apellidos = _split_name(op.get("full_name", ""))
         ws.cell(row=row, column=COL_NOMBRES, value=nombres)
         ws.cell(row=row, column=COL_APELLIDOS, value=apellidos)
         ws.cell(row=row, column=COL_CEDULA, value=op.get("document_number", ""))
@@ -416,11 +428,20 @@ def _sort_operators(operators: list[dict], sort_by: str) -> list[dict]:
     """
     if sort_by == "document":
         return sorted(operators, key=_sort_key_by_document)
-    # default: lastname
-    return sorted(
-        operators,
-        key=lambda op: _sort_key_by_lastname(op.get("full_name", "")),
-    )
+    # default: lastname — usar first_name/last_name si están disponibles
+    # (campos separados de la BD). Si no, fallback a _split_name(full_name).
+    def _lastname_key(op: dict) -> tuple[str, str]:
+        last = (op.get("last_name") or "").strip()
+        first = (op.get("first_name") or "").strip()
+        if last or first:
+            return (
+                _norm_sort_text(last) or _norm_sort_text(first),
+                _norm_sort_text(first),
+            )
+        # Fallback (retrocompatibilidad): usar full_name
+        return _sort_key_by_lastname(op.get("full_name", ""))
+
+    return sorted(operators, key=_lastname_key)
 
 
 def _render_pages(
