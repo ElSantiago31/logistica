@@ -41,10 +41,18 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # System deps + LibreOffice (para conversión XLSX → PDF de planillas)
+# IMPORTANTE: libreoffice-writer es necesario para el filtro de exportación
+# a PDF. Sin él, soffice puede generar el .xlsx pero falla al exportar a PDF
+# (error silencioso que se manifiesta como 500 Internal Server Error).
+# Las fuentes (fonts-dejavu, fonts-liberation) evitan que soffice crashee
+# al procesar documentos con texto.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc \
+    libreoffice-core \
     libreoffice-calc \
-    libreoffice-core && \
+    libreoffice-writer \
+    fonts-dejavu-core \
+    fonts-liberation2 && \
     rm -rf /var/lib/apt/lists/*
 
 # Python deps (cache layer: solo se reinstala si cambia requirements.txt)
