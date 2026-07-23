@@ -177,6 +177,9 @@ async def get_offline_data(
     # --- Cupos por coordinador (para tarjetas) ---
     quotas = await _get_coordinator_quotas(db, event_id)
 
+    # --- Cargos requeridos por rol (EventStaffNeed) ---
+    staff_needs = await _get_event_staff_needs(db, event_id)
+
     return {
         "id": str(event.id),
         "name": event.name,

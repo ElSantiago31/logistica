@@ -941,59 +941,75 @@ async def download_planilla_coordinador(
     if user.user_type not in _PERMITTED:
         raise HTTPException(403, "Sin permisos")
 
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(404, "Evento no encontrado")
+    # --- Consultas a BD y construcción de datos ---
+    # Envolver TODO en try/except para que cualquier error de BD (columna
+    # faltante, FK rota, etc.) se loguee con traceback completo en vez de
+    # escapar al handler global que solo dice "Error interno del servidor".
+    try:
+        event = await db.get(Event, event_id)
+        if not event:
+            raise HTTPException(404, "Evento no encontrado")
 
-    # Operadores checked_in del evento, con datos para la planilla
-    result = await db.execute(
-        select(EventAssignment, Operator, User, Role)
-        .join(Operator, Operator.id == EventAssignment.operator_id)
-        .join(User, User.id == Operator.user_id)
-        .outerjoin(Role, Role.id == EventAssignment.role_id)
-        .where(
-            EventAssignment.event_id == event_id,
-            EventAssignment.status == "checked_in",
+        logger.info(
+            "[planilla] evento=%s format=%s group_by=%s sort_by=%s signatures=%s",
+            event.name, format, group_by, sort_by, with_signatures,
         )
-    )
-    rows = result.all()
 
-    # Mapear áreas a coordinadores del evento
-    area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
-
-    # --- Consultar novedades y vetos para resaltar filas en la planilla ---
-    # Operadores con alguna novedad (incident) en ESTE evento → fila amarilla.
-    inc_result = await db.execute(
-        select(OperatorIncident.operator_id)
-        .where(OperatorIncident.event_id == event_id)
-        .distinct()
-    )
-    ops_with_incident = {str(oid) for (oid,) in inc_result.all()}
-
-    # Operadores con veto ACTIVO (cualquier evento) → fila roja.
-    ban_result = await db.execute(
-        select(OperatorBan.operator_id)
-        .where(OperatorBan.is_active.is_(True))
-        .distinct()
-    )
-    banned_ops = {str(oid) for (oid,) in ban_result.all()}
-
-    # --- Consultar firmas de nómina (solo si with_signatures=True) ---
-    # [OPTIMIZACIÓN] Solo se carga el blob signature_data (base64 PNG ~50KB)
-    # cuando el usuario pidió expresamente el modo con firmas. En la planilla
-    # normal (para firmar a mano) no se transfiere ningún blob.
-    signatures_by_op: dict[str, str | None] = {}
-    if with_signatures:
-        sig_result = await db.execute(
-            select(PayrollRecord.operator_id, PayrollRecord.signature_data)
+        # Operadores checked_in del evento, con datos para la planilla
+        result = await db.execute(
+            select(EventAssignment, Operator, User, Role)
+            .join(Operator, Operator.id == EventAssignment.operator_id)
+            .join(User, User.id == Operator.user_id)
+            .outerjoin(Role, Role.id == EventAssignment.role_id)
             .where(
-                PayrollRecord.event_id == event_id,
-                PayrollRecord.signature_data.is_not(None),
+                EventAssignment.event_id == event_id,
+                EventAssignment.status == "checked_in",
             )
         )
-        signatures_by_op = {
-            str(oid): sig for (oid, sig) in sig_result.all()
-        }
+        rows = result.all()
+        logger.info("[planilla] %d operadores checked_in encontrados", len(rows))
+
+        # Mapear áreas a coordinadores del evento
+        area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
+
+        # --- Consultar novedades y vetos para resaltar filas en la planilla ---
+        inc_result = await db.execute(
+            select(OperatorIncident.operator_id)
+            .where(OperatorIncident.event_id == event_id)
+            .distinct()
+        )
+        ops_with_incident = {str(oid) for (oid,) in inc_result.all()}
+
+        ban_result = await db.execute(
+            select(OperatorBan.operator_id)
+            .where(OperatorBan.is_active.is_(True))
+            .distinct()
+        )
+        banned_ops = {str(oid) for (oid,) in ban_result.all()}
+
+        # --- Consultar firmas de nómina (solo si with_signatures=True) ---
+        signatures_by_op: dict[str, str | None] = {}
+        if with_signatures:
+            sig_result = await db.execute(
+                select(PayrollRecord.operator_id, PayrollRecord.signature_data)
+                .where(
+                    PayrollRecord.event_id == event_id,
+                    PayrollRecord.signature_data.is_not(None),
+                )
+            )
+            signatures_by_op = {
+                str(oid): sig for (oid, sig) in sig_result.all()
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("[planilla] Error en consulta de datos: %s", exc)
+        safe_http_error(
+            status_code=500,
+            client_message="Error al consultar los datos de la planilla",
+            log_detail="Error consultando datos para planilla",
+            exc=exc,
+        )
 
     # Construir lista plana de operadores (con su coordinator_name)
     operators: list[dict] = []
