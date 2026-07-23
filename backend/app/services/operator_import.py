@@ -470,20 +470,109 @@ async def _load_coordinators(db: AsyncSession, event_id: uuid.UUID) -> list:
     """Carga coordinadores del evento desde EventCoordinatorQuota.
 
     Retorna [(operator_id, norm_name, display_name), ...].
+    Incluye coordinadores legacy (sin operator_id) y del nuevo flujo (con FK).
     """
     result = await db.execute(
         text("""
             SELECT coordinator_operator_id, coordinator
             FROM event_coordinator_quotas
-            WHERE event_id = :eid AND coordinator_operator_id IS NOT NULL
+            WHERE event_id = :eid
         """),
         {"eid": str(event_id)},
     )
     coords = []
     for r in result:
         norm = _strip_accents(r.coordinator).upper().strip()
-        coords.append((r.coordinator_operator_id, norm, r.coordinator))
+        op_id = str(r.coordinator_operator_id) if r.coordinator_operator_id else None
+        coords.append((op_id, norm, r.coordinator))
     return coords
+
+
+async def _ensure_coordinator_quotas(
+    db: AsyncSession, event_id: uuid.UUID,
+    excel_coords: dict, existing_coords: list,
+) -> tuple[int, list]:
+    """Crea quotas de coordinadores faltantes desde el Excel.
+
+    Para cada coordinador del Excel que no tiene quota en el evento, crea una
+    quota (legacy o con FK si se resuelve el operator_id). El cupo se calcula
+    del conteo de operadores del Excel + un margen mínimo.
+
+    Args:
+        excel_coords: {norm_name: (display_name, count)} del Excel.
+        existing_coords: lista de coordinadores ya con quota.
+
+    Returns:
+        (num_created, updated_coords_list) — coords actualizadas con las nuevas.
+    """
+    created = 0
+
+    # Nombres normalizados ya existentes
+    existing_norms = {c[1] for c in existing_coords}
+
+    # Pre-cargar operadores de la BD para intentar resolver coordinator_operator_id
+    # por nombre (los coordinadores suelen ser operadores del sistema).
+    all_ops = await db.execute(text("""
+        SELECT o.id, u.first_name, u.last_name, u.document_number
+        FROM operators o
+        JOIN users u ON o.user_id = u.id
+        WHERE o.is_active = true
+    """))
+    ops_by_norm = {}
+    for r in all_ops:
+        full = f"{r.first_name or ''} {r.last_name or ''}".strip()
+        norm = _strip_accents(full).upper().strip()
+        ops_by_norm[norm] = str(r.id)
+        # También indexar por primer nombre para matching parcial
+        first_token = norm.split()[0] if norm.split() else ""
+        if first_token and first_token not in ops_by_norm:
+            ops_by_norm[first_token] = str(r.id)
+
+    for cnorm, (display, count) in excel_coords.items():
+        # ¿Ya existe esta quota? (match exacto o parcial)
+        already = any(
+            cnorm == ex_norm or cnorm in ex_norm or ex_norm in cnorm
+            for ex_norm in existing_norms
+        )
+        if already:
+            continue
+
+        # Intentar resolver coordinator_operator_id por nombre
+        coord_op_id = ops_by_norm.get(cnorm)
+        if not coord_op_id:
+            # Intentar por primer token
+            first_token = cnorm.split()[0] if cnorm.split() else ""
+            coord_op_id = ops_by_norm.get(first_token)
+
+        # Cupo: operadores del Excel + margen (mínimo 5)
+        quota_val = max(count + 5, 5)
+
+        # Display name en MAYÚSCULAS
+        display_upper = _strip_accents(display).upper().strip()
+
+        try:
+            await db.execute(text("""
+                INSERT INTO event_coordinator_quotas (
+                    id, event_id, coordinator, coordinator_operator_id, quota
+                ) VALUES (
+                    gen_random_uuid(), :eid, :coord, :op_id, :quota
+                )
+                ON CONFLICT DO NOTHING
+            """), {
+                "eid": str(event_id),
+                "coord": display_upper,
+                "op_id": coord_op_id,
+                "quota": quota_val,
+            })
+            created += 1
+            # Agregar a la lista existente para que las filas posteriores lo encuentren
+            existing_coords.append((coord_op_id, cnorm, display_upper))
+            existing_norms.add(cnorm)
+        except Exception:
+            # Si falla (p. ej. constraint), no detener la importación
+            pass
+
+    return created, existing_coords
 
 
 def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.UUID], Optional[str]]:
@@ -612,6 +701,26 @@ async def import_operators_from_excel(
 
     existing_users = await _load_existing_users_by_doc(db, list(set(all_docs)))
     assigned_ops = await _load_assigned_operators(db, event_id)
+
+    # --- 2b. Auto-crear quotas de coordinadores faltantes ---
+    # Recolectar coordinadores únicos del Excel con su conteo de operadores.
+    excel_coords: dict[str, tuple[str, int]] = {}  # {norm_name: (display, count)}
+    for raw in raw_rows:
+        coord_val = raw.get("coordinator_name")
+        if not coord_val or not str(coord_val).strip():
+            continue
+        display = _strip_accents(str(coord_val)).upper().strip()
+        cnorm = display
+        if cnorm not in excel_coords:
+            excel_coords[cnorm] = (display, 0)
+        # Incrementar el conteo de operadores para este coordinador
+        prev_display, prev_count = excel_coords[cnorm]
+        excel_coords[cnorm] = (prev_display, prev_count + 1)
+
+    # Crear quotas para coordinadores del Excel que no existen en el evento
+    created_quotas, coords = await _ensure_coordinator_quotas(
+        db, event_id, excel_coords, coords,
+    )
 
     # Detección de duplicados dentro del Excel
     seen_docs: set[str] = set()
