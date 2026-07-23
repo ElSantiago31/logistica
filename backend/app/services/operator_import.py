@@ -491,24 +491,25 @@ async def _load_coordinators(db: AsyncSession, event_id: uuid.UUID) -> list:
 async def _ensure_coordinator_quotas(
     db: AsyncSession, event_id: uuid.UUID,
     excel_coords: dict, existing_coords: list,
-) -> tuple[int, list]:
-    """Crea quotas de coordinadores faltantes desde el Excel.
+) -> tuple[int, int, list]:
+    """Sincroniza quotas de coordinadores desde el Excel.
 
-    Para cada coordinador del Excel que no tiene quota en el evento, crea una
-    quota (legacy o con FK si se resuelve el operator_id). El cupo se calcula
-    del conteo de operadores del Excel + un margen mínimo.
+    Para cada coordinador del Excel:
+    - Si YA tiene quota: la actualiza al count exacto del Excel (source of truth).
+    - Si NO tiene quota: la crea con quota = count (sin margen arbitrario).
+
+    Antes se creaba con count + 5 (margen) y no se actualizaban las existentes,
+    lo que dejaba quotas infladas (ej: 21 cuando debía ser 16).
 
     Args:
         excel_coords: {norm_name: (display_name, count)} del Excel.
         existing_coords: lista de coordinadores ya con quota.
 
     Returns:
-        (num_created, updated_coords_list) — coords actualizadas con las nuevas.
+        (num_created, num_updated, updated_coords_list).
     """
     created = 0
-
-    # Nombres normalizados ya existentes
-    existing_norms = {c[1] for c in existing_coords}
+    updated = 0
 
     # Pre-cargar operadores de la BD para intentar resolver coordinator_operator_id
     # por nombre (los coordinadores suelen ser operadores del sistema).
@@ -529,25 +530,35 @@ async def _ensure_coordinator_quotas(
             ops_by_norm[first_token] = str(r.id)
 
     for cnorm, (display, count) in excel_coords.items():
-        # ¿Ya existe esta quota? (match exacto o parcial)
-        already = any(
-            cnorm == ex_norm or cnorm in ex_norm or ex_norm in cnorm
-            for ex_norm in existing_norms
-        )
-        if already:
+        # Buscar match exacto en las quotas existentes.
+        matched = None
+        for item in existing_coords:
+            ex_op_id, ex_norm, ex_display = item
+            if cnorm == ex_norm:
+                matched = item
+                break
+
+        if matched:
+            # Ya tiene quota → actualizar al count exacto del Excel.
+            ex_op_id, ex_norm, ex_display = matched
+            await db.execute(text("""
+                UPDATE event_coordinator_quotas
+                SET quota = :quota
+                WHERE event_id = :eid AND coordinator = :coord_name
+            """), {
+                "eid": str(event_id),
+                "coord_name": ex_display,
+                "quota": count,
+            })
+            updated += 1
             continue
 
-        # Intentar resolver coordinator_operator_id por nombre
+        # No tiene quota → crear con quota = count exacto (sin margen +5).
         coord_op_id = ops_by_norm.get(cnorm)
         if not coord_op_id:
-            # Intentar por primer token
             first_token = cnorm.split()[0] if cnorm.split() else ""
             coord_op_id = ops_by_norm.get(first_token)
 
-        # Cupo: operadores del Excel + margen (mínimo 5)
-        quota_val = max(count + 5, 5)
-
-        # Display name en MAYÚSCULAS
         display_upper = _strip_accents(display).upper().strip()
 
         try:
@@ -562,17 +573,14 @@ async def _ensure_coordinator_quotas(
                 "eid": str(event_id),
                 "coord": display_upper,
                 "op_id": coord_op_id,
-                "quota": quota_val,
+                "quota": count,
             })
             created += 1
-            # Agregar a la lista existente para que las filas posteriores lo encuentren
             existing_coords.append((coord_op_id, cnorm, display_upper))
-            existing_norms.add(cnorm)
         except Exception:
-            # Si falla (p. ej. constraint), no detener la importación
             pass
 
-    return created, existing_coords
+    return created, updated, existing_coords
 
 
 def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.UUID], Optional[str]]:
@@ -745,8 +753,9 @@ async def import_operators_from_excel(
         prev_display, prev_count = excel_coords[cnorm]
         excel_coords[cnorm] = (prev_display, prev_count + 1)
 
-    # Crear quotas para coordinadores del Excel que no existen en el evento
-    created_quotas, coords = await _ensure_coordinator_quotas(
+    # Sincronizar quotas: crea las faltantes y actualiza las existentes al
+    # count exacto del Excel (source of truth).
+    created_quotas, updated_quotas, coords = await _ensure_coordinator_quotas(
         db, event_id, excel_coords, coords,
     )
 
