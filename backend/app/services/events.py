@@ -108,12 +108,20 @@ async def _save_coordinator_quotas(
 async def _count_used_by_coordinator(
     db: AsyncSession, event_id: uuid.UUID, operator_id: uuid.UUID,
 ) -> int:
-    """Cuenta cuántos operadores admitió este coordinador en el evento."""
+    """Cuenta cuántos operadores confirmados/activos admitió este coordinador.
+
+    Antes contaba TODAS las asignaciones (invited, rejected, no_show, cancelled,
+    inactivas) lo que inflaba el "usado" del cupo. Ahora solo cuenta las que
+    realmente ocupan el cupo: status IN ('confirmed', 'checked_in') y activas.
+    Esto se alinea con cómo se calcula quantity_confirmed en event_staff_needs.
+    """
     result = await db.execute(
         select(func.count()).select_from(EventAssignment)
         .where(
             EventAssignment.event_id == event_id,
             EventAssignment.admitted_by_operator_id == operator_id,
+            EventAssignment.status.in_(["confirmed", "checked_in"]),
+            EventAssignment.is_active == True,
         )
     )
     return int(result.scalar() or 0)

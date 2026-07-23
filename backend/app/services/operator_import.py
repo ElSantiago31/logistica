@@ -576,31 +576,59 @@ async def _ensure_coordinator_quotas(
 
 
 def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.UUID], Optional[str]]:
-    """Busca un coordinador por nombre (fuzzy) en la lista de coordinadores del evento.
+    """Busca un coordinador por nombre en la lista de coordinadores del evento.
 
     Retorna (operator_id, display_name). Si no hay match → (None, coord_name original).
+
+    IMPORTANTE: El matching es ESTRICTO para evitar que un nombre del Excel (ej:
+    'SANDRA R') se reparta a múltiples coordinadores cuyos nombres comparten
+    tokens (ej: 'SANDRA RAMIREZ' y 'SANDRA RIOS'). Solo se acepta un match parcial
+    cuando hay EXACTAMENTE UN candidato, evitando ambigüedad.
     """
     if not coord_name:
         return None, None
     norm = _strip_accents(str(coord_name)).upper().strip()
+    norm_tokens = norm.split()
 
-    # Match exacto normalizado
+    # 1. Match exacto normalizado
     for op_id, c_norm, display in coords:
         if c_norm == norm:
             return op_id, display
 
-    # Match parcial (contains)
-    for op_id, c_norm, display in coords:
-        if not c_norm or not norm:
-            continue
-        if c_norm in norm or norm in c_norm:
-            return op_id, display
+    # 2. Match por iniciales: cada token del input es prefijo del token
+    #    correspondiente del coordinador (ej: 'SANDRA R' → 'SANDRA RAMIREZ').
+    #    Solo si hay un único candidato.
+    if len(norm_tokens) >= 2:
+        candidates = []
+        for op_id, c_norm, display in coords:
+            c_tokens = c_norm.split()
+            if len(c_tokens) >= len(norm_tokens) and all(
+                c_tokens[i].startswith(norm_tokens[i]) for i in range(len(norm_tokens))
+            ):
+                candidates.append((op_id, c_norm, display))
+        if len(candidates) == 1:
+            return candidates[0][0], candidates[0][2]
 
-    # Match por primer nombre (ej: "XIMENA" → "XIMENA RODRIGUEZ")
-    for op_id, c_norm, display in coords:
-        first_token = c_norm.split()[0] if c_norm.split() else ""
-        if first_token and first_token == norm:
-            return op_id, display
+    # 3. El input es prefijo del nombre completo (ej: 'SANDRA' → 'SANDRA RAMIREZ').
+    #    Solo si hay un único candidato.
+    prefix_candidates = [
+        (op_id, c_norm, display)
+        for op_id, c_norm, display in coords
+        if c_norm and c_norm.startswith(norm)
+    ]
+    if len(prefix_candidates) == 1:
+        return prefix_candidates[0][0], prefix_candidates[0][2]
+
+    # 4. Match por primer token exacto, solo si hay un único candidato.
+    first_token = norm_tokens[0] if norm_tokens else ""
+    if first_token:
+        first_token_candidates = [
+            (op_id, c_norm, display)
+            for op_id, c_norm, display in coords
+            if c_norm.split() and c_norm.split()[0] == first_token
+        ]
+        if len(first_token_candidates) == 1:
+            return first_token_candidates[0][0], first_token_candidates[0][2]
 
     # No match → texto libre
     return None, _strip_accents(str(coord_name)).upper().strip()
@@ -774,7 +802,12 @@ async def import_operators_from_excel(
         if doc in existing_users:
             user_id, operator_id = existing_users[doc]
             if operator_id and operator_id in assigned_ops:
-                # Ya asignado a este evento
+                # Ya asignado a este evento.
+                # Corregir la FK de coordinador si el Excel trae un coordinador
+                # distinto al estampado en una importación anterior (drift).
+                await _update_assignment_coordinator(
+                    db, event_id, operator_id, coord_op_id, coord_display,
+                )
                 already_assigned += 1
                 rows_result.append(ImportRowResult(
                     row=idx, document_number=doc, full_name=full_name,
@@ -961,6 +994,37 @@ async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, co
         "eid": str(event_id),
         "oid": str(operator_id),
         "rid": role_id,
+        "coord_display": coord_display,
+        "coord_op_id": str(coord_op_id) if coord_op_id else None,
+    })
+
+
+async def _update_assignment_coordinator(
+    db, event_id, operator_id, coord_op_id, coord_display,
+):
+    """Actualiza las FKs/strings de coordinador de una asignación existente.
+
+    Se usa al reimportar un Excel sobre operadores ya asignados: si una
+    importación anterior estampó un coordinador equivocado (por matching
+    permisivo), esta función lo corrige al coordinador correcto del Excel.
+    Solo actualiza si el nuevo coordinador está definido (coord_op_id o
+    coord_display); nunca deja la FK en NULL si antes tenía valor y el Excel
+    no trae coordinador.
+    """
+    if not coord_op_id and not coord_display:
+        return
+    await db.execute(text("""
+        UPDATE event_assignments
+        SET programmed_by = :coord_display,
+            admitted_by = :coord_display,
+            programmed_by_operator_id = :coord_op_id,
+            admitted_by_operator_id = :coord_op_id
+        WHERE event_id = :eid
+          AND operator_id = :oid
+          AND is_active = true
+    """), {
+        "eid": str(event_id),
+        "oid": str(operator_id),
         "coord_display": coord_display,
         "coord_op_id": str(coord_op_id) if coord_op_id else None,
     })
