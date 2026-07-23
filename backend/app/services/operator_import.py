@@ -854,7 +854,14 @@ async def import_operators_from_excel(
                 warnings=warnings,
             ))
 
-    # --- 4. Commit único ---
+    # --- 4. Recalcular quantity_confirmed (personal requerido) ---
+    # La importación crea asignaciones con status='confirmed' pero no toca
+    # el contador quantity_confirmed de event_staff_needs. Recalcular desde
+    # la fuente de verdad (asignaciones reales) repara drift histórico y
+    # refleja los confirmados en la tabla de "personal requerido".
+    await _recalculate_confirmed_counts(db, event_id)
+
+    # --- 5. Commit único ---
     await db.commit()
 
     elapsed = round(time.time() - t0, 2)
@@ -957,3 +964,28 @@ async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, co
         "coord_display": coord_display,
         "coord_op_id": str(coord_op_id) if coord_op_id else None,
     })
+
+
+async def _recalculate_confirmed_counts(db: AsyncSession, event_id: uuid.UUID) -> None:
+    """Recalcula event_staff_needs.quantity_confirmed desde las asignaciones reales.
+
+    Cuenta operadores con status IN ('confirmed', 'checked_in') agrupados por rol,
+    y actualiza el contador de cada cargo. Repara drift histórico (p. ej. cuando
+    los operadores se importaron por Excel sin actualizar el contador).
+    """
+    await db.execute(text("""
+        UPDATE event_staff_needs esn
+        SET quantity_confirmed = sub.cnt
+        FROM (
+            SELECT esn2.id AS need_id, COALESCE(count(a.id), 0) AS cnt
+            FROM event_staff_needs esn2
+            LEFT JOIN event_assignments a
+                ON a.event_id = esn2.event_id
+                AND a.role_id = esn2.role_id
+                AND a.status IN ('confirmed', 'checked_in')
+                AND a.is_active = true
+            WHERE esn2.event_id = :eid
+            GROUP BY esn2.id
+        ) sub
+        WHERE esn.id = sub.need_id
+    """), {"eid": str(event_id)})
