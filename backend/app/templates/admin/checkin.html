@@ -22,6 +22,9 @@
     .quota-card .qc-bar-fill { height:100%; border-radius:2px; transition:width .3s; }
     /* FASE 4: Modal de reasignación */
     .reassign-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:50; }
+    /* Fix: .hidden de Tailwind pierde contra .reassign-modal por especificidad.
+       Esta regla con doble clase (0,2,0) garantiza que el modal se oculte al añadir 'hidden'. */
+    .reassign-modal.hidden { display:none; }
     .reassign-modal .box { background:#fff; border-radius:14px; padding:24px; max-width:400px; width:90%; }
 </style>
 {% endblock %}
