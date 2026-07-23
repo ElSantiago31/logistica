@@ -1032,7 +1032,7 @@ async def download_planilla_coordinador(
             "full_name": f"{op_user.first_name} {op_user.last_name}",
             "document_number": op_user.document_number or "",
             "address": operator.address or "",
-            "phone": operator.phone or "",
+            "phone": op_user.phone or "",
             "coordinator_name": coord_name,
             "role_name": role.name if role else "Operador",
             "jacket_number": assignment.jacket_number or "",
