@@ -1124,6 +1124,165 @@ async def download_planilla_coordinador(
 
 
 # ============================================================
+# ENDPOINT DE DIAGNÓSTICO TEMPORAL
+# ============================================================
+# Ejecuta cada paso de la planilla por separado y devuelve JSON con el estado
+# de cada uno. Permite identificar exactamente dónde falla sin necesidad de
+# acceder a los logs del VPS.
+
+
+@router.get("/events/{event_id}/planilla-debug")
+async def planilla_debug(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Diagnóstico: ejecuta cada paso de la planilla y reporta errores.
+
+    TEMPORAL: eliminar o comentar después de diagnosticar.
+    """
+    if user.user_type not in _PERMITTED:
+        raise HTTPException(403, "Sin permisos")
+
+    report: dict = {"steps": [], "errors": []}
+
+    def _ok(msg: str, data=None):
+        entry = {"step": msg, "status": "ok"}
+        if data is not None:
+            entry["data"] = data
+        report["steps"].append(entry)
+
+    def _fail(msg: str, exc: Exception):
+        import traceback
+        report["steps"].append({
+            "step": msg,
+            "status": "FAIL",
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        })
+        report["errors"].append(msg)
+
+    # Paso 1: obtener evento
+    try:
+        event = await db.get(Event, event_id)
+        if not event:
+            report["steps"].append({"step": "get_event", "status": "404"})
+            return report
+        _ok("get_event", {"name": event.name, "start_date": str(event.start_date)})
+    except Exception as exc:
+        _fail("get_event", exc)
+        return report
+
+    # Paso 2: consultar operadores checked_in
+    try:
+        result = await db.execute(
+            select(EventAssignment, Operator, User, Role)
+            .join(Operator, Operator.id == EventAssignment.operator_id)
+            .join(User, User.id == Operator.user_id)
+            .outerjoin(Role, Role.id == EventAssignment.role_id)
+            .where(
+                EventAssignment.event_id == event_id,
+                EventAssignment.status == "checked_in",
+            )
+        )
+        rows = result.all()
+        _ok("query_operators", {"count": len(rows)})
+    except Exception as exc:
+        _fail("query_operators", exc)
+        return report
+
+    # Paso 3: _build_coordinator_map
+    try:
+        area_to_coord, general_coord = await _build_coordinator_map(db, event_id)
+        _ok("build_coordinator_map", {
+            "areas": list(area_to_coord.keys()),
+            "general": general_coord[0] if general_coord else None,
+        })
+    except Exception as exc:
+        _fail("build_coordinator_map", exc)
+
+    # Paso 4: consultar incidencias
+    try:
+        inc_result = await db.execute(
+            select(OperatorIncident.operator_id)
+            .where(OperatorIncident.event_id == event_id)
+            .distinct()
+        )
+        ops_with_incident = {str(oid) for (oid,) in inc_result.all()}
+        _ok("query_incidents", {"count": len(ops_with_incident)})
+    except Exception as exc:
+        _fail("query_incidents", exc)
+
+    # Paso 5: consultar vetos
+    try:
+        ban_result = await db.execute(
+            select(OperatorBan.operator_id)
+            .where(OperatorBan.is_active.is_(True))
+            .distinct()
+        )
+        banned_ops = {str(oid) for (oid,) in ban_result.all()}
+        _ok("query_bans", {"count": len(banned_ops)})
+    except Exception as exc:
+        _fail("query_bans", exc)
+
+    # Paso 6: construir lista de operadores
+    try:
+        operators = []
+        for assignment, operator, op_user, role in rows:
+            coord_name = assignment.programmed_by or assignment.admitted_by
+            if not coord_name:
+                coord_name = general_coord[0] if general_coord else "Sin asignar"
+                if role and role.area and role.area in area_to_coord:
+                    coord_name = area_to_coord[role.area][0]
+
+            operators.append({
+                "first_name": op_user.first_name or "",
+                "last_name": op_user.last_name or "",
+                "full_name": f"{op_user.first_name} {op_user.last_name}",
+                "document_number": op_user.document_number or "",
+                "coordinator_name": coord_name,
+                "role_name": role.name if role else "Operador",
+            })
+        _ok("build_operators_list", {"count": len(operators)})
+    except Exception as exc:
+        _fail("build_operators_list", exc)
+        return report
+
+    # Paso 7: generar Excel
+    try:
+        from app.services.planilla_excel import generate_planilla_xlsx
+        xlsx_bytes = generate_planilla_xlsx(
+            event_name=event.name,
+            event_date=event.start_date,
+            event_location=event.location,
+            operators=operators,
+            group_by="coordinator",
+            sort_by="lastname",
+        )
+        _ok("generate_xlsx", {"size_bytes": len(xlsx_bytes)})
+    except Exception as exc:
+        _fail("generate_xlsx", exc)
+
+    # Paso 8: generar PDF
+    try:
+        from app.services.planilla_pdf import generate_planilla_pdf
+        pdf_bytes = generate_planilla_pdf(
+            event_name=event.name,
+            event_date=event.start_date,
+            event_location=event.location,
+            operators=operators,
+            group_by="coordinator",
+            sort_by="lastname",
+        )
+        _ok("generate_pdf", {"size_bytes": len(pdf_bytes)})
+    except Exception as exc:
+        _fail("generate_pdf", exc)
+
+    report["success"] = len(report["errors"]) == 0
+    return report
+
+
+# ============================================================
 # FACTURAS PDF MASIVAS (ZIP)
 # ============================================================
 # Genera un ZIP con un PDF por cada operador pagado con firma.
