@@ -28,9 +28,22 @@ class StaffNeedResponse(BaseModel):
 
 # --- Coordinator Quota ---
 class CoordinatorQuotaCreate(BaseModel):
-    """Asignación de cupo a un coordinador (operador) en un evento nuevo."""
-    operator_id: uuid.UUID
+    """Asignación de cupo a un coordinador en un evento.
+
+    Acepta dos modos mutuamente excluyentes:
+      - operator_id (FK): coordinador real registrado en el sistema.
+      - coordinator_name (texto libre): coordinador legacy importado de Excel,
+        sin FK. Se conserva tal cual, NO se hace matching con ningún operador.
+    """
+    operator_id: Optional[uuid.UUID] = None
+    coordinator_name: Optional[str] = Field(None, max_length=200, description="Nombre legacy (texto libre, sin FK)")
     quota: int = Field(ge=0, description="Cupo informativo (no bloquea la asignación)")
+
+    @model_validator(mode='after')
+    def validate_coordinator(self):
+        if not self.operator_id and not self.coordinator_name:
+            raise ValueError('Debe proveer operator_id o coordinator_name')
+        return self
 
 
 class CoordinatorQuotaResponse(BaseModel):

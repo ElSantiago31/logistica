@@ -355,7 +355,12 @@ function collectQuotas(){
     document.querySelectorAll('#quotaRows > div[data-row-id]').forEach(row=>{
         const opId=row.querySelector('.quota-op').value;
         const val=parseInt(row.querySelector('.quota-val').value)||0;
-        if(opId && val>=0) out.push({operator_id:opId,quota:val});
+        if(val<0) return;
+        if(opId){
+            out.push({operator_id:opId,quota:val});
+        }else if((row.querySelector('.quota-search').value||'').trim()){
+            out.push({coordinator_name:(row.querySelector('.quota-search').value||'').trim().toUpperCase(),quota:val});
+        }
     });
     return out;
 }

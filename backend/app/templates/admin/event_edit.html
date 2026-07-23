@@ -330,10 +330,12 @@ async function loadEvent(){
     // Load staff system assignments
     await loadStaffUsers();
     await loadCurrentStaffAssignments();
-    // Load coordinator quotas (nuevo flujo)
+    // Load coordinator quotas (nuevo flujo + legacy)
     await loadCoordinators();
     if(ev.coordinator_quotas && ev.coordinator_quotas.length){
-        ev.coordinator_quotas.forEach(q => addQuotaRow(q.coordinator_operator_id, q.quota));
+        // Pasar q.coordinator como 3er arg (legacyName) para los coordinadores
+        // importados de Excel que NO tienen FK (coordinator_operator_id es null).
+        ev.coordinator_quotas.forEach(q => addQuotaRow(q.coordinator_operator_id, q.quota, q.coordinator));
     }
 }
 
@@ -398,25 +400,36 @@ async function loadCoordinators(){
         coordinatorOperators=(data.items||[]).filter(o=>o.is_active!==false);
     }catch(e){console.error('Error cargando coordinadores',e);}
 }
-function addQuotaRow(opId='',quota=5){
+function addQuotaRow(opId='',quota=5,legacyName=''){
     const div=document.getElementById('quotaRows');
     const rowId='qr'+Date.now()+Math.random().toString(36).slice(2,6);
     const row=document.createElement('div');
     row.className='relative grid grid-cols-[1fr_100px_40px] gap-2 items-center';
     row.dataset.rowId=rowId;
-    // Si viene un opId existente, resolver su nombre para mostrarlo en el input
+    // Resolver preset:
+    //  - opId (FK) → buscar coordinador real en la lista y armar label.
+    //  - legacyName (sin FK, importado de Excel) → usar el nombre tal cual,
+    //    marcar visualmente como legacy. NO se hace matching con nadie.
+    //  - ninguno → fila nueva vacía.
     let presetLabel='';
     let presetId='';
+    let isLegacy=false;
     if(opId){
         const o=coordinatorOperators.find(x=>(x.operator_id||x.id)===opId);
         if(o){
             presetId=opId;
             presetLabel=(o.full_name||o.name||'').toUpperCase()+(o.document_number?' · '+o.document_number:'');
         }
+    } else if(legacyName){
+        presetLabel=legacyName;
+        isLegacy=true;
     }
+    const legacyBadge=isLegacy?'<span class="absolute -top-2 left-2 bg-amber-100 text-amber-700 text-[10px] px-1 rounded border border-amber-300">Importado</span>':'';
+    const legacyBorder=isLegacy?'border-amber-300 bg-amber-50':'';
     row.innerHTML=`
         <div class="relative">
-            <input type="text" class="quota-search border rounded-lg px-3 py-2 text-sm w-full" placeholder="🔍 Buscar coordinador por nombre o cédula..." autocomplete="off" value="${presetLabel.replace(/"/g,'"')}" oninput="filterCoordinator(this,'${rowId}');this.closest('[data-row-id]').querySelector('.quota-op').value=''" onfocus="filterCoordinator(this,'${rowId}')">
+            ${legacyBadge}
+            <input type="text" class="quota-search border rounded-lg px-3 py-2 text-sm w-full ${legacyBorder}" placeholder="🔍 Buscar coordinador por nombre o cédula..." autocomplete="off" value="${presetLabel.replace(/"/g,'"')}" oninput="filterCoordinator(this,'${rowId}');this.closest('[data-row-id]').querySelector('.quota-op').value=''" onfocus="filterCoordinator(this,'${rowId}')">
             <input type="hidden" class="quota-op" value="${presetId}">
             <div class="quota-dropdown hidden absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto"></div>
         </div>
@@ -462,7 +475,15 @@ function collectQuotas(){
     document.querySelectorAll('#quotaRows > div[data-row-id]').forEach(row=>{
         const opId=row.querySelector('.quota-op').value;
         const val=parseInt(row.querySelector('.quota-val').value)||0;
-        if(opId && val>=0) out.push({operator_id:opId,quota:val});
+        const name=row.querySelector('.quota-search').value.trim();
+        if(opId && val>=0){
+            // Coordinador real (con FK).
+            out.push({operator_id:opId,quota:val});
+        } else if(name && val>=0){
+            // Coordinador legacy (texto libre, sin FK). Se conserva tal cual,
+            // no se hace matching con ningún operador.
+            out.push({coordinator_name:name,quota:val});
+        }
     });
     return out;
 }

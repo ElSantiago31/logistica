@@ -391,24 +391,28 @@ async def list_coordinators(
     current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lista coordinadores y operadores aptos para recibir cupos de coordinación.
+    """Lista SOLO coordinadores reales (user_type='coordinator').
 
     Devuelve campos normalizados para el selector de cupos en crear/editar evento:
     operator_id, user_id, full_name, document_number, phone, user_type.
 
-    Incluye cualquier usuario con perfil de operador (coordinator u operator),
-    ya que los cupos (EventCoordinatorQuota) referencian operators.id.
-    Prioriza coordinadores primero, luego operadores, ordenados alfabéticamente.
+    No incluye operadores comunes para evitar que aparezcan como sugerencia.
+    Los coordinadores legacy (importados de Excel, sin FK) se manejan como
+    texto libre en el frontend, no aparecen acá.
     """
+    # SOLO coordinadores reales (user_type='coordinator'). No incluir operadores
+    # comunes, para evitar que aparezcan como sugerencia en el selector de cupos.
     result = await db.execute(
         select(Operator, User)
         .join(User, User.id == Operator.user_id)
-        .where(User.is_active == True)
+        .where(
+            User.is_active == True,
+            User.user_type == "coordinator",
+        )
         .order_by(User.first_name, User.last_name)
     )
     rows = result.all()
-    # Ordenar: coordinadores primero, luego operadores
-    rows.sort(key=lambda r: (0 if r[1].user_type == "coordinator" else 1, r[1].first_name))
+    rows.sort(key=lambda r: (r[1].first_name, r[1].last_name))
     return {
         "items": [
             {

@@ -70,7 +70,11 @@ async def _save_coordinator_quotas(
 ) -> List[dict]:
     """Reemplaza las quotas de coordinadores de un evento (delete + insert).
 
-    `quotas_data` es una lista de dicts: [{operator_id, quota}, ...].
+    `quotas_data` es una lista de dicts/objetos con dos modos mutuamente excluyentes:
+      - {operator_id, quota}: coordinador real (con FK). Se resuelve el operador
+        y se guarda el nombre en MAYÚSCULAS.
+      - {coordinator_name, quota}: coordinador legacy (texto libre, sin FK).
+        Se conserva tal cual, NO se hace matching con ningún operador.
     Devuelve un resumen para el audit log.
     """
     # Borrar quotas existentes del evento.
@@ -83,25 +87,49 @@ async def _save_coordinator_quotas(
 
     summary = []
     for q in quotas_data:
-        operator_id = q.get("operator_id") if isinstance(q, dict) else q.operator_id
-        quota = q.get("quota") if isinstance(q, dict) else q.quota
-        # Resolver al objeto Operator (acepta user_id u operator_id).
-        operator = await _resolve_coordinator(db, operator_id)
-        if not operator:
-            continue  # operador inválido, se omite
-        u_result = await db.execute(select(User).where(User.id == operator.user_id))
-        user = u_result.scalar_one_or_none()
-        name = f"{user.first_name} {user.last_name}".upper() if user else None
-        if not name:
-            continue
-        ecq = EventCoordinatorQuota(
-            event_id=event_id,
-            coordinator_operator_id=operator.id,  # FK siempre a operators.id
-            coordinator=name,
-            quota=int(quota),
-        )
-        db.add(ecq)
-        summary.append({"operator_id": str(operator.id), "coordinator": name, "quota": int(quota)})
+        # Extraer campos según sea dict o modelo Pydantic.
+        if isinstance(q, dict):
+            operator_id = q.get("operator_id")
+            coordinator_name = q.get("coordinator_name")
+            quota = q.get("quota")
+        else:
+            operator_id = getattr(q, "operator_id", None)
+            coordinator_name = getattr(q, "coordinator_name", None)
+            quota = getattr(q, "quota", None)
+
+        # Modo 1: coordinador real (con FK).
+        if operator_id:
+            operator = await _resolve_coordinator(db, operator_id)
+            if not operator:
+                continue  # operador inválido, se omite
+            u_result = await db.execute(select(User).where(User.id == operator.user_id))
+            user = u_result.scalar_one_or_none()
+            name = f"{user.first_name} {user.last_name}".upper() if user else None
+            if not name:
+                continue
+            ecq = EventCoordinatorQuota(
+                event_id=event_id,
+                coordinator_operator_id=operator.id,
+                coordinator=name,
+                quota=int(quota),
+            )
+            db.add(ecq)
+            summary.append({"operator_id": str(operator.id), "coordinator": name, "quota": int(quota)})
+
+        # Modo 2: coordinador legacy (texto libre, sin FK).
+        elif coordinator_name:
+            name = str(coordinator_name).strip().upper()
+            if not name:
+                continue
+            ecq = EventCoordinatorQuota(
+                event_id=event_id,
+                coordinator_operator_id=None,  # sin FK
+                coordinator=name,
+                quota=int(quota),
+            )
+            db.add(ecq)
+            summary.append({"operator_id": None, "coordinator": name, "quota": int(quota)})
+
     return summary
 
 

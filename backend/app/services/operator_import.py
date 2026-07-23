@@ -496,10 +496,13 @@ async def _ensure_coordinator_quotas(
 
     Para cada coordinador del Excel:
     - Si YA tiene quota: la actualiza al count exacto del Excel (source of truth).
-    - Si NO tiene quota: la crea con quota = count (sin margen arbitrario).
+    - Si NO tiene quota: la crea como LEGACY (sin FK, texto libre).
 
-    Antes se creaba con count + 5 (margen) y no se actualizaban las existentes,
-    lo que dejaba quotas infladas (ej: 21 cuando debía ser 16).
+    IMPORTANTE: NO se hace matching por nombre contra TODOS los operadores de la BD.
+    Eso asignaba FKs falsas a operadores que no son coordinadores. La FK solo se
+    conserva si el coordinador ya existía en event_coordinator_quotas con FK
+    (es decir, fue cargado manualmente por el admin en crear/editar evento).
+    Los coordinadores nuevos del Excel se guardan como legacy (sin FK).
 
     Args:
         excel_coords: {norm_name: (display_name, count)} del Excel.
@@ -511,26 +514,8 @@ async def _ensure_coordinator_quotas(
     created = 0
     updated = 0
 
-    # Pre-cargar operadores de la BD para intentar resolver coordinator_operator_id
-    # por nombre (los coordinadores suelen ser operadores del sistema).
-    all_ops = await db.execute(text("""
-        SELECT o.id, u.first_name, u.last_name, u.document_number
-        FROM operators o
-        JOIN users u ON o.user_id = u.id
-        WHERE o.is_active = true
-    """))
-    ops_by_norm = {}
-    for r in all_ops:
-        full = f"{r.first_name or ''} {r.last_name or ''}".strip()
-        norm = _strip_accents(full).upper().strip()
-        ops_by_norm[norm] = str(r.id)
-        # También indexar por primer nombre para matching parcial
-        first_token = norm.split()[0] if norm.split() else ""
-        if first_token and first_token not in ops_by_norm:
-            ops_by_norm[first_token] = str(r.id)
-
     for cnorm, (display, count) in excel_coords.items():
-        # Buscar match exacto en las quotas existentes.
+        # Buscar match exacto en las quotas existentes (por nombre normalizado).
         matched = None
         for item in existing_coords:
             ex_op_id, ex_norm, ex_display = item
@@ -553,12 +538,8 @@ async def _ensure_coordinator_quotas(
             updated += 1
             continue
 
-        # No tiene quota → crear con quota = count exacto (sin margen +5).
-        coord_op_id = ops_by_norm.get(cnorm)
-        if not coord_op_id:
-            first_token = cnorm.split()[0] if cnorm.split() else ""
-            coord_op_id = ops_by_norm.get(first_token)
-
+        # No tiene quota → crear como LEGACY (sin FK, texto libre).
+        # NO se resuelve coordinator_operator_id contra operadores de la BD.
         display_upper = _strip_accents(display).upper().strip()
 
         try:
@@ -566,17 +547,16 @@ async def _ensure_coordinator_quotas(
                 INSERT INTO event_coordinator_quotas (
                     id, event_id, coordinator, coordinator_operator_id, quota
                 ) VALUES (
-                    gen_random_uuid(), :eid, :coord, :op_id, :quota
+                    gen_random_uuid(), :eid, :coord, NULL, :quota
                 )
                 ON CONFLICT DO NOTHING
             """), {
                 "eid": str(event_id),
                 "coord": display_upper,
-                "op_id": coord_op_id,
                 "quota": count,
             })
             created += 1
-            existing_coords.append((coord_op_id, cnorm, display_upper))
+            existing_coords.append((None, cnorm, display_upper))
         except Exception:
             pass
 
