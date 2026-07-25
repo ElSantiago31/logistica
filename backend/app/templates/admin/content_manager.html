@@ -1,0 +1,1102 @@
+{% extends "base.html" %}
+
+{% block title %}Administrador de contenido | A&C Eventos{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --admin-black: #050505;
+    --admin-panel: #0d0d0d;
+    --admin-panel-soft: #141414;
+    --admin-gold: #cf9b62;
+    --admin-gold-dark: #b48450;
+    --admin-white: #f7f5f2;
+    --admin-muted: #9d9891;
+    --admin-border: rgba(207, 155, 98, .2);
+    --admin-danger: #ef6f6c;
+    --admin-success: #69c18b;
+  }
+
+  body {
+    margin: 0;
+    background: var(--admin-black) !important;
+    color: var(--admin-white);
+    font-family: 'Manrope', sans-serif;
+  }
+
+  #main-nav {
+    display: none !important;
+  }
+
+  main {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 90% 0%, rgba(207,155,98,.08), transparent 26rem),
+      var(--admin-black);
+  }
+
+  .admin-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 265px minmax(0, 1fr);
+  }
+
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 1.3rem;
+    border-right: 1px solid var(--admin-border);
+    background: rgba(7,7,7,.96);
+  }
+
+  .admin-brand {
+    display: flex;
+    gap: .8rem;
+    align-items: center;
+    padding: .35rem .2rem 1.4rem;
+    border-bottom: 1px solid var(--admin-border);
+  }
+
+  .admin-brand img {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .admin-brand strong {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: .9rem;
+    line-height: 1.25;
+  }
+
+  .admin-brand span {
+    display: block;
+    margin-top: .25rem;
+    color: var(--admin-muted);
+    font-size: .68rem;
+  }
+
+  .admin-nav {
+    display: grid;
+    gap: .45rem;
+    margin-top: 1.5rem;
+  }
+
+  .admin-nav button,
+  .admin-nav a {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .82rem .9rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: #c7c2bc;
+    font: inherit;
+    font-size: .84rem;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: .2s ease;
+  }
+
+  .admin-nav button:hover,
+  .admin-nav a:hover,
+  .admin-nav button.active {
+    border-color: var(--admin-border);
+    background: rgba(207,155,98,.09);
+    color: var(--admin-gold);
+  }
+
+  .admin-sidebar-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--admin-border);
+  }
+
+  .admin-user {
+    display: flex;
+    gap: .7rem;
+    align-items: center;
+  }
+
+  .admin-avatar {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--admin-gold);
+    color: #050505;
+    font-size: .75rem;
+    font-weight: 800;
+  }
+
+  .admin-user strong {
+    display: block;
+    font-size: .78rem;
+  }
+
+  .admin-user span {
+    color: var(--admin-muted);
+    font-size: .68rem;
+  }
+
+  .admin-main {
+    min-width: 0;
+    padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 3rem;
+  }
+
+  .admin-topbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    min-height: 66px;
+    margin-bottom: 1.5rem;
+  }
+
+  .admin-topbar h1 {
+    margin: 0;
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1.35rem, 2.4vw, 2rem);
+  }
+
+  .admin-topbar p {
+    margin: .3rem 0 0;
+    color: var(--admin-muted);
+    font-size: .78rem;
+  }
+
+  .admin-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+  }
+
+  .admin-btn {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: .68rem 1rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--admin-white);
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition: .2s ease;
+  }
+
+  .admin-btn:hover {
+    transform: translateY(-1px);
+    border-color: var(--admin-gold);
+    color: var(--admin-gold);
+  }
+
+  .admin-btn-primary {
+    border-color: var(--admin-gold);
+    background: var(--admin-gold);
+    color: #050505;
+  }
+
+  .admin-btn-primary:hover {
+    background: #dda96d;
+    color: #050505;
+  }
+
+  .admin-btn-danger {
+    color: var(--admin-danger);
+    border-color: rgba(239,111,108,.35);
+  }
+
+  .admin-panel {
+    display: none;
+  }
+
+  .admin-panel.active {
+    display: block;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .9rem;
+  }
+
+  .stat-card {
+    padding: 1.2rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 14px;
+    background: var(--admin-panel);
+  }
+
+  .stat-card span {
+    color: var(--admin-muted);
+    font-size: .72rem;
+  }
+
+  .stat-card strong {
+    display: block;
+    margin-top: .5rem;
+    color: var(--admin-gold);
+    font-family: 'Cinzel', serif;
+    font-size: 1.7rem;
+  }
+
+  .section-card {
+    margin-top: 1rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 16px;
+    background: var(--admin-panel);
+    overflow: hidden;
+  }
+
+  .section-card-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.1rem 1.2rem;
+    border-bottom: 1px solid var(--admin-border);
+  }
+
+  .section-card-header h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .section-card-header p {
+    margin: .3rem 0 0;
+    color: var(--admin-muted);
+    font-size: .7rem;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  .admin-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    padding: .9rem 1rem;
+    border-bottom: 1px solid rgba(207,155,98,.10);
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  .admin-table th {
+    color: var(--admin-muted);
+    font-size: .67rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .admin-table td {
+    font-size: .78rem;
+  }
+
+  .content-title {
+    max-width: 350px;
+    font-weight: 700;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .35rem .55rem;
+    border-radius: 999px;
+    font-size: .65rem;
+    font-weight: 800;
+  }
+
+  .status-published {
+    background: rgba(105,193,139,.12);
+    color: var(--admin-success);
+  }
+
+  .status-draft {
+    background: rgba(207,155,98,.11);
+    color: var(--admin-gold);
+  }
+
+  .row-actions {
+    display: flex;
+    gap: .45rem;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--admin-white);
+    cursor: pointer;
+  }
+
+  .icon-btn:hover {
+    border-color: var(--admin-gold);
+    color: var(--admin-gold);
+  }
+
+  .icon-btn.delete:hover {
+    border-color: var(--admin-danger);
+    color: var(--admin-danger);
+  }
+
+  .gallery-admin-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: .85rem;
+    padding: 1rem;
+  }
+
+  .gallery-admin-card {
+    position: relative;
+    overflow: hidden;
+    min-height: 210px;
+    border: 1px solid var(--admin-border);
+    border-radius: 12px;
+    background: var(--admin-panel-soft);
+  }
+
+  .gallery-admin-card img {
+    width: 100%;
+    height: 155px;
+    object-fit: cover;
+  }
+
+  .gallery-admin-info {
+    padding: .75rem;
+  }
+
+  .gallery-admin-info strong {
+    display: block;
+    font-size: .75rem;
+  }
+
+  .gallery-admin-info span {
+    display: block;
+    margin-top: .2rem;
+    color: var(--admin-muted);
+    font-size: .65rem;
+  }
+
+  .gallery-delete {
+    position: absolute;
+    top: .55rem;
+    right: .55rem;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(239,111,108,.45);
+    border-radius: 50%;
+    background: rgba(5,5,5,.85);
+    color: var(--admin-danger);
+    cursor: pointer;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: .9rem;
+    padding: 1rem;
+  }
+
+  .form-field {
+    display: grid;
+    gap: .4rem;
+  }
+
+  .form-field-full {
+    grid-column: 1 / -1;
+  }
+
+  .form-field label {
+    color: #d0cbc5;
+    font-size: .72rem;
+    font-weight: 700;
+  }
+
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid var(--admin-border);
+    border-radius: 9px;
+    outline: none;
+    background: #080808;
+    color: var(--admin-white);
+    padding: .7rem .8rem;
+  }
+
+  .form-field textarea {
+    min-height: 130px;
+    resize: vertical;
+  }
+
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    border-color: var(--admin-gold);
+    box-shadow: 0 0 0 3px rgba(207,155,98,.08);
+  }
+
+  .upload-zone {
+    display: grid;
+    place-items: center;
+    min-height: 210px;
+    margin: 1rem;
+    padding: 1.3rem;
+    border: 1px dashed rgba(207,155,98,.45);
+    border-radius: 14px;
+    background: rgba(207,155,98,.035);
+    text-align: center;
+  }
+
+  .upload-zone input {
+    max-width: 100%;
+    margin-top: .8rem;
+    color: var(--admin-muted);
+  }
+
+  .empty-state {
+    padding: 2rem;
+    color: var(--admin-muted);
+    text-align: center;
+    font-size: .8rem;
+  }
+
+  .admin-toast {
+    position: fixed;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    z-index: 300;
+    max-width: 340px;
+    padding: .9rem 1rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 12px;
+    background: #111;
+    color: var(--admin-white);
+    font-size: .75rem;
+    box-shadow: 0 20px 55px rgba(0,0,0,.45);
+    opacity: 0;
+    transform: translateY(16px);
+    pointer-events: none;
+    transition: .25s ease;
+  }
+
+  .admin-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .mobile-admin-menu {
+    display: none;
+  }
+
+  @media (max-width: 1050px) {
+    .admin-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .admin-sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 200;
+      width: 265px;
+      transform: translateX(-105%);
+      transition: transform .25s ease;
+    }
+
+    .admin-sidebar.open {
+      transform: translateX(0);
+    }
+
+    .mobile-admin-menu {
+      display: inline-flex;
+    }
+
+    .stats-grid,
+    .gallery-admin-grid {
+      grid-template-columns: repeat(2, minmax(0,1fr));
+    }
+  }
+
+  @media (max-width: 680px) {
+    .admin-topbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .stats-grid,
+    .gallery-admin-grid,
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .form-field-full {
+      grid-column: auto;
+    }
+
+    .gallery-admin-card {
+      min-height: 250px;
+    }
+
+    .gallery-admin-card img {
+      height: 195px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="admin-auth-gate" style="position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#050505;color:#cf9b62;font-family:Manrope,sans-serif;">
+  <div style="text-align:center">
+    <img src="/static/frontend/logo.jpeg" alt="A&C Eventos" style="width:78px;height:78px;border-radius:50%;object-fit:cover;margin:0 auto 1rem;border:2px solid #cf9b62;">
+    <strong style="display:block;font-family:Cinzel,serif;letter-spacing:.08em">Verificando acceso administrativo</strong>
+    <span style="display:block;margin-top:.55rem;color:#8f8982;font-size:.76rem">Espera un momento…</span>
+  </div>
+</div>
+<div class="admin-shell" id="admin-content-shell" style="visibility:hidden">
+  <aside class="admin-sidebar" id="admin-sidebar">
+    <div class="admin-brand">
+      <img src="/static/frontend/logo.jpeg" alt="A&C Eventos">
+      <div>
+        <strong>A&C Eventos</strong>
+        <span>Administrador de contenido</span>
+      </div>
+    </div>
+
+    <nav class="admin-nav" aria-label="Navegación del administrador">
+      <button type="button" class="active" data-panel="dashboard">▦ Resumen</button>
+      <button type="button" data-panel="news">📰 Noticias</button>
+      <button type="button" data-panel="gallery">▧ Galería</button>
+      <button type="button" data-panel="services">◆ Servicios</button>
+      <button type="button" data-panel="contacts">✉ Solicitudes</button>
+      <a href="/" target="_blank" rel="noopener">↗ Ver página pública</a>
+      <a href="/admin">← Volver al panel</a>
+    </nav>
+
+    <div class="admin-sidebar-footer">
+      <div class="admin-user">
+        <div class="admin-avatar">AC</div>
+        <div>
+          <strong>Administrador</strong>
+          <span>Contenido web</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div>
+        <button type="button" class="admin-btn mobile-admin-menu" id="open-admin-menu">☰ Menú</button>
+        <h1 id="admin-page-title">Resumen del sitio</h1>
+        <p id="admin-page-description">Estado general del contenido visible en ayceventos.com.co.</p>
+      </div>
+
+      <div class="admin-actions">
+        <button type="button" class="admin-btn" id="reset-demo">Restaurar demo</button>
+        <a href="/" class="admin-btn admin-btn-primary" target="_blank" rel="noopener">Ver sitio</a>
+      </div>
+    </header>
+
+    <section class="admin-panel active" id="panel-dashboard">
+      <div class="stats-grid">
+        <article class="stat-card">
+          <span>Noticias registradas</span>
+          <strong id="stat-news">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Noticias publicadas</span>
+          <strong id="stat-published">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Imágenes en galería</span>
+          <strong id="stat-images">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Solicitudes nuevas</span>
+          <strong>0</strong>
+        </article>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Actividad reciente</h2>
+            <p>Vista preliminar de las acciones del administrador.</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          Esta primera versión funciona como prototipo local. Las acciones se guardan en el navegador mediante localStorage.
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-news">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Crear noticia</h2>
+            <p>Agrega una noticia temporal para probar el flujo del administrador.</p>
+          </div>
+        </div>
+
+        <form id="news-form" class="form-grid">
+          <div class="form-field">
+            <label for="news-title">Título *</label>
+            <input id="news-title" required maxlength="120">
+          </div>
+
+          <div class="form-field">
+            <label for="news-category">Categoría *</label>
+            <select id="news-category" required>
+              <option value="">Selecciona</option>
+              <option>Actualidad</option>
+              <option>Equipo</option>
+              <option>Eventos</option>
+              <option>Capacitación</option>
+            </select>
+          </div>
+
+          <div class="form-field form-field-full">
+            <label for="news-summary">Resumen *</label>
+            <textarea id="news-summary" required maxlength="320"></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="news-status">Estado</label>
+            <select id="news-status">
+              <option value="published">Publicada</option>
+              <option value="draft">Borrador</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="news-date">Fecha</label>
+            <input id="news-date" type="date">
+          </div>
+
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit">Guardar noticia</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Noticias registradas</h2>
+            <p>Edita el estado o elimina contenido de la demostración.</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Noticia</th>
+                <th>Categoría</th>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="news-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-gallery">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Montar imagen</h2>
+            <p>Selecciona una imagen local para verla dentro de esta demostración.</p>
+          </div>
+        </div>
+
+        <form class="upload-zone" id="gallery-form">
+          <div>
+            <strong>Agregar imagen a la galería</strong>
+            <p style="color:var(--admin-muted);font-size:.72rem;margin:.45rem 0 0">
+              En producción se subirá al servidor o a un servicio de almacenamiento.
+            </p>
+            <input id="gallery-file" type="file" accept="image/png,image/jpeg,image/webp" required>
+            <input id="gallery-title" type="text" placeholder="Título de la imagen" required
+              style="display:block;width:min(100%,420px);margin:.8rem auto 0;min-height:42px;border:1px solid var(--admin-border);border-radius:8px;background:#080808;color:white;padding:.7rem">
+            <button class="admin-btn admin-btn-primary" type="submit" style="margin-top:.8rem">Agregar imagen</button>
+          </div>
+        </form>
+
+        <div class="gallery-admin-grid" id="gallery-grid"></div>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-services">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Servicios</h2>
+            <p>Esta sección quedará disponible para administrar títulos, textos, imágenes y orden.</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          La página pública ya contiene seis servicios. La edición persistente se conectará con la base de datos en la siguiente etapa.
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-contacts">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Solicitudes de contacto</h2>
+            <p>Aquí aparecerán los formularios enviados desde la página pública.</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          Todavía no hay solicitudes porque el formulario público no se encuentra conectado al backend.
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="admin-toast" id="admin-toast"></div>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const STORAGE_NEWS = 'ayc_admin_demo_news';
+    const STORAGE_GALLERY = 'ayc_admin_demo_gallery';
+
+    const defaultNews = [
+      {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        title: 'Seguimos fortaleciendo nuestros equipos para grandes eventos',
+        category: 'Actualidad',
+        summary: 'Una operación sólida comienza con personas preparadas y coordinación clara.',
+        status: 'published',
+        date: '2026-07-14'
+      },
+      {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + 1),
+        title: 'Nuevas jornadas de capacitación operativa',
+        category: 'Capacitación',
+        summary: 'Entrenamiento, protocolos y preparación para responder mejor en cada servicio.',
+        status: 'draft',
+        date: '2026-07-10'
+      }
+    ];
+
+    const defaultGallery = [
+      { id: 'g1', title: 'Logística operativa', src: '/static/frontend/landing/gallery/gallery_1.jpg' },
+      { id: 'g2', title: 'Grandes eventos', src: '/static/frontend/landing/gallery/gallery_2.jpg' },
+      { id: 'g3', title: 'Producción y montaje', src: '/static/frontend/landing/gallery/gallery_3.jpg' },
+      { id: 'g4', title: 'Brigadas y prevención', src: '/static/frontend/landing/gallery/gallery_7.jpg' }
+    ];
+
+    let news = load(STORAGE_NEWS, defaultNews);
+    let gallery = load(STORAGE_GALLERY, defaultGallery);
+
+    const panelMetadata = {
+      dashboard: ['Resumen del sitio', 'Estado general del contenido visible en ayceventos.com.co.'],
+      news: ['Administrar noticias', 'Crea, publica, cambia el estado o elimina noticias.'],
+      gallery: ['Administrar galería', 'Monta y elimina fotografías de eventos.'],
+      services: ['Administrar servicios', 'Gestiona los servicios que se muestran en la página pública.'],
+      contacts: ['Solicitudes de contacto', 'Consulta los datos de personas y empresas interesadas.']
+    };
+
+    function load(key, fallback) {
+      try {
+        const data = JSON.parse(localStorage.getItem(key));
+        return Array.isArray(data) ? data : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_NEWS, JSON.stringify(news));
+      localStorage.setItem(STORAGE_GALLERY, JSON.stringify(gallery));
+    }
+
+    function toast(message) {
+      const element = document.getElementById('admin-toast');
+      element.textContent = message;
+      element.classList.add('show');
+      clearTimeout(window.__aycToastTimer);
+      window.__aycToastTimer = setTimeout(() => element.classList.remove('show'), 2600);
+    }
+
+    function renderStats() {
+      document.getElementById('stat-news').textContent = news.length;
+      document.getElementById('stat-published').textContent =
+        news.filter(item => item.status === 'published').length;
+      document.getElementById('stat-images').textContent = gallery.length;
+    }
+
+    function renderNews() {
+      const body = document.getElementById('news-table-body');
+
+      if (!news.length) {
+        body.innerHTML = '<tr><td colspan="5" class="empty-state">No hay noticias registradas.</td></tr>';
+        renderStats();
+        return;
+      }
+
+      body.innerHTML = news.map(item => `
+        <tr>
+          <td>
+            <div class="content-title">${escapeHtml(item.title)}</div>
+            <div style="color:var(--admin-muted);font-size:.68rem;margin-top:.25rem">${escapeHtml(item.summary)}</div>
+          </td>
+          <td>${escapeHtml(item.category)}</td>
+          <td>${escapeHtml(item.date || 'Sin fecha')}</td>
+          <td>
+            <span class="status-badge ${item.status === 'published' ? 'status-published' : 'status-draft'}">
+              ${item.status === 'published' ? 'Publicada' : 'Borrador'}
+            </span>
+          </td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" type="button" data-news-toggle="${item.id}" title="Cambiar estado">↻</button>
+              <button class="icon-btn delete" type="button" data-news-delete="${item.id}" title="Eliminar">×</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      renderStats();
+    }
+
+    function renderGallery() {
+      const grid = document.getElementById('gallery-grid');
+
+      if (!gallery.length) {
+        grid.innerHTML = '<div class="empty-state">No hay imágenes en la galería.</div>';
+        renderStats();
+        return;
+      }
+
+      grid.innerHTML = gallery.map(item => `
+        <article class="gallery-admin-card">
+          <button type="button" class="gallery-delete" data-gallery-delete="${item.id}" title="Eliminar imagen">×</button>
+          <img src="${item.src}" alt="${escapeHtml(item.title)}">
+          <div class="gallery-admin-info">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>Imagen de galería</span>
+          </div>
+        </article>
+      `).join('');
+
+      renderStats();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    document.querySelectorAll('[data-panel]').forEach(button => {
+      button.addEventListener('click', () => {
+        const panelName = button.dataset.panel;
+
+        document.querySelectorAll('[data-panel]').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach(panel => panel.classList.remove('active'));
+
+        button.classList.add('active');
+        document.getElementById('panel-' + panelName).classList.add('active');
+
+        document.getElementById('admin-page-title').textContent = panelMetadata[panelName][0];
+        document.getElementById('admin-page-description').textContent = panelMetadata[panelName][1];
+
+        document.getElementById('admin-sidebar').classList.remove('open');
+      });
+    });
+
+    document.getElementById('open-admin-menu').addEventListener('click', () => {
+      document.getElementById('admin-sidebar').classList.toggle('open');
+    });
+
+    document.getElementById('news-form').addEventListener('submit', event => {
+      event.preventDefault();
+
+      const title = document.getElementById('news-title').value.trim();
+      const category = document.getElementById('news-category').value;
+      const summary = document.getElementById('news-summary').value.trim();
+      const status = document.getElementById('news-status').value;
+      const date = document.getElementById('news-date').value;
+
+      news.unshift({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        title,
+        category,
+        summary,
+        status,
+        date
+      });
+
+      save();
+      renderNews();
+      event.target.reset();
+      toast('Noticia guardada en la demostración local.');
+    });
+
+    document.getElementById('news-table-body').addEventListener('click', event => {
+      const toggleId = event.target.dataset.newsToggle;
+      const deleteId = event.target.dataset.newsDelete;
+
+      if (toggleId) {
+        news = news.map(item =>
+          item.id === toggleId
+            ? { ...item, status: item.status === 'published' ? 'draft' : 'published' }
+            : item
+        );
+        save();
+        renderNews();
+        toast('Estado de la noticia actualizado.');
+      }
+
+      if (deleteId && confirm('¿Eliminar esta noticia de la demostración?')) {
+        news = news.filter(item => item.id !== deleteId);
+        save();
+        renderNews();
+        toast('Noticia eliminada.');
+      }
+    });
+
+    document.getElementById('gallery-form').addEventListener('submit', event => {
+      event.preventDefault();
+
+      const fileInput = document.getElementById('gallery-file');
+      const titleInput = document.getElementById('gallery-title');
+      const file = fileInput.files[0];
+
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        gallery.unshift({
+          id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+          title: titleInput.value.trim(),
+          src: reader.result
+        });
+
+        save();
+        renderGallery();
+        event.target.reset();
+        toast('Imagen agregada a la demostración local.');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('gallery-grid').addEventListener('click', event => {
+      const deleteId = event.target.dataset.galleryDelete;
+
+      if (deleteId && confirm('¿Quitar esta imagen de la galería?')) {
+        gallery = gallery.filter(item => item.id !== deleteId);
+        save();
+        renderGallery();
+        toast('Imagen eliminada.');
+      }
+    });
+
+    document.getElementById('reset-demo').addEventListener('click', () => {
+      if (!confirm('¿Restaurar todos los datos de demostración?')) return;
+
+      news = [...defaultNews];
+      gallery = [...defaultGallery];
+      save();
+      renderNews();
+      renderGallery();
+      toast('Demostración restaurada.');
+    });
+    async function verifyAdminAccess() {
+      const token = localStorage.getItem('access_token');
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const allowedRoles = ['superadmin', 'coordinator'];
+
+      if (!token || !allowedRoles.includes(storedUser.user_type)) {
+        sessionStorage.setItem('admin_redirect_after_login', '/admin/contenido');
+        window.location.replace('/admin/login');
+        return false;
+      }
+
+      try {
+        const response = await fetch('/api/auth/me', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        if (!response.ok) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          sessionStorage.setItem('admin_redirect_after_login', '/admin/contenido');
+          window.location.replace('/admin/login');
+          return false;
+        }
+
+        const currentUser = await response.json();
+        const role = currentUser.user_type || storedUser.user_type;
+
+        if (!allowedRoles.includes(role)) {
+          window.location.replace('/');
+          return false;
+        }
+
+        document.getElementById('admin-auth-gate')?.remove();
+        const shell = document.getElementById('admin-content-shell');
+        if (shell) shell.style.visibility = 'visible';
+        return true;
+      } catch (error) {
+        sessionStorage.setItem('admin_redirect_after_login', '/admin/contenido');
+        window.location.replace('/admin/login');
+        return false;
+      }
+    }
+
+    verifyAdminAccess().then((isAuthorized) => {
+      if (!isAuthorized) return;
+      renderNews();
+      renderGallery();
+    });
+  })();
+</script>
+{% endblock %}

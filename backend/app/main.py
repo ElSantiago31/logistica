@@ -182,6 +182,12 @@ async def operator_profile(request: Request):
 async def admin_page(request: Request):
     return templates.TemplateResponse("admin/index.html", {"request": request})
 
+@app.get("/admin/contenido", response_class=HTMLResponse)
+async def admin_content_manager(request: Request):
+    return templates.TemplateResponse(
+        "admin/content_manager.html",
+        {"request": request},
+    )
 
 @app.get("/admin/login", response_class=HTMLResponse)
 async def admin_login(request: Request):
