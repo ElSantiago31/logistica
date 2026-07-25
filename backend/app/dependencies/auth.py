@@ -101,3 +101,4 @@ def require_roles(*allowed_roles: str):
 require_superadmin = require_roles("superadmin")
 require_superadmin_or_admin = require_roles("superadmin", "admin")
 require_any_role = require_roles("superadmin", "admin", "checkin", "operator")
+require_content_manager = require_roles("superadmin", "admin", "web_admin")

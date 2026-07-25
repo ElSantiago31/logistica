@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     PHOTOS_THUMBNAIL_DIR: str = "./data/photos/thumbnails"
     PHOTO_MAX_SIZE_MB: int = 5
 
+    # Static assets base dir (sirve también imágenes de contenido de la home)
+    STATIC_DIR: str = "./data/static"
+    CONTENT_IMAGES_DIR: str = "./data/static/content"
+    CONTENT_MAX_IMAGES: int = 50
+
     # RUT (Registro Único Tributario) — PDF obligatorio en el registro
     RUT_DIR: str = "./data/rut"
     RUT_MAX_SIZE_MB: int = 5

@@ -1,17 +1,19 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.core.errors import register_exception_handlers
+from app.database import get_db
 from app.dependencies.rate_limit import limiter
 from app.routers import auth as auth_router
 from app.routers import operators as operators_router
@@ -23,6 +25,7 @@ from app.routers import payroll as payroll_router
 from app.routers import reports as reports_router
 from app.routers import coordinator as coordinator_router
 from app.routers import incidents as incidents_router
+from app.routers import content as content_router
 from app.websockets import router as ws_router
 
 
@@ -62,6 +65,7 @@ app.include_router(payroll_router.router)
 app.include_router(reports_router.router)
 app.include_router(coordinator_router.router)
 app.include_router(incidents_router.router)
+app.include_router(content_router.router)
 app.include_router(ws_router.router)
 
 # Templates Jinja2
@@ -88,9 +92,13 @@ os.makedirs(FRONTEND_JS, exist_ok=True)
 for _d in (settings.PHOTOS_DIR, settings.PHOTOS_THUMBNAIL_DIR, settings.RUT_DIR):
     os.makedirs(_d, exist_ok=True)
 
+# Asegurar existencia del directorio de imágenes de contenido (static)
+os.makedirs(settings.CONTENT_IMAGES_DIR, exist_ok=True)
+
 # Mount static files for photos and RUT PDFs
 app.mount("/static/photos", StaticFiles(directory=settings.PHOTOS_DIR), name="photos")
 app.mount("/static/rut", StaticFiles(directory=settings.RUT_DIR), name="rut")
+app.mount("/static/content", StaticFiles(directory=settings.CONTENT_IMAGES_DIR), name="content_images")
 app.mount("/static/frontend", StaticFiles(directory=FRONTEND_PUBLIC), name="frontend_static")
 app.mount("/static/js", StaticFiles(directory=FRONTEND_JS), name="frontend_js")
 
@@ -285,9 +293,18 @@ async def coordinator_event(request: Request, event_id: str):
 
 
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    """Root — Landing principal de la empresa."""
-    return templates.TemplateResponse("landing/home.html", {"request": request})
+async def root(request: Request, db: AsyncSession = Depends(get_db)):
+    """Root — Landing principal de la empresa (SSR con contenido desde la BD)."""
+    from app.services import content as content_service
+    try:
+        content = await content_service.get_homepage_content(db)
+    except Exception:
+        # Si la tabla aún no existe (pre-migración), servir home sin datos.
+        content = {"sections": {}, "services": [], "news": [], "gallery": []}
+    return templates.TemplateResponse(
+        "landing/home.html",
+        {"request": request, "content": content},
+    )
 
 
 @app.get("/colaboradores", response_class=HTMLResponse)

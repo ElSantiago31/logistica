@@ -97,6 +97,8 @@
             if (token && user.user_type) {
                 if (['superadmin', 'admin'].includes(user.user_type)) {
                     window.location.href = '/admin';
+                } else if (user.user_type === 'web_admin') {
+                    window.location.href = '/admin/contenido';
                 } else if (user.user_type === 'checkin') {
                     window.location.href = '/staff';
                 } else if (user.user_type === 'operator') {
@@ -159,7 +161,9 @@
                     // Redirect based on user role
                     const userType = data.user.user_type;
                     let redirectUrl = '/admin';
-                    if (userType === 'checkin') {
+                    if (userType === 'web_admin') {
+                        redirectUrl = '/admin/contenido';
+                    } else if (userType === 'checkin') {
                         redirectUrl = '/staff';
                     } else if (userType === 'operator') {
                         redirectUrl = '/enrolamiento/perfil';

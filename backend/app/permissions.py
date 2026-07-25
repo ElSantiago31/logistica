@@ -5,7 +5,7 @@ Replaces the scattered inline checks like ``user.user_type not in (...)``.
 
 NOTE on terminology:
   - ``user_type`` is the SYSTEM role of a user account (who can log in):
-      ``superadmin``, ``admin``, ``checkin``, ``operator``.
+      ``superadmin``, ``admin``, ``checkin``, ``operator``, ``web_admin``.
   - ``coordinator`` as a *concept* (event area leader, planilla grouping,
     EventCoordinatorQuota, /coordinador module) is NOT a user_type and is
     kept intact. It lives as data inside events, not as a login role.
@@ -23,18 +23,19 @@ SUPERADMIN = "superadmin"
 ADMIN = "admin"
 CHECKIN = "checkin"
 OPERATOR = "operator"
+WEB_ADMIN = "web_admin"
 
-ALL_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, OPERATOR})
+ALL_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, OPERATOR, WEB_ADMIN})
 
 # Management = users who run the back-office (dashboard, events, operators).
 MANAGEMENT_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN})
 
 # All staff (non-operator) accounts that may appear in admin views.
-ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN})
+ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, WEB_ADMIN})
 
 # Roles allowed to be CREATED from /admin/superadmin (depending on caller).
 CREATABLE_BY_ADMIN: frozenset[str] = frozenset({CHECKIN})
-CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({ADMIN, CHECKIN})
+CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({ADMIN, CHECKIN, WEB_ADMIN})
 
 
 # ------------------------------------------------------------------
@@ -58,6 +59,15 @@ def is_checkin(user: User | None) -> bool:
 
 def is_operator(user: User | None) -> bool:
     return _roles(user) == OPERATOR
+
+
+def is_web_admin(user: User | None) -> bool:
+    """Web content editor. Can only manage site content (homepage, news, gallery)."""
+    return _roles(user) == WEB_ADMIN
+
+
+# Roles allowed to manage site content (web admin panel /admin/contenido).
+CONTENT_MANAGEMENT_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, WEB_ADMIN})
 
 
 # ------------------------------------------------------------------
@@ -120,6 +130,15 @@ def can_create_admin(user: User | None) -> bool:
 def can_checkin(user: User | None) -> bool:
     """Perform event check-in (staff & operators with staff assignment)."""
     return _roles(user) in ALL_STAFF
+
+
+def can_manage_content(user: User | None) -> bool:
+    """Manage site content (sections, services, news, gallery, contact inbox).
+
+    Allowed for superadmin, admin and web_admin. Web admins can ONLY access
+    this module (no operators, events, payroll, etc.).
+    """
+    return _roles(user) in CONTENT_MANAGEMENT_ROLES
 
 
 def creatable_roles_for(user: User | None) -> list[str]:

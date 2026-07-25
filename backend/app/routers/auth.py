@@ -434,7 +434,7 @@ async def list_admins(
       frontend hides edit/delete actions on admin/superadmin rows.
     """
     result = await db.execute(
-        select(User).where(User.user_type.in_(["superadmin", "admin", "checkin"])).order_by(User.created_at.desc())
+        select(User).where(User.user_type.in_(["superadmin", "admin", "checkin", "web_admin"])).order_by(User.created_at.desc())
     )
     admins = result.scalars().all()
     return [{"id": str(a.id), "email": a.email, "first_name": a.first_name, "last_name": a.last_name,

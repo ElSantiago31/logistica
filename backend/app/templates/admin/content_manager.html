@@ -28,9 +28,7 @@
     font-family: 'Manrope', sans-serif;
   }
 
-  #main-nav {
-    display: none !important;
-  }
+  #main-nav { display: none !important; }
 
   main {
     min-height: 100vh;
@@ -142,15 +140,8 @@
     font-weight: 800;
   }
 
-  .admin-user strong {
-    display: block;
-    font-size: .78rem;
-  }
-
-  .admin-user span {
-    color: var(--admin-muted);
-    font-size: .68rem;
-  }
+  .admin-user strong { display: block; font-size: .78rem; }
+  .admin-user span { color: var(--admin-muted); font-size: .68rem; }
 
   .admin-main {
     min-width: 0;
@@ -225,13 +216,8 @@
     border-color: rgba(239,111,108,.35);
   }
 
-  .admin-panel {
-    display: none;
-  }
-
-  .admin-panel.active {
-    display: block;
-  }
+  .admin-panel { display: none; }
+  .admin-panel.active { display: block; }
 
   .stats-grid {
     display: grid;
@@ -246,11 +232,7 @@
     background: var(--admin-panel);
   }
 
-  .stat-card span {
-    color: var(--admin-muted);
-    font-size: .72rem;
-  }
-
+  .stat-card span { color: var(--admin-muted); font-size: .72rem; }
   .stat-card strong {
     display: block;
     margin-top: .5rem;
@@ -276,20 +258,14 @@
     border-bottom: 1px solid var(--admin-border);
   }
 
-  .section-card-header h2 {
-    margin: 0;
-    font-size: 1rem;
-  }
-
+  .section-card-header h2 { margin: 0; font-size: 1rem; }
   .section-card-header p {
     margin: .3rem 0 0;
     color: var(--admin-muted);
     font-size: .7rem;
   }
 
-  .table-wrap {
-    overflow-x: auto;
-  }
+  .table-wrap { overflow-x: auto; }
 
   .admin-table {
     width: 100%;
@@ -312,9 +288,7 @@
     text-transform: uppercase;
   }
 
-  .admin-table td {
-    font-size: .78rem;
-  }
+  .admin-table td { font-size: .78rem; }
 
   .content-title {
     max-width: 350px;
@@ -329,17 +303,14 @@
     border-radius: 999px;
     font-size: .65rem;
     font-weight: 800;
+    cursor: pointer;
   }
 
-  .status-published {
-    background: rgba(105,193,139,.12);
-    color: var(--admin-success);
-  }
-
-  .status-draft {
-    background: rgba(207,155,98,.11);
-    color: var(--admin-gold);
-  }
+  .status-new { background: rgba(105,193,139,.12); color: var(--admin-success); }
+  .status-read { background: rgba(207,155,98,.11); color: var(--admin-gold); }
+  .status-archived { background: rgba(157,152,145,.12); color: var(--admin-muted); }
+  .status-published { background: rgba(105,193,139,.12); color: var(--admin-success); }
+  .status-draft { background: rgba(207,155,98,.11); color: var(--admin-gold); }
 
   .row-actions {
     display: flex;
@@ -390,15 +361,8 @@
     object-fit: cover;
   }
 
-  .gallery-admin-info {
-    padding: .75rem;
-  }
-
-  .gallery-admin-info strong {
-    display: block;
-    font-size: .75rem;
-  }
-
+  .gallery-admin-info { padding: .75rem; }
+  .gallery-admin-info strong { display: block; font-size: .75rem; }
   .gallery-admin-info span {
     display: block;
     margin-top: .2rem;
@@ -426,14 +390,8 @@
     padding: 1rem;
   }
 
-  .form-field {
-    display: grid;
-    gap: .4rem;
-  }
-
-  .form-field-full {
-    grid-column: 1 / -1;
-  }
+  .form-field { display: grid; gap: .4rem; }
+  .form-field-full { grid-column: 1 / -1; }
 
   .form-field label {
     color: #d0cbc5;
@@ -467,21 +425,140 @@
   }
 
   .upload-zone {
+    position: relative;
     display: grid;
     place-items: center;
     min-height: 210px;
     margin: 1rem;
     padding: 1.3rem;
-    border: 1px dashed rgba(207,155,98,.45);
+    border: 1.5px dashed rgba(207,155,98,.45);
     border-radius: 14px;
     background: rgba(207,155,98,.035);
     text-align: center;
+    cursor: pointer;
+    transition: .2s ease;
   }
 
-  .upload-zone input {
-    max-width: 100%;
-    margin-top: .8rem;
+  .upload-zone:hover {
+    border-color: var(--admin-gold);
+    background: rgba(207,155,98,.07);
+  }
+
+  .upload-zone.dragover {
+    border-color: var(--admin-gold);
+    border-style: solid;
+    background: rgba(207,155,98,.12);
+    transform: scale(1.005);
+    box-shadow: 0 0 0 4px rgba(207,155,98,.12);
+  }
+
+  .upload-zone input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .upload-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    margin: 0 auto .6rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 50%;
+    color: var(--admin-gold);
+    font-size: 1.3rem;
+    transition: .2s ease;
+  }
+
+  .upload-zone:hover .upload-icon,
+  .upload-zone.dragover .upload-icon {
+    transform: translateY(-2px);
+    border-color: var(--admin-gold);
+  }
+
+  .upload-filename {
+    display: none;
+    margin-top: .6rem;
+    padding: .35rem .65rem;
+    border-radius: 6px;
+    background: rgba(207,155,98,.12);
+    color: var(--admin-gold);
+    font-size: .72rem;
+    font-weight: 700;
+    word-break: break-all;
+  }
+
+  .upload-filename.show { display: inline-block; }
+
+  /* Campos de imagen con drag & drop + preview */
+  .image-field-wrapper {
+    display: grid;
+    gap: .5rem;
+  }
+
+  .image-drop-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 110px;
+    border: 1.5px dashed var(--admin-border);
+    border-radius: 10px;
+    background: rgba(207,155,98,.03);
+    cursor: pointer;
+    overflow: hidden;
+    transition: .2s ease;
+  }
+
+  .image-drop-area:hover {
+    border-color: var(--admin-gold);
+    background: rgba(207,155,98,.07);
+  }
+
+  .image-drop-area.dragover {
+    border-color: var(--admin-gold);
+    border-style: solid;
+    background: rgba(207,155,98,.12);
+    box-shadow: 0 0 0 4px rgba(207,155,98,.12);
+  }
+
+  .image-preview {
+    width: 100%;
+    max-height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+  }
+
+  .image-drop-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .35rem;
+    padding: 1rem;
     color: var(--admin-muted);
+    font-size: .72rem;
+    text-align: center;
+  }
+
+  .image-drop-icon {
+    font-size: 1.2rem;
+    color: var(--admin-gold);
+  }
+
+  .image-drop-progress {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(5,5,5,.85);
+    color: var(--admin-gold);
+    font-size: .78rem;
+    font-weight: 700;
   }
 
   .empty-state {
@@ -515,14 +592,32 @@
     transform: translateY(0);
   }
 
-  .mobile-admin-menu {
-    display: none;
+  .admin-toast.success { border-color: rgba(105,193,139,.5); }
+  .admin-toast.error { border-color: rgba(239,111,108,.5); }
+
+  .mobile-admin-menu { display: none; }
+
+  .hero-preview {
+    padding: 1rem;
+    border-radius: 10px;
+    background: linear-gradient(90deg, rgba(5,5,5,.94) 0%, rgba(5,5,5,.70) 42%, rgba(5,5,5,.22) 100%),
+                var(--admin-panel-soft);
+    min-height: 120px;
+    margin-top: .8rem;
   }
 
+  .contact-detail {
+    background: var(--admin-panel-soft);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: .5rem;
+  }
+
+  .contact-detail p { margin: .35rem 0; font-size: .78rem; }
+  .contact-detail strong { color: var(--admin-gold); }
+
   @media (max-width: 1050px) {
-    .admin-shell {
-      grid-template-columns: 1fr;
-    }
+    .admin-shell { grid-template-columns: 1fr; }
 
     .admin-sidebar {
       position: fixed;
@@ -533,13 +628,8 @@
       transition: transform .25s ease;
     }
 
-    .admin-sidebar.open {
-      transform: translateX(0);
-    }
-
-    .mobile-admin-menu {
-      display: inline-flex;
-    }
+    .admin-sidebar.open { transform: translateX(0); }
+    .mobile-admin-menu { display: inline-flex; }
 
     .stats-grid,
     .gallery-admin-grid {
@@ -559,17 +649,10 @@
       grid-template-columns: 1fr;
     }
 
-    .form-field-full {
-      grid-column: auto;
-    }
+    .form-field-full { grid-column: auto; }
 
-    .gallery-admin-card {
-      min-height: 250px;
-    }
-
-    .gallery-admin-card img {
-      height: 195px;
-    }
+    .gallery-admin-card { min-height: 250px; }
+    .gallery-admin-card img { height: 195px; }
   }
 </style>
 {% endblock %}
@@ -582,6 +665,7 @@
     <span style="display:block;margin-top:.55rem;color:#8f8982;font-size:.76rem">Espera un momento…</span>
   </div>
 </div>
+
 <div class="admin-shell" id="admin-content-shell" style="visibility:hidden">
   <aside class="admin-sidebar" id="admin-sidebar">
     <div class="admin-brand">
@@ -594,9 +678,11 @@
 
     <nav class="admin-nav" aria-label="Navegación del administrador">
       <button type="button" class="active" data-panel="dashboard">▦ Resumen</button>
+      <button type="button" data-panel="hero">★ Inicio (Hero)</button>
+      <button type="button" data-panel="about">✎ Nosotros</button>
+      <button type="button" data-panel="services">◆ Servicios</button>
       <button type="button" data-panel="news">📰 Noticias</button>
       <button type="button" data-panel="gallery">▧ Galería</button>
-      <button type="button" data-panel="services">◆ Servicios</button>
       <button type="button" data-panel="contacts">✉ Solicitudes</button>
       <a href="/" target="_blank" rel="noopener">↗ Ver página pública</a>
       <a href="/admin">← Volver al panel</a>
@@ -604,10 +690,10 @@
 
     <div class="admin-sidebar-footer">
       <div class="admin-user">
-        <div class="admin-avatar">AC</div>
+        <div class="admin-avatar" id="user-initials">AC</div>
         <div>
-          <strong>Administrador</strong>
-          <span>Contenido web</span>
+          <strong id="user-name">Administrador</strong>
+          <span id="user-role">Contenido web</span>
         </div>
       </div>
     </div>
@@ -622,20 +708,21 @@
       </div>
 
       <div class="admin-actions">
-        <button type="button" class="admin-btn" id="reset-demo">Restaurar demo</button>
+        <button type="button" class="admin-btn admin-btn-danger" id="cleanup-btn">Limpiar huérfanos</button>
         <a href="/" class="admin-btn admin-btn-primary" target="_blank" rel="noopener">Ver sitio</a>
       </div>
     </header>
 
+    <!-- DASHBOARD -->
     <section class="admin-panel active" id="panel-dashboard">
       <div class="stats-grid">
         <article class="stat-card">
-          <span>Noticias registradas</span>
-          <strong id="stat-news">0</strong>
+          <span>Servicios activos</span>
+          <strong id="stat-services">0</strong>
         </article>
         <article class="stat-card">
           <span>Noticias publicadas</span>
-          <strong id="stat-published">0</strong>
+          <strong id="stat-news">0</strong>
         </article>
         <article class="stat-card">
           <span>Imágenes en galería</span>
@@ -643,38 +730,178 @@
         </article>
         <article class="stat-card">
           <span>Solicitudes nuevas</span>
-          <strong>0</strong>
+          <strong id="stat-contacts">0</strong>
         </article>
       </div>
 
       <div class="section-card">
         <div class="section-card-header">
           <div>
-            <h2>Actividad reciente</h2>
-            <p>Vista preliminar de las acciones del administrador.</p>
+            <h2>Estado del contenido</h2>
+            <p>Resumen de lo que se muestra en la home pública.</p>
           </div>
         </div>
-        <div class="empty-state">
-          Esta primera versión funciona como prototipo local. Las acciones se guardan en el navegador mediante localStorage.
+        <div id="dashboard-summary" class="empty-state">Cargando…</div>
+      </div>
+    </section>
+
+    <!-- HERO -->
+    <section class="admin-panel" id="panel-hero">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Sección de inicio (Hero)</h2>
+            <p>Encabezado principal de la home.</p>
+          </div>
+        </div>
+        <form id="hero-form" class="form-grid">
+          <div class="form-field">
+            <label for="hero-eyebrow">Texto pequeño (eyebrow)</label>
+            <input id="hero-eyebrow" placeholder="Logística y producción de eventos">
+          </div>
+          <div class="form-field">
+            <label for="hero-title">Título principal</label>
+            <input id="hero-title" placeholder="Hacemos posible">
+          </div>
+          <div class="form-field">
+            <label for="hero-highlight">Resaltado dorado</label>
+            <input id="hero-highlight" placeholder="grandes eventos.">
+          </div>
+          <div class="form-field">
+            <label for="hero-cta-primary">Botón primario</label>
+            <input id="hero-cta-primary" placeholder="Solicitar una cotización">
+          </div>
+          <div class="form-field">
+            <label for="hero-cta-secondary">Botón secundario</label>
+            <input id="hero-cta-secondary" placeholder="Conocer nuestros servicios">
+          </div>
+          <div class="form-field">
+            <label for="hero-background">URL imagen de fondo (opcional)</label>
+            <input id="hero-background" data-image-upload placeholder="/static/content/hero.jpg">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="hero-description">Descripción</label>
+            <textarea id="hero-description" placeholder="Texto del hero…"></textarea>
+          </div>
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit">Guardar sección Hero</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="admin-panel" id="panel-about">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Sección Nosotros</h2>
+            <p>Presentación de la empresa y puntos fuertes.</p>
+          </div>
+        </div>
+        <form id="about-form" class="form-grid">
+          <div class="form-field">
+            <label for="about-eyebrow">Texto pequeño (eyebrow)</label>
+            <input id="about-eyebrow" placeholder="Quiénes somos">
+          </div>
+          <div class="form-field">
+            <label for="about-badge">Texto del badge circular</label>
+            <input id="about-badge" placeholder="Operación humana, técnica y confiable">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="about-title">Título</label>
+            <input id="about-title" placeholder="Un equipo preparado…">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="about-description">Descripción</label>
+            <textarea id="about-description"></textarea>
+          </div>
+          <div class="form-field">
+            <label for="about-main-image">URL imagen principal</label>
+            <input id="about-main-image" data-image-upload placeholder="/static/frontend/landing/gallery/gallery_7.jpg">
+          </div>
+          <div class="form-field">
+            <label for="about-detail-image">URL imagen detalle</label>
+            <input id="about-detail-image" data-image-upload placeholder="/static/frontend/landing/gallery/gallery_3.jpg">
+          </div>
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit">Guardar sección Nosotros</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- SERVICES -->
+    <section class="admin-panel" id="panel-services">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Crear servicio</h2>
+            <p>Agrega un servicio a la home pública.</p>
+          </div>
+        </div>
+        <form id="service-form" class="form-grid">
+          <input type="hidden" id="service-id">
+          <div class="form-field">
+            <label for="service-title">Título *</label>
+            <input id="service-title" required maxlength="120">
+          </div>
+          <div class="form-field">
+            <label for="service-order">Orden</label>
+            <input id="service-order" type="number" min="0" value="0">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="service-description">Descripción *</label>
+            <textarea id="service-description" required maxlength="2000"></textarea>
+          </div>
+          <div class="form-field">
+            <label for="service-image">URL imagen de fondo</label>
+            <input id="service-image" data-image-upload placeholder="/static/content/servicio.jpg">
+          </div>
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit" id="service-submit">Crear servicio</button>
+            <button class="admin-btn" type="button" id="service-cancel" style="display:none">Cancelar edición</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Servicios actuales</h2>
+            <p>Edita o elimina los servicios visibles en la home.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Servicio</th>
+                <th>Orden</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="services-table-body"></tbody>
+          </table>
         </div>
       </div>
     </section>
 
+    <!-- NEWS -->
     <section class="admin-panel" id="panel-news">
       <div class="section-card">
         <div class="section-card-header">
           <div>
             <h2>Crear noticia</h2>
-            <p>Agrega una noticia temporal para probar el flujo del administrador.</p>
+            <p>Las noticias publicadas aparecen en la home pública.</p>
           </div>
         </div>
-
         <form id="news-form" class="form-grid">
+          <input type="hidden" id="news-id">
           <div class="form-field">
             <label for="news-title">Título *</label>
-            <input id="news-title" required maxlength="120">
+            <input id="news-title" required maxlength="160">
           </div>
-
           <div class="form-field">
             <label for="news-category">Categoría *</label>
             <select id="news-category" required>
@@ -685,12 +912,10 @@
               <option>Capacitación</option>
             </select>
           </div>
-
           <div class="form-field form-field-full">
             <label for="news-summary">Resumen *</label>
-            <textarea id="news-summary" required maxlength="320"></textarea>
+            <textarea id="news-summary" required maxlength="2000"></textarea>
           </div>
-
           <div class="form-field">
             <label for="news-status">Estado</label>
             <select id="news-status">
@@ -698,14 +923,17 @@
               <option value="draft">Borrador</option>
             </select>
           </div>
-
           <div class="form-field">
-            <label for="news-date">Fecha</label>
-            <input id="news-date" type="date">
+            <label for="news-order">Orden</label>
+            <input id="news-order" type="number" min="0" value="0">
           </div>
-
           <div class="form-field form-field-full">
-            <button class="admin-btn admin-btn-primary" type="submit">Guardar noticia</button>
+            <label for="news-image">URL imagen (opcional)</label>
+            <input id="news-image" data-image-upload placeholder="/static/content/noticia.jpg">
+          </div>
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit" id="news-submit">Guardar noticia</button>
+            <button class="admin-btn" type="button" id="news-cancel" style="display:none">Cancelar edición</button>
           </div>
         </form>
       </div>
@@ -714,17 +942,15 @@
         <div class="section-card-header">
           <div>
             <h2>Noticias registradas</h2>
-            <p>Edita el estado o elimina contenido de la demostración.</p>
+            <p>Edita, cambia estado o elimina noticias.</p>
           </div>
         </div>
-
         <div class="table-wrap">
           <table class="admin-table">
             <thead>
               <tr>
                 <th>Noticia</th>
                 <th>Categoría</th>
-                <th>Fecha</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -735,56 +961,89 @@
       </div>
     </section>
 
+    <!-- GALLERY -->
     <section class="admin-panel" id="panel-gallery">
       <div class="section-card">
         <div class="section-card-header">
           <div>
-            <h2>Montar imagen</h2>
-            <p>Selecciona una imagen local para verla dentro de esta demostración.</p>
+            <h2>Agregar imagen</h2>
+            <p>Sube una imagen y agrégala a la galería pública.</p>
           </div>
         </div>
-
-        <form class="upload-zone" id="gallery-form">
+        <form id="gallery-upload-form" class="upload-zone">
           <div>
-            <strong>Agregar imagen a la galería</strong>
+            <div class="upload-icon">⇪</div>
+            <strong>Arrastra una imagen aquí o haz clic para seleccionarla</strong>
             <p style="color:var(--admin-muted);font-size:.72rem;margin:.45rem 0 0">
-              En producción se subirá al servidor o a un servicio de almacenamiento.
+              Formatos: JPG, PNG, WEBP. Se almacenará en el servidor.
             </p>
             <input id="gallery-file" type="file" accept="image/png,image/jpeg,image/webp" required>
-            <input id="gallery-title" type="text" placeholder="Título de la imagen" required
-              style="display:block;width:min(100%,420px);margin:.8rem auto 0;min-height:42px;border:1px solid var(--admin-border);border-radius:8px;background:#080808;color:white;padding:.7rem">
-            <button class="admin-btn admin-btn-primary" type="submit" style="margin-top:.8rem">Agregar imagen</button>
+            <span class="upload-filename" id="gallery-filename"></span>
+            <button class="admin-btn admin-btn-primary" type="submit" style="margin-top:.8rem" id="gallery-upload-btn">Subir imagen</button>
           </div>
         </form>
 
+        <form id="gallery-form" class="form-grid" style="display:none">
+          <input type="hidden" id="gallery-image-url">
+          <div class="form-field">
+            <label for="gallery-title">Título *</label>
+            <input id="gallery-title" required maxlength="160">
+          </div>
+          <div class="form-field">
+            <label for="gallery-caption">Descripción corta</label>
+            <input id="gallery-caption" maxlength="255">
+          </div>
+          <div class="form-field">
+            <label for="gallery-order">Orden</label>
+            <input id="gallery-order" type="number" min="0" value="0">
+          </div>
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit">Agregar a galería</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Galería actual</h2>
+            <p>Imágenes visibles en la sección "Experiencia".</p>
+          </div>
+        </div>
         <div class="gallery-admin-grid" id="gallery-grid"></div>
       </div>
     </section>
 
-    <section class="admin-panel" id="panel-services">
-      <div class="section-card">
-        <div class="section-card-header">
-          <div>
-            <h2>Servicios</h2>
-            <p>Esta sección quedará disponible para administrar títulos, textos, imágenes y orden.</p>
-          </div>
-        </div>
-        <div class="empty-state">
-          La página pública ya contiene seis servicios. La edición persistente se conectará con la base de datos en la siguiente etapa.
-        </div>
-      </div>
-    </section>
-
+    <!-- CONTACTS -->
     <section class="admin-panel" id="panel-contacts">
       <div class="section-card">
         <div class="section-card-header">
           <div>
-            <h2>Solicitudes de contacto</h2>
-            <p>Aquí aparecerán los formularios enviados desde la página pública.</p>
+            <h2>Bandeja de solicitudes</h2>
+            <p>Formularios recibidos desde la home pública.</p>
+          </div>
+          <div class="admin-actions">
+            <select id="contacts-filter" class="admin-btn" style="padding-right:2rem">
+              <option value="">Todas</option>
+              <option value="new">Nuevas</option>
+              <option value="read">Leídas</option>
+              <option value="archived">Archivadas</option>
+            </select>
           </div>
         </div>
-        <div class="empty-state">
-          Todavía no hay solicitudes porque el formulario público no se encuentra conectado al backend.
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Contacto</th>
+                <th>Servicio</th>
+                <th>Recibido</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="contacts-table-body"></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -798,155 +1057,299 @@
 
 {% block scripts %}
 <script>
-  (function () {
-    const STORAGE_NEWS = 'ayc_admin_demo_news';
-    const STORAGE_GALLERY = 'ayc_admin_demo_gallery';
+(function () {
+  'use strict';
 
-    const defaultNews = [
-      {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-        title: 'Seguimos fortaleciendo nuestros equipos para grandes eventos',
-        category: 'Actualidad',
-        summary: 'Una operación sólida comienza con personas preparadas y coordinación clara.',
-        status: 'published',
-        date: '2026-07-14'
-      },
-      {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + 1),
-        title: 'Nuevas jornadas de capacitación operativa',
-        category: 'Capacitación',
-        summary: 'Entrenamiento, protocolos y preparación para responder mejor en cada servicio.',
-        status: 'draft',
-        date: '2026-07-10'
+  // --- Auth helpers (token en localStorage, como todos los paneles admin) ---
+  function getToken() { return localStorage.getItem('access_token'); }
+  function getUser() { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } }
+  function authHeaders(json) {
+    const h = {};
+    if (json) h['Content-Type'] = 'application/json';
+    const t = getToken();
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    return h;
+  }
+
+  const ALLOWED = ['superadmin', 'admin', 'web_admin'];
+
+  async function bootstrap() {
+    // Validar sesión; si no es válido, redirigir al login admin.
+    const user = getUser();
+    if (!getToken() || !ALLOWED.includes(user.user_type)) {
+      window.location.href = '/admin/login';
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/me', { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      const me = await res.json();
+      if (!ALLOWED.includes(me.user_type)) {
+        window.location.href = '/admin/login';
+        return;
       }
-    ];
+      // Personalizar UI con datos del usuario
+      const initials = (me.full_name || me.email || 'AC').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+      document.getElementById('user-initials').textContent = initials;
+      document.getElementById('user-name').textContent = me.full_name || 'Administrador';
+      document.getElementById('user-role').textContent = me.user_type === 'web_admin' ? 'Web Admin' : 'Administrador';
+    } catch {
+      window.location.href = '/admin/login';
+      return;
+    }
+    document.getElementById('admin-auth-gate').style.display = 'none';
+    document.getElementById('admin-content-shell').style.visibility = 'visible';
+    bindUI();
+    await loadAll();
+  }
 
-    const defaultGallery = [
-      { id: 'g1', title: 'Logística operativa', src: '/static/frontend/landing/gallery/gallery_1.jpg' },
-      { id: 'g2', title: 'Grandes eventos', src: '/static/frontend/landing/gallery/gallery_2.jpg' },
-      { id: 'g3', title: 'Producción y montaje', src: '/static/frontend/landing/gallery/gallery_3.jpg' },
-      { id: 'g4', title: 'Brigadas y prevención', src: '/static/frontend/landing/gallery/gallery_7.jpg' }
-    ];
+  // --- API helpers ---
+  async function apiGet(path) {
+    const res = await fetch('/api/content/' + path, { headers: authHeaders() });
+    if (!res.ok) throw new Error('GET ' + path + ' -> ' + res.status);
+    return res.json();
+  }
+  async function apiSend(method, path, body, isJson) {
+    const opts = { method, headers: authHeaders(isJson !== false) };
+    if (body !== undefined) opts.body = isJson === false ? body : JSON.stringify(body);
+    const res = await fetch('/api/content/' + path, opts);
+    if (!res.ok) {
+      let msg = res.status;
+      try { const e = await res.json(); msg = e.detail || msg; } catch {}
+      throw new Error(msg);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
 
-    let news = load(STORAGE_NEWS, defaultNews);
-    let gallery = load(STORAGE_GALLERY, defaultGallery);
+  // --- Toast ---
+  function toast(message, type) {
+    const el = document.getElementById('admin-toast');
+    el.textContent = message;
+    el.className = 'admin-toast show ' + (type || '');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
 
-    const panelMetadata = {
-      dashboard: ['Resumen del sitio', 'Estado general del contenido visible en ayceventos.com.co.'],
-      news: ['Administrar noticias', 'Crea, publica, cambia el estado o elimina noticias.'],
-      gallery: ['Administrar galería', 'Monta y elimina fotografías de eventos.'],
-      services: ['Administrar servicios', 'Gestiona los servicios que se muestran en la página pública.'],
-      contacts: ['Solicitudes de contacto', 'Consulta los datos de personas y empresas interesadas.']
-    };
+  // Nota: se usan secuencias \x26 (carácter "&") para que el formatter HTML
+  // del editor no convierta las entidades al guardar el template.
+  function escapeHtml(v) {
+    return String(v ?? '')
+      .replace(/&/g, '\x26amp;')
+      .replace(/</g, '\x26lt;')
+      .replace(/>/g, '\x26gt;')
+      .replace(/"/g, '\x26quot;')
+      .replace(/'/g, '\x26#039;');
+  }
 
-    function load(key, fallback) {
+  // --- Panel navigation ---
+  const panelMeta = {
+    dashboard: ['Resumen del sitio', 'Estado general del contenido visible en la home.'],
+    hero: ['Sección de inicio', 'Edita el encabezado principal de la home.'],
+    about: ['Sección nosotros', 'Edita la presentación de la empresa.'],
+    services: ['Servicios', 'Crea, edita y ordena los servicios.'],
+    news: ['Noticias', 'Crea, publica y elimina noticias.'],
+    gallery: ['Galería', 'Sube y administra imágenes de eventos.'],
+    contacts: ['Solicitudes de contacto', 'Revisa los formularios recibidos.'],
+  };
+
+  // Convierte cualquier contenedor con clase .upload-zone en una zona drag&drop
+  // universal. El input[type=file] interno se sincroniza automáticamente.
+  function setupUniversalDropZone(zone) {
+    const fileInput = zone.querySelector('input[type="file"]');
+    const filenameTag = zone.querySelector('.upload-filename');
+
+    // Click sobre la zona abre el selector de archivos (salvo que el click
+    // venga del propio botón de submit, que tiene su propia acción).
+    zone.addEventListener('click', (e) => {
+      if (e.target.closest('button[type="submit"]')) return;
+      fileInput.click();
+    });
+
+    // Cambio manual del input
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length && filenameTag) {
+        filenameTag.textContent = fileInput.files[0].name;
+        filenameTag.classList.add('show');
+      }
+    });
+
+    // Drag & drop events
+    ['dragenter', 'dragover'].forEach(evt => {
+      zone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'dragend'].forEach(evt => {
+      zone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Solo quitar la clase si salimos de la zona realmente.
+        if (e.target === zone) zone.classList.remove('dragover');
+      });
+    });
+
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('dragover');
+      const dt = e.dataTransfer;
+      if (!dt || !dt.files || !dt.files.length) return;
+
+      // Validar tipo antes de asignar (utiliza el atributo "accept" del input)
+      const accept = (fileInput.getAttribute('accept') || '').split(',').map(s => s.trim());
+      const file = dt.files[0];
+      const okType = accept.length === 0 || accept.some(a => {
+        if (a.endsWith('/*')) return file.type.startsWith(a.slice(0, -1));
+        return file.type === a || file.name.toLowerCase().endsWith(a.split('/')[1]);
+      });
+
+      if (!okType) {
+        toast('Tipo de archivo no permitido.', 'error');
+        return;
+      }
+
+      // Asignar el archivo al input mediante DataTransfer (compatible con la
+      // lógica existente que lee fileInput.files).
       try {
-        const data = JSON.parse(localStorage.getItem(key));
-        return Array.isArray(data) ? data : fallback;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files = transfer.files;
       } catch {
-        return fallback;
+        // Fallback: algunos navegadores no permiten asignar .files; en ese
+        // caso subimos directamente pasando el File al handler del submit.
+        fileInput.__directFile = file;
       }
-    }
-
-    function save() {
-      localStorage.setItem(STORAGE_NEWS, JSON.stringify(news));
-      localStorage.setItem(STORAGE_GALLERY, JSON.stringify(gallery));
-    }
-
-    function toast(message) {
-      const element = document.getElementById('admin-toast');
-      element.textContent = message;
-      element.classList.add('show');
-      clearTimeout(window.__aycToastTimer);
-      window.__aycToastTimer = setTimeout(() => element.classList.remove('show'), 2600);
-    }
-
-    function renderStats() {
-      document.getElementById('stat-news').textContent = news.length;
-      document.getElementById('stat-published').textContent =
-        news.filter(item => item.status === 'published').length;
-      document.getElementById('stat-images').textContent = gallery.length;
-    }
-
-    function renderNews() {
-      const body = document.getElementById('news-table-body');
-
-      if (!news.length) {
-        body.innerHTML = '<tr><td colspan="5" class="empty-state">No hay noticias registradas.</td></tr>';
-        renderStats();
-        return;
+      if (filenameTag) {
+        filenameTag.textContent = file.name;
+        filenameTag.classList.add('show');
       }
+    });
+  }
 
-      body.innerHTML = news.map(item => `
-        <tr>
-          <td>
-            <div class="content-title">${escapeHtml(item.title)}</div>
-            <div style="color:var(--admin-muted);font-size:.68rem;margin-top:.25rem">${escapeHtml(item.summary)}</div>
-          </td>
-          <td>${escapeHtml(item.category)}</td>
-          <td>${escapeHtml(item.date || 'Sin fecha')}</td>
-          <td>
-            <span class="status-badge ${item.status === 'published' ? 'status-published' : 'status-draft'}">
-              ${item.status === 'published' ? 'Publicada' : 'Borrador'}
-            </span>
-          </td>
-          <td>
-            <div class="row-actions">
-              <button class="icon-btn" type="button" data-news-toggle="${item.id}" title="Cambiar estado">↻</button>
-              <button class="icon-btn delete" type="button" data-news-delete="${item.id}" title="Eliminar">×</button>
-            </div>
-          </td>
-        </tr>
-      `).join('');
+  // Convierte un input[type=text] con data-image-upload en una zona drag&drop
+  // con preview. Al soltar o seleccionar una imagen, se sube automáticamente al
+  // endpoint POST /api/content/upload y el input se rellena con la URL pública.
+  function setupImageFieldDrop(input) {
+    const field = input.closest('.form-field');
+    if (!field) return;
 
-      renderStats();
-    }
+    // Crear contenedor wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'image-field-wrapper';
 
-    function renderGallery() {
-      const grid = document.getElementById('gallery-grid');
+    // Mover el input al wrapper
+    input.parentNode.insertBefore(wrapper, input);
+    input.style.display = 'none';
+    wrapper.appendChild(input);
 
-      if (!gallery.length) {
-        grid.innerHTML = '<div class="empty-state">No hay imágenes en la galería.</div>';
-        renderStats();
-        return;
-      }
+    // Crear área de drop
+    const dropArea = document.createElement('div');
+    dropArea.className = 'image-drop-area';
+    dropArea.innerHTML = `
+      <div class="image-drop-hint">
+        <span class="image-drop-icon">⇪</span>
+        <span>Arrastra o haz clic para subir</span>
+      </div>
+    `;
+    wrapper.appendChild(dropArea);
 
-      grid.innerHTML = gallery.map(item => `
-        <article class="gallery-admin-card">
-          <button type="button" class="gallery-delete" data-gallery-delete="${item.id}" title="Eliminar imagen">×</button>
-          <img src="${item.src}" alt="${escapeHtml(item.title)}">
-          <div class="gallery-admin-info">
-            <strong>${escapeHtml(item.title)}</strong>
-            <span>Imagen de galería</span>
+    // Crear input file oculto
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/png,image/jpeg,image/webp';
+    fileInput.style.display = 'none';
+    wrapper.appendChild(fileInput);
+
+    // Función para renderizar la preview según el valor del input original
+    function renderPreview() {
+      const url = input.value.trim();
+      if (url) {
+        dropArea.innerHTML = `<img class="image-preview" src="${escapeHtml(url)}" alt="Preview">`;
+      } else {
+        dropArea.innerHTML = `
+          <div class="image-drop-hint">
+            <span class="image-drop-icon">⇪</span>
+            <span>Arrastra o haz clic para subir</span>
           </div>
-        </article>
-      `).join('');
+        `;
+      }
+    }
+    renderPreview();
 
-      renderStats();
+    // Si el input original cambia (por ej. al editar), refrescar preview
+    input.addEventListener('change', renderPreview);
+
+    // Click abre selector
+    dropArea.addEventListener('click', () => fileInput.click());
+
+    // Subir archivo al servidor
+    async function uploadFile(file) {
+      // Validar tipo
+      if (!file.type.startsWith('image/')) {
+        toast('Solo se permiten imágenes.', 'error');
+        return;
+      }
+      // Mostrar progreso
+      dropArea.innerHTML = '<div class="image-drop-progress">Subiendo…</div>';
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await apiSend('POST', 'upload', fd, false);
+        input.value = r.url;
+        renderPreview();
+        toast('Imagen subida correctamente.', 'success');
+      } catch (e) {
+        renderPreview();
+        toast('Error al subir: ' + e.message, 'error');
+      }
     }
 
-    function escapeHtml(value) {
-      return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-    }
+    // Cambio manual del input file
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) uploadFile(fileInput.files[0]);
+    });
 
-    document.querySelectorAll('[data-panel]').forEach(button => {
-      button.addEventListener('click', () => {
-        const panelName = button.dataset.panel;
+    // Drag & drop
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropArea.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropArea.classList.add('dragover');
+      });
+    });
 
-        document.querySelectorAll('[data-panel]').forEach(item => item.classList.remove('active'));
-        document.querySelectorAll('.admin-panel').forEach(panel => panel.classList.remove('active'));
+    ['dragleave', 'dragend'].forEach(evt => {
+      dropArea.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target === dropArea) dropArea.classList.remove('dragover');
+      });
+    });
 
-        button.classList.add('active');
-        document.getElementById('panel-' + panelName).classList.add('active');
+    dropArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropArea.classList.remove('dragover');
+      const dt = e.dataTransfer;
+      if (!dt || !dt.files || !dt.files.length) return;
+      uploadFile(dt.files[0]);
+    });
+  }
 
-        document.getElementById('admin-page-title').textContent = panelMetadata[panelName][0];
-        document.getElementById('admin-page-description').textContent = panelMetadata[panelName][1];
-
+  function bindUI() {
+    document.querySelectorAll('[data-panel]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.panel;
+        document.querySelectorAll('[data-panel]').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-' + name).classList.add('active');
+        document.getElementById('admin-page-title').textContent = panelMeta[name][0];
+        document.getElementById('admin-page-description').textContent = panelMeta[name][1];
         document.getElementById('admin-sidebar').classList.remove('open');
       });
     });
@@ -955,148 +1358,427 @@
       document.getElementById('admin-sidebar').classList.toggle('open');
     });
 
-    document.getElementById('news-form').addEventListener('submit', event => {
-      event.preventDefault();
+    document.getElementById('hero-form').addEventListener('submit', e => saveSection(e, 'hero'));
+    document.getElementById('about-form').addEventListener('submit', e => saveSection(e, 'about'));
 
-      const title = document.getElementById('news-title').value.trim();
-      const category = document.getElementById('news-category').value;
-      const summary = document.getElementById('news-summary').value.trim();
-      const status = document.getElementById('news-status').value;
-      const date = document.getElementById('news-date').value;
+    document.getElementById('service-form').addEventListener('submit', saveService);
+    document.getElementById('service-cancel').addEventListener('click', resetServiceForm);
 
-      news.unshift({
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-        title,
-        category,
-        summary,
-        status,
-        date
-      });
+    document.getElementById('news-form').addEventListener('submit', saveNews);
+    document.getElementById('news-cancel').addEventListener('click', resetNewsForm);
 
-      save();
-      renderNews();
-      event.target.reset();
-      toast('Noticia guardada en la demostración local.');
-    });
+    document.getElementById('gallery-upload-form').addEventListener('submit', uploadGalleryImage);
+    document.getElementById('gallery-form').addEventListener('submit', createGalleryItem);
 
-    document.getElementById('news-table-body').addEventListener('click', event => {
-      const toggleId = event.target.dataset.newsToggle;
-      const deleteId = event.target.dataset.newsDelete;
+    // Activar drag & drop en todas las zonas que tengan la clase .upload-zone
+    document.querySelectorAll('.upload-zone').forEach(setupUniversalDropZone);
 
-      if (toggleId) {
-        news = news.map(item =>
-          item.id === toggleId
-            ? { ...item, status: item.status === 'published' ? 'draft' : 'published' }
-            : item
-        );
-        save();
-        renderNews();
-        toast('Estado de la noticia actualizado.');
-      }
+    // Activar drag & drop + preview en todos los inputs marcados con data-image-upload
+    document.querySelectorAll('[data-image-upload]').forEach(setupImageFieldDrop);
 
-      if (deleteId && confirm('¿Eliminar esta noticia de la demostración?')) {
-        news = news.filter(item => item.id !== deleteId);
-        save();
-        renderNews();
-        toast('Noticia eliminada.');
-      }
-    });
+    document.getElementById('contacts-filter').addEventListener('change', renderContacts);
 
-    document.getElementById('gallery-form').addEventListener('submit', event => {
-      event.preventDefault();
-
-      const fileInput = document.getElementById('gallery-file');
-      const titleInput = document.getElementById('gallery-title');
-      const file = fileInput.files[0];
-
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        gallery.unshift({
-          id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-          title: titleInput.value.trim(),
-          src: reader.result
-        });
-
-        save();
-        renderGallery();
-        event.target.reset();
-        toast('Imagen agregada a la demostración local.');
-      };
-      reader.readAsDataURL(file);
-    });
-
-    document.getElementById('gallery-grid').addEventListener('click', event => {
-      const deleteId = event.target.dataset.galleryDelete;
-
-      if (deleteId && confirm('¿Quitar esta imagen de la galería?')) {
-        gallery = gallery.filter(item => item.id !== deleteId);
-        save();
-        renderGallery();
-        toast('Imagen eliminada.');
-      }
-    });
-
-    document.getElementById('reset-demo').addEventListener('click', () => {
-      if (!confirm('¿Restaurar todos los datos de demostración?')) return;
-
-      news = [...defaultNews];
-      gallery = [...defaultGallery];
-      save();
-      renderNews();
-      renderGallery();
-      toast('Demostración restaurada.');
-    });
-    async function verifyAdminAccess() {
-      const token = localStorage.getItem('access_token');
-      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const allowedRoles = ['superadmin', 'coordinator'];
-
-      if (!token || !allowedRoles.includes(storedUser.user_type)) {
-        sessionStorage.setItem('admin_redirect_after_login', '/admin/contenido');
-        window.location.replace('/admin/login');
-        return false;
-      }
-
+    document.getElementById('cleanup-btn').addEventListener('click', async () => {
+      if (!confirm('¿Eliminar imágenes huérfanas del servidor?')) return;
       try {
-        const response = await fetch('/api/auth/me', {
-          headers: { 'Authorization': 'Bearer ' + token }
-        });
-
-        if (!response.ok) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user');
-          sessionStorage.setItem('admin_redirect_after_login', '/admin/contenido');
-          window.location.replace('/admin/login');
-          return false;
-        }
-
-        const currentUser = await response.json();
-        const role = currentUser.user_type || storedUser.user_type;
-
-        if (!allowedRoles.includes(role)) {
-          window.location.replace('/');
-          return false;
-        }
-
-        document.getElementById('admin-auth-gate')?.remove();
-        const shell = document.getElementById('admin-content-shell');
-        if (shell) shell.style.visibility = 'visible';
-        return true;
-      } catch (error) {
-        sessionStorage.setItem('admin_redirect_after_login', '/admin/contenido');
-        window.location.replace('/admin/login');
-        return false;
-      }
-    }
-
-    verifyAdminAccess().then((isAuthorized) => {
-      if (!isAuthorized) return;
-      renderNews();
-      renderGallery();
+        const r = await apiSend('POST', 'cleanup');
+        toast('Eliminadas ' + (r.deleted || 0) + ' imágenes huérfanas.', 'success');
+      } catch (e) { toast('Error: ' + e.message, 'error'); }
     });
-  })();
+  }
+
+  // --- Load all data ---
+  async function loadAll() {
+    await Promise.all([loadHomepage(), loadServices(), loadNews(), loadGallery(), loadContacts()]);
+  }
+
+  async function loadHomepage() {
+    try {
+      const data = await apiGet('homepage');
+      window.__home = data;
+      fillHeroForm(data.sections.hero || {});
+      fillAboutForm(data.sections.about || {});
+    } catch (e) { /* sin datos aún */ }
+  }
+
+  function fillHeroForm(h) {
+    document.getElementById('hero-eyebrow').value = h.eyebrow || '';
+    document.getElementById('hero-title').value = h.title || '';
+    document.getElementById('hero-highlight').value = h.highlight || '';
+    document.getElementById('hero-description').value = h.description || '';
+    const extractCta = (v) => (v && typeof v === 'object') ? (v.label || '') : (v || '');
+    document.getElementById('hero-cta-primary').value = extractCta(h.cta_primary);
+    document.getElementById('hero-cta-secondary').value = extractCta(h.cta_secondary);
+    document.getElementById('hero-background').value = h.background_image || '';
+  }
+
+  function fillAboutForm(a) {
+    document.getElementById('about-eyebrow').value = a.eyebrow || '';
+    document.getElementById('about-title').value = a.title || '';
+    document.getElementById('about-description').value = a.description || '';
+    document.getElementById('about-badge').value = a.badge || '';
+    document.getElementById('about-main-image').value = a.main_image || '';
+    document.getElementById('about-detail-image').value = a.detail_image || '';
+  }
+
+  async function saveSection(e, key) {
+    e.preventDefault();
+    const form = e.target;
+    const content = {};
+    if (key === 'hero') {
+      content.eyebrow = val('hero-eyebrow');
+      content.title = val('hero-title');
+      content.highlight = val('hero-highlight');
+      content.description = val('hero-description');
+      content.cta_primary = val('hero-cta-primary');
+      content.cta_secondary = val('hero-cta-secondary');
+      if (val('hero-background')) content.background_image = val('hero-background');
+    } else if (key === 'about') {
+      content.eyebrow = val('about-eyebrow');
+      content.title = val('about-title');
+      content.description = val('about-description');
+      content.badge = val('about-badge');
+      if (val('about-main-image')) content.main_image = val('about-main-image');
+      if (val('about-detail-image')) content.detail_image = val('about-detail-image');
+    }
+    try {
+      await apiSend('PUT', 'sections/' + key, { section_key: key, content });
+      toast('Sección "' + key + '" guardada.', 'success');
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  function val(id) { return document.getElementById(id).value.trim(); }
+
+  // --- Services ---
+  let services = [];
+  async function loadServices() {
+    try {
+      services = await apiGet('services');
+    } catch { services = []; }
+    renderServices();
+    updateStats();
+  }
+
+  function renderServices() {
+    const body = document.getElementById('services-table-body');
+    if (!services.length) {
+      body.innerHTML = '<tr><td colspan="3" class="empty-state">No hay servicios. Crea el primero arriba.</td></tr>';
+      return;
+    }
+    body.innerHTML = services.map(s => `
+      <tr>
+        <td>
+          <div class="content-title">${escapeHtml(s.title)}</div>
+          <div style="color:var(--admin-muted);font-size:.68rem;margin-top:.25rem">${escapeHtml((s.description || '').slice(0, 90))}…</div>
+        </td>
+        <td>${s.sort_order}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" type="button" data-svc-edit="${s.id}" title="Editar">✎</button>
+            <button class="icon-btn delete" type="button" data-svc-del="${s.id}" title="Eliminar">×</button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    body.querySelectorAll('[data-svc-edit]').forEach(b => b.addEventListener('click', () => editService(b.dataset.svcEdit)));
+    body.querySelectorAll('[data-svc-del]').forEach(b => b.addEventListener('click', () => deleteService(b.dataset.svcDel)));
+  }
+
+  function editService(id) {
+    const s = services.find(x => x.id === id);
+    if (!s) return;
+    document.getElementById('service-id').value = s.id;
+    document.getElementById('service-title').value = s.title;
+    document.getElementById('service-description').value = s.description;
+    document.getElementById('service-image').value = s.image_url || '';
+    document.getElementById('service-order').value = s.sort_order;
+    document.getElementById('service-submit').textContent = 'Guardar cambios';
+    document.getElementById('service-cancel').style.display = 'inline-flex';
+    document.querySelector('[data-panel="services"]').click();
+  }
+
+  function resetServiceForm() {
+    document.getElementById('service-form').reset();
+    document.getElementById('service-id').value = '';
+    document.getElementById('service-submit').textContent = 'Crear servicio';
+    document.getElementById('service-cancel').style.display = 'none';
+  }
+
+  async function saveService(e) {
+    e.preventDefault();
+    const id = document.getElementById('service-id').value;
+    const body = {
+      title: val('service-title'),
+      description: val('service-description'),
+      image_url: val('service-image') || null,
+      sort_order: parseInt(val('service-order') || '0', 10),
+    };
+    try {
+      if (id) {
+        await apiSend('PUT', 'services/' + id, body);
+        toast('Servicio actualizado.', 'success');
+      } else {
+        await apiSend('POST', 'services', body);
+        toast('Servicio creado.', 'success');
+      }
+      resetServiceForm();
+      await loadServices();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function deleteService(id) {
+    if (!confirm('¿Eliminar este servicio de la home?')) return;
+    try {
+      await apiSend('DELETE', 'services/' + id);
+      toast('Servicio eliminado.', 'success');
+      await loadServices();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  // --- News ---
+  let news = [];
+  async function loadNews() {
+    try { news = await apiGet('news'); } catch { news = []; }
+    renderNews();
+    updateStats();
+  }
+
+  function renderNews() {
+    const body = document.getElementById('news-table-body');
+    if (!news.length) {
+      body.innerHTML = '<tr><td colspan="4" class="empty-state">No hay noticias.</td></tr>';
+      return;
+    }
+    body.innerHTML = news.map(n => `
+      <tr>
+        <td>
+          <div class="content-title">${escapeHtml(n.title)}</div>
+          <div style="color:var(--admin-muted);font-size:.68rem;margin-top:.25rem">${escapeHtml((n.summary || '').slice(0, 90))}…</div>
+        </td>
+        <td>${escapeHtml(n.category)}</td>
+        <td>
+          <span class="status-badge ${n.status === 'published' ? 'status-published' : 'status-draft'}"
+            data-news-toggle="${n.id}" title="Click para cambiar estado">
+            ${n.status === 'published' ? 'Publicada' : 'Borrador'}
+          </span>
+        </td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" type="button" data-news-edit="${n.id}" title="Editar">✎</button>
+            <button class="icon-btn delete" type="button" data-news-del="${n.id}" title="Eliminar">×</button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    body.querySelectorAll('[data-news-toggle]').forEach(b => b.addEventListener('click', () => toggleNewsStatus(b.dataset.newsToggle)));
+    body.querySelectorAll('[data-news-edit]').forEach(b => b.addEventListener('click', () => editNews(b.dataset.newsEdit)));
+    body.querySelectorAll('[data-news-del]').forEach(b => b.addEventListener('click', () => deleteNews(b.dataset.newsDel)));
+  }
+
+  function editNews(id) {
+    const n = news.find(x => x.id === id);
+    if (!n) return;
+    document.getElementById('news-id').value = n.id;
+    document.getElementById('news-title').value = n.title;
+    document.getElementById('news-category').value = n.category;
+    document.getElementById('news-summary').value = n.summary;
+    document.getElementById('news-status').value = n.status;
+    document.getElementById('news-order').value = n.sort_order;
+    document.getElementById('news-image').value = n.image_url || '';
+    document.getElementById('news-submit').textContent = 'Guardar cambios';
+    document.getElementById('news-cancel').style.display = 'inline-flex';
+    document.querySelector('[data-panel="news"]').click();
+  }
+
+  function resetNewsForm() {
+    document.getElementById('news-form').reset();
+    document.getElementById('news-id').value = '';
+    document.getElementById('news-submit').textContent = 'Guardar noticia';
+    document.getElementById('news-cancel').style.display = 'none';
+  }
+
+  async function saveNews(e) {
+    e.preventDefault();
+    const id = document.getElementById('news-id').value;
+    const body = {
+      title: val('news-title'),
+      category: val('news-category'),
+      summary: val('news-summary'),
+      status: document.getElementById('news-status').value,
+      sort_order: parseInt(val('news-order') || '0', 10),
+      image_url: val('news-image') || null,
+    };
+    try {
+      if (id) {
+        await apiSend('PUT', 'news/' + id, body);
+        toast('Noticia actualizada.', 'success');
+      } else {
+        await apiSend('POST', 'news', body);
+        toast('Noticia creada.', 'success');
+      }
+      resetNewsForm();
+      await loadNews();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function toggleNewsStatus(id) {
+    const n = news.find(x => x.id === id);
+    if (!n) return;
+    try {
+      await apiSend('PUT', 'news/' + id, { status: n.status === 'published' ? 'draft' : 'published' });
+      await loadNews();
+      toast('Estado actualizado.', 'success');
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function deleteNews(id) {
+    if (!confirm('¿Eliminar esta noticia?')) return;
+    try {
+      await apiSend('DELETE', 'news/' + id);
+      toast('Noticia eliminada.', 'success');
+      await loadNews();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  // --- Gallery ---
+  let gallery = [];
+  async function loadGallery() {
+    try { gallery = await apiGet('gallery'); } catch { gallery = []; }
+    renderGallery();
+    updateStats();
+  }
+
+  function renderGallery() {
+    const grid = document.getElementById('gallery-grid');
+    if (!gallery.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No hay imágenes en la galería.</div>';
+      return;
+    }
+    grid.innerHTML = gallery.map(g => `
+      <article class="gallery-admin-card">
+        <button type="button" class="gallery-delete" data-gal-del="${g.id}" title="Eliminar">×</button>
+        <img src="${escapeHtml(g.image_url)}" alt="${escapeHtml(g.title)}">
+        <div class="gallery-admin-info">
+          <strong>${escapeHtml(g.title)}</strong>
+          <span>${escapeHtml(g.caption || 'Sin descripción')}</span>
+        </div>
+      </article>`).join('');
+    grid.querySelectorAll('[data-gal-del]').forEach(b => b.addEventListener('click', () => deleteGallery(b.dataset.galDel)));
+  }
+
+  async function uploadGalleryImage(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('gallery-file');
+    const file = fileInput.__directFile || (fileInput.files.length ? fileInput.files[0] : null);
+    if (!file) { toast('Selecciona o arrastra una imagen.', 'error'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    const btn = document.getElementById('gallery-upload-btn');
+    btn.disabled = true; btn.textContent = 'Subiendo…';
+    try {
+      const r = await apiSend('POST', 'upload', fd, false);
+      document.getElementById('gallery-image-url').value = r.url;
+      document.getElementById('gallery-form').style.display = 'grid';
+      document.getElementById('gallery-upload-form').style.display = 'none';
+      toast('Imagen subida. Ahora asigna título y guarda.', 'success');
+    } catch (e) { toast('Error al subir: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = 'Subir imagen'; }
+  }
+
+  async function createGalleryItem(e) {
+    e.preventDefault();
+    const body = {
+      title: val('gallery-title'),
+      image_url: document.getElementById('gallery-image-url').value,
+      caption: val('gallery-caption') || null,
+      sort_order: parseInt(val('gallery-order') || '0', 10),
+    };
+    if (!body.image_url) { toast('Sube una imagen primero.', 'error'); return; }
+    try {
+      await apiSend('POST', 'gallery', body);
+      toast('Imagen agregada a la galería.', 'success');
+      document.getElementById('gallery-form').reset();
+      document.getElementById('gallery-form').style.display = 'none';
+      document.getElementById('gallery-upload-form').style.display = 'grid';
+      await loadGallery();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function deleteGallery(id) {
+    if (!confirm('¿Eliminar esta imagen de la galería?')) return;
+    try {
+      await apiSend('DELETE', 'gallery/' + id);
+      toast('Imagen eliminada.', 'success');
+      await loadGallery();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  // --- Contacts ---
+  let contacts = [];
+  async function loadContacts() {
+    try { contacts = await apiGet('contacts'); } catch { contacts = []; }
+    renderContacts();
+    updateStats();
+  }
+
+  function renderContacts() {
+    const filter = document.getElementById('contacts-filter').value;
+    const list = filter ? contacts.filter(c => c.status === filter) : contacts;
+    const body = document.getElementById('contacts-table-body');
+    if (!list.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-state">No hay solicitudes.</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(c => `
+      <tr>
+        <td>
+          <div class="content-title">${escapeHtml(c.full_name)}</div>
+          <div style="color:var(--admin-muted);font-size:.68rem;margin-top:.25rem">${escapeHtml(c.email)}${c.phone ? ' · ' + escapeHtml(c.phone) : ''}</div>
+          ${c.company ? '<div style="color:var(--admin-muted);font-size:.68rem">Empresa: ' + escapeHtml(c.company) + '</div>' : ''}
+          <div class="contact-detail" style="margin-top:.5rem"><p>${escapeHtml(c.message)}</p></div>
+        </td>
+        <td>${escapeHtml(c.event_type || '—')}</td>
+        <td>${c.created_at ? new Date(c.created_at).toLocaleDateString('es-CO') : '—'}</td>
+        <td>
+          <span class="status-badge status-${c.status}" data-contact-cycle="${c.id}" title="Click para cambiar estado">
+            ${c.status === 'new' ? 'Nueva' : c.status === 'read' ? 'Leída' : 'Archivada'}
+          </span>
+        </td>
+        <td></td>
+      </tr>`).join('');
+    body.querySelectorAll('[data-contact-cycle]').forEach(b => b.addEventListener('click', () => cycleContact(b.dataset.contactCycle)));
+  }
+
+  async function cycleContact(id) {
+    const c = contacts.find(x => x.id === id);
+    if (!c) return;
+    const next = c.status === 'new' ? 'read' : c.status === 'read' ? 'archived' : 'new';
+    try {
+      await apiSend('PUT', 'contacts/' + id, { status: next });
+      await loadContacts();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  // --- Dashboard stats ---
+  function updateStats() {
+    document.getElementById('stat-services').textContent = services.length;
+    document.getElementById('stat-news').textContent = news.filter(n => n.status === 'published').length;
+    document.getElementById('stat-images').textContent = gallery.length;
+    document.getElementById('stat-contacts').textContent = contacts.filter(c => c.status === 'new').length;
+    const sum = document.getElementById('dashboard-summary');
+    sum.classList.remove('empty-state');
+    sum.innerHTML = `
+      <div style="padding:1.2rem;font-size:.82rem;line-height:1.8;color:var(--admin-muted)">
+        <strong style="color:var(--admin-white);font-family:Cinzel,serif">Resumen actual</strong><br>
+        • Servicios visibles en la home: <strong style="color:var(--admin-gold)">${services.length}</strong><br>
+        • Noticias publicadas: <strong style="color:var(--admin-gold)">${news.filter(n => n.status === 'published').length}</strong><br>
+        • Imágenes en galería: <strong style="color:var(--admin-gold)">${gallery.length}</strong><br>
+        • Solicitudes nuevas sin leer: <strong style="color:var(--admin-gold)">${contacts.filter(c => c.status === 'new').length}</strong>
+      </div>`;
+  }
+
+  // --- Start ---
+  bootstrap();
+})();
 </script>
 {% endblock %}

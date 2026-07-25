@@ -908,136 +908,144 @@
 {% block content %}
 <div class="home-page">
 
-  <section class="hero" id="inicio">
+  {% set hero = (content.sections.get("hero") if content else None) or {} %}
+  <section class="hero" id="inicio"
+    {% if hero.background_image %}style="background-image: linear-gradient(90deg, rgba(5,5,5,.94) 0%, rgba(5,5,5,.70) 42%, rgba(5,5,5,.22) 100%), linear-gradient(0deg, rgba(5,5,5,.90) 0%, rgba(5,5,5,0) 55%), url('{{ hero.background_image }}') center 38% / cover no-repeat;"{% endif %}>
     <div class="container-ayc">
       <div class="hero-content">
-        <span class="eyebrow">Logística y producción de eventos</span>
-        <h1>Hacemos posible <span>grandes eventos.</span></h1>
+        <span class="eyebrow">{{ hero.eyebrow or 'Logística y producción de eventos' }}</span>
+        <h1>{{ hero.title or 'Hacemos posible' }} {% if hero.highlight %}<span>{{ hero.highlight }}</span>{% else %}<span>grandes eventos.</span>{% endif %}</h1>
         <p class="hero-description">
-          Planeamos, coordinamos y ejecutamos soluciones de logística, producción,
-          seguridad, brigadas, protocolo y personal operativo para eventos de cualquier escala.
+          {{ hero.description or 'Planeamos, coordinamos y ejecutamos soluciones de logística, producción, seguridad, brigadas, protocolo y personal operativo para eventos de cualquier escala.' }}
         </p>
 
+        {% set cta_p = hero.cta_primary %}
+        {% set cta_s = hero.cta_secondary %}
         <div class="hero-actions">
-          <a href="#contacto" class="btn-ayc btn-primary-ayc">Solicitar una cotización</a>
-          <a href="#servicios" class="btn-ayc btn-secondary-ayc">Conocer nuestros servicios</a>
+          {% if cta_p is mapping %}
+          <a href="{{ cta_p.href or '#contacto' }}" class="btn-ayc btn-primary-ayc">{{ cta_p.label or 'Solicitar una cotización' }}</a>
+          {% else %}
+          <a href="#contacto" class="btn-ayc btn-primary-ayc">{{ cta_p or 'Solicitar una cotización' }}</a>
+          {% endif %}
+          {% if cta_s is mapping %}
+          <a href="{{ cta_s.href or '#servicios' }}" class="btn-ayc btn-secondary-ayc">{{ cta_s.label or 'Conocer nuestros servicios' }}</a>
+          {% else %}
+          <a href="#servicios" class="btn-ayc btn-secondary-ayc">{{ cta_s or 'Conocer nuestros servicios' }}</a>
+          {% endif %}
         </div>
 
         <div class="hero-trust" aria-label="Capacidades principales">
-          <div class="trust-item">
-            <strong>360°</strong>
-            <span>Operación integral antes, durante y después del evento.</span>
-          </div>
-          <div class="trust-item">
-            <strong>24/7</strong>
-            <span>Acompañamiento operativo para jornadas de alta exigencia.</span>
-          </div>
-          <div class="trust-item">
-            <strong>Bogotá</strong>
-            <span>Experiencia en eventos públicos, privados y de gran formato.</span>
-          </div>
+          {% set trust = hero.trust or [] %}
+          {% if trust %}
+            {% for item in trust %}
+            <div class="trust-item">
+              <strong>{{ item.value }}</strong>
+              <span>{{ item.label }}</span>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="trust-item">
+              <strong>360°</strong>
+              <span>Operación integral antes, durante y después del evento.</span>
+            </div>
+            <div class="trust-item">
+              <strong>24/7</strong>
+              <span>Acompañamiento operativo para jornadas de alta exigencia.</span>
+            </div>
+            <div class="trust-item">
+              <strong>Bogotá</strong>
+              <span>Experiencia en eventos públicos, privados y de gran formato.</span>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </section>
 
+  {% set about = (content.sections.get("about") if content else None) or {} %}
   <section class="section" id="nosotros">
     <div class="container-ayc intro-grid">
       <div class="intro-media reveal">
-        <img class="intro-main" src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Brigadista de A&C durante un evento">
-        <img class="intro-detail" src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Equipo de producción y montaje de A&C">
-        <div class="intro-badge">Operación humana, técnica y confiable</div>
+        <img class="intro-main" src="{{ about.main_image or '/static/frontend/landing/gallery/gallery_7.jpg' }}" alt="Brigadista de A&C durante un evento">
+        <img class="intro-detail" src="{{ about.detail_image or '/static/frontend/landing/gallery/gallery_3.jpg' }}" alt="Equipo de producción y montaje de A&C">
+        <div class="intro-badge">{{ about.badge or 'Operación humana, técnica y confiable' }}</div>
       </div>
 
       <div class="reveal">
-        <span class="eyebrow">Quiénes somos</span>
-        <h2 class="section-title">Un equipo preparado para cuidar cada detalle.</h2>
+        <span class="eyebrow">{{ about.eyebrow or 'Quiénes somos' }}</span>
+        <h2 class="section-title">{{ about.title or 'Un equipo preparado para cuidar cada detalle.' }}</h2>
         <p class="section-copy">
-          En A&C integramos talento humano, experiencia operativa y capacidad de respuesta
-          para que cada evento se desarrolle con orden, seguridad y una ejecución impecable.
+          {{ about.description or 'En A&C integramos talento humano, experiencia operativa y capacidad de respuesta para que cada evento se desarrolle con orden, seguridad y una ejecución impecable.' }}
         </p>
 
         <div class="intro-list">
-          <article class="intro-point">
-            <span class="intro-point-number">01</span>
-            <div>
-              <h3>Planeación precisa</h3>
-              <p>Diseñamos la operación de acuerdo con el tipo de evento, aforo, ubicación y necesidades del cliente.</p>
-            </div>
-          </article>
-
-          <article class="intro-point">
-            <span class="intro-point-number">02</span>
-            <div>
-              <h3>Personal capacitado</h3>
-              <p>Conformamos equipos para logística, brigadas, protocolo, seguridad, control y apoyo operativo.</p>
-            </div>
-          </article>
-
-          <article class="intro-point">
-            <span class="intro-point-number">03</span>
-            <div>
-              <h3>Ejecución en campo</h3>
-              <p>Acompañamos el evento en tiempo real y respondemos ante cambios, novedades y contingencias.</p>
-            </div>
-          </article>
+          {% set points = about.points or [] %}
+          {% if points %}
+            {% for p in points %}
+            <article class="intro-point">
+              <span class="intro-point-number">{{ '%02d' % loop.index }}</span>
+              <div>
+                <h3>{{ p.title }}</h3>
+                <p>{{ p.description }}</p>
+              </div>
+            </article>
+            {% endfor %}
+          {% else %}
+            <article class="intro-point">
+              <span class="intro-point-number">01</span>
+              <div>
+                <h3>Planeación precisa</h3>
+                <p>Diseñamos la operación de acuerdo con el tipo de evento, aforo, ubicación y necesidades del cliente.</p>
+              </div>
+            </article>
+            <article class="intro-point">
+              <span class="intro-point-number">02</span>
+              <div>
+                <h3>Personal capacitado</h3>
+                <p>Conformamos equipos para logística, brigadas, protocolo, seguridad, control y apoyo operativo.</p>
+              </div>
+            </article>
+            <article class="intro-point">
+              <span class="intro-point-number">03</span>
+              <div>
+                <h3>Ejecución en campo</h3>
+                <p>Acompañamos el evento en tiempo real y respondemos ante cambios, novedades y contingencias.</p>
+              </div>
+            </article>
+          {% endif %}
         </div>
       </div>
     </div>
   </section>
 
+  {% set services_intro = (content.sections.get("services_intro") if content else None) or {} %}
+  {% set services = (content.services if content else None) or [] %}
+  {% if services %}
   <section class="section services-section" id="servicios">
     <div class="container-ayc">
       <div class="section-heading-row reveal">
         <div>
-          <span class="eyebrow">Nuestros servicios</span>
-          <h2 class="section-title">Soluciones que se adaptan a cada evento.</h2>
+          <span class="eyebrow">{{ services_intro.eyebrow or 'Nuestros servicios' }}</span>
+          <h2 class="section-title">{{ services_intro.title or 'Soluciones que se adaptan a cada evento.' }}</h2>
         </div>
         <p class="section-copy">
-          Construimos equipos y operaciones a la medida para eventos corporativos,
-          culturales, institucionales, comerciales y de entretenimiento.
+          {{ services_intro["copy"] or 'Construimos equipos y operaciones a la medida para eventos corporativos, culturales, institucionales, comerciales y de entretenimiento.' }}
         </p>
       </div>
 
       <div class="services-grid">
-        <article class="service-card reveal" style="--service-image:url('/static/frontend/landing/gallery/gallery_1.jpg')">
-          <span class="service-index">SERVICIO 01</span>
-          <h3>Logística operativa</h3>
-          <p>Control de accesos, orientación, filas, aforo, zonas de circulación y apoyo general.</p>
+        {% for svc in services %}
+        <article class="service-card reveal"
+          {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')"{% endif %}>
+          <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
+          <h3>{{ svc.title }}</h3>
+          <p>{{ svc.description }}</p>
         </article>
-
-        <article class="service-card reveal" style="--service-image:url('/static/frontend/landing/gallery/gallery_4.jpg')">
-          <span class="service-index">SERVICIO 02</span>
-          <h3>Brigadas y prevención</h3>
-          <p>Personal preparado para prevención, primeros auxilios, evacuación y respuesta inicial.</p>
-        </article>
-
-        <article class="service-card reveal" style="--service-image:url('/static/frontend/landing/gallery/gallery_2.jpg')">
-          <span class="service-index">SERVICIO 03</span>
-          <h3>Seguridad y control</h3>
-          <p>Apoyo al orden, protección de zonas, coordinación de accesos y acompañamiento operativo.</p>
-        </article>
-
-        <article class="service-card reveal" style="--service-image:url('/static/frontend/landing/gallery/gallery_3.jpg')">
-          <span class="service-index">SERVICIO 04</span>
-          <h3>Montaje y producción</h3>
-          <p>Soporte de montaje, desmontaje, adecuación de espacios y operación técnica en campo.</p>
-        </article>
-
-        <article class="service-card reveal" style="--service-image:url('/static/frontend/landing/gallery/gallery_5.jpg')">
-          <span class="service-index">SERVICIO 05</span>
-          <h3>Protocolo y atención</h3>
-          <p>Recepción de asistentes, acreditación, acompañamiento y experiencia de servicio.</p>
-        </article>
-
-        <article class="service-card reveal" style="--service-image:url('/static/frontend/landing/gallery/gallery_6.jpg')">
-          <span class="service-index">SERVICIO 06</span>
-          <h3>Personal especializado</h3>
-          <p>Equipos conformados según perfiles, funciones, turnos, condiciones y dimensión del evento.</p>
-        </article>
+        {% endfor %}
       </div>
     </div>
   </section>
+  {% endif %}
 
   <section class="section" id="experiencia">
     <div class="container-ayc">
@@ -1048,23 +1056,33 @@
         que acompaña a los asistentes durante una jornada.
       </p>
 
+      {% set gallery = (content.gallery if content else None) or [] %}
       <div class="gallery-layout">
-        <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Brigadista de A&C en operación">
-          <figcaption>Prevención y respuesta</figcaption>
-        </figure>
-        <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_2.jpg" alt="Equipo A&C frente a escenario">
-          <figcaption>Grandes formatos</figcaption>
-        </figure>
-        <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_5.jpg" alt="Personal logístico de A&C">
-          <figcaption>Equipo operativo</figcaption>
-        </figure>
-        <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Equipo A&C en montaje de escenario">
-          <figcaption>Producción y montaje</figcaption>
-        </figure>
+        {% if gallery %}
+          {% for g in gallery[:4] %}
+          <figure class="gallery-card reveal">
+            <img src="{{ g.image_url }}" alt="{{ g.title or 'Galería A&C' }}">
+            <figcaption>{{ g.title or g.caption or '' }}</figcaption>
+          </figure>
+          {% endfor %}
+        {% else %}
+          <figure class="gallery-card reveal">
+            <img src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Brigadista de A&C en operación">
+            <figcaption>Prevención y respuesta</figcaption>
+          </figure>
+          <figure class="gallery-card reveal">
+            <img src="/static/frontend/landing/gallery/gallery_2.jpg" alt="Equipo A&C frente a escenario">
+            <figcaption>Grandes formatos</figcaption>
+          </figure>
+          <figure class="gallery-card reveal">
+            <img src="/static/frontend/landing/gallery/gallery_5.jpg" alt="Personal logístico de A&C">
+            <figcaption>Equipo operativo</figcaption>
+          </figure>
+          <figure class="gallery-card reveal">
+            <img src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Equipo A&C en montaje de escenario">
+            <figcaption>Producción y montaje</figcaption>
+          </figure>
+        {% endif %}
       </div>
     </div>
   </section>
@@ -1074,33 +1092,47 @@
       <span class="eyebrow reveal">Noticias y novedades</span>
       <h2 class="section-title reveal">Lo que está pasando en A&C.</h2>
 
+      {% set news = (content.news if content else None) or [] %}
       <div class="news-grid">
-        <article class="news-card featured reveal">
-          <span class="news-tag">Actualidad</span>
-          <div>
-            <h3>Seguimos fortaleciendo nuestros equipos para grandes eventos.</h3>
-            <p>Una operación sólida comienza con personas preparadas, coordinación clara y experiencia en campo.</p>
-            <div class="news-meta">Contenido temporal · Próximamente administrable</div>
-          </div>
-        </article>
-
-        <article class="news-card reveal">
-          <span class="news-tag">Equipo</span>
-          <div>
-            <h3>Nuevas jornadas de capacitación operativa.</h3>
-            <p>Entrenamiento, protocolos y preparación para responder mejor en cada servicio.</p>
-            <div class="news-meta">Contenido temporal</div>
-          </div>
-        </article>
-
-        <article class="news-card reveal">
-          <span class="news-tag">Eventos</span>
-          <div>
-            <h3>Experiencia en escenarios de alta afluencia.</h3>
-            <p>Planeación, despliegue y control para operaciones donde cada detalle cuenta.</p>
-            <div class="news-meta">Contenido temporal</div>
-          </div>
-        </article>
+        {% if news %}
+          {% for n in news[:3] %}
+          <article class="news-card {{ 'featured' if loop.first else '' }} reveal">
+            <span class="news-tag">{{ n.category or 'Actualidad' }}</span>
+            <div>
+              <h3>{{ n.title }}</h3>
+              {% if n.summary %}<p>{{ n.summary }}</p>{% endif %}
+              {% if n.published_at %}
+              <div class="news-meta">{{ n.published_at[:10] }}</div>
+              {% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        {% else %}
+          <article class="news-card featured reveal">
+            <span class="news-tag">Actualidad</span>
+            <div>
+              <h3>Seguimos fortaleciendo nuestros equipos para grandes eventos.</h3>
+              <p>Una operación sólida comienza con personas preparadas, coordinación clara y experiencia en campo.</p>
+              <div class="news-meta">Contenido temporal · Próximamente administrable</div>
+            </div>
+          </article>
+          <article class="news-card reveal">
+            <span class="news-tag">Equipo</span>
+            <div>
+              <h3>Nuevas jornadas de capacitación operativa.</h3>
+              <p>Entrenamiento, protocolos y preparación para responder mejor en cada servicio.</p>
+              <div class="news-meta">Contenido temporal</div>
+            </div>
+          </article>
+          <article class="news-card reveal">
+            <span class="news-tag">Eventos</span>
+            <div>
+              <h3>Experiencia en escenarios de alta afluencia.</h3>
+              <p>Planeación, despliegue y control para operaciones donde cada detalle cuenta.</p>
+              <div class="news-meta">Contenido temporal</div>
+            </div>
+          </article>
+        {% endif %}
       </div>
     </div>
   </section>
@@ -1170,7 +1202,7 @@
           <div class="field field-full">
             <button class="btn-ayc btn-primary-ayc" type="submit">Enviar solicitud</button>
             <p class="contact-note" id="contact-status">
-              En esta primera versión el formulario es visual. El envío por correo se conectará en la siguiente etapa.
+              Al enviar este formulario, tu solicitud queda registrada para que nuestro equipo te contacte.
             </p>
           </div>
         </div>
@@ -1246,7 +1278,7 @@
     }
 
     if (contactForm) {
-      contactForm.addEventListener('submit', function (event) {
+      contactForm.addEventListener('submit', async function (event) {
         event.preventDefault();
 
         if (!contactForm.checkValidity()) {
@@ -1254,8 +1286,40 @@
           return;
         }
 
-        contactStatus.textContent = 'Formulario validado correctamente. El envío por correo se conectará en la siguiente etapa.';
-        contactStatus.style.color = '#cf9b62';
+        const submitBtn = contactForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Enviando...';
+        contactStatus.style.color = '#aaa49c';
+
+        const payload = {
+          full_name: document.getElementById('contact-name').value.trim(),
+          email: document.getElementById('contact-email').value.trim(),
+          phone: document.getElementById('contact-phone').value.trim(),
+          company: document.getElementById('contact-company').value.trim() || null,
+          event_type: document.getElementById('contact-service').value || null,
+          message: document.getElementById('contact-message').value.trim(),
+        };
+
+        try {
+          const res = await fetch('/api/content/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            throw new Error('Respuesta no OK: ' + res.status);
+          }
+          contactStatus.textContent = '¡Solicitud enviada! Te contactaremos pronto.';
+          contactStatus.style.color = '#cf9b62';
+          contactForm.reset();
+        } catch (err) {
+          contactStatus.textContent = 'No se pudo enviar. Intenta nuevamente o escríbenos a info@ayceventos.com.co';
+          contactStatus.style.color = '#e57373';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
       });
     }
   })();

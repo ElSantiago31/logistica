@@ -32,6 +32,11 @@ from app.models.audit import AuditLog, RevokedToken
 from app.models.blocked_document import BlockedDocument
 from app.models.password_reset import PasswordResetToken
 
+# Site content (public website)
+from app.models.content import (
+    SiteSection, ServiceItem, NewsItem, GalleryItem, ContactRequest,
+)
+
 __all__ = [
     "BaseModel",
     "Role", "EPS", "PensionFund",
@@ -45,4 +50,5 @@ __all__ = [
     "AuditLog", "RevokedToken",
     "BlockedDocument",
     "PasswordResetToken",
+    "SiteSection", "ServiceItem", "NewsItem", "GalleryItem", "ContactRequest",
 ]
