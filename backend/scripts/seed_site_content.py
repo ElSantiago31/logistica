@@ -22,7 +22,7 @@ from sqlalchemy import select  # noqa: E402
 
 from app.database import AsyncSessionLocal  # noqa: E402
 from app.models.content import (  # noqa: E402
-    GalleryItem, NewsItem, ServiceItem, SiteSection,
+    GalleryItem, NewsItem, ServiceItem, SiteSection, StageItem,
 )
 
 
@@ -75,6 +75,14 @@ SECTIONS = {
         "copy": (
             "Construimos equipos y operaciones a la medida para eventos corporativos, "
             "culturales, institucionales, comerciales y de entretenimiento."
+        ),
+    },
+    "stages_intro": {
+        "eyebrow": "Grandes escenarios",
+        "title": "Hemos sido parte de eventos inolvidables.",
+        "copy": (
+            "Llevamos nuestra operación a escenarios de gran formato, acompañando "
+            "a artistas, marcas y productoras que confían en A&C."
         ),
     },
     "gallery_intro": {
@@ -190,6 +198,49 @@ SERVICES = [
 
 
 # --------------------------------------------------------------------------- #
+# Stages (Grandes Escenarios)                                                  #
+# --------------------------------------------------------------------------- #
+STAGES = [
+    {
+        "label": "Artista internacional",
+        "title": "J Balvin — Los Lobos Tour",
+        "image_url": f"{GALLERY_BASE}/gallery_2.jpg",
+        "sort_order": 1,
+    },
+    {
+        "label": "Festival de música",
+        "title": "Rock al Parque",
+        "image_url": f"{GALLERY_BASE}/gallery_3.jpg",
+        "sort_order": 2,
+    },
+    {
+        "label": "Evento corporativo",
+        "title": "Convención Andina",
+        "image_url": f"{GALLERY_BASE}/gallery_5.jpg",
+        "sort_order": 3,
+    },
+    {
+        "label": "Marca global",
+        "title": "Bavaria Live",
+        "image_url": f"{GALLERY_BASE}/gallery_7.jpg",
+        "sort_order": 4,
+    },
+    {
+        "label": "Gran formato",
+        "title": "Estéreo Picnic",
+        "image_url": f"{GALLERY_BASE}/gallery_1.jpg",
+        "sort_order": 5,
+    },
+    {
+        "label": "Deporte y entretenimiento",
+        "title": "Copa América Fan Zone",
+        "image_url": f"{GALLERY_BASE}/gallery_4.jpg",
+        "sort_order": 6,
+    },
+]
+
+
+# --------------------------------------------------------------------------- #
 # Gallery                                                                      #
 # --------------------------------------------------------------------------- #
 GALLERY = [
@@ -278,6 +329,20 @@ async def _upsert_by_title(db, model, items: list[dict]) -> None:
             db.add(model(**clean))
 
 
+async def _upsert_stages(db) -> None:
+    for data in STAGES:
+        existing = (
+            await db.execute(
+                select(StageItem).where(StageItem.title == data["title"])
+            )
+        ).scalar_one_or_none()
+        if existing:
+            for k, v in data.items():
+                setattr(existing, k, v)
+        else:
+            db.add(StageItem(**data))
+
+
 async def _upsert_gallery(db) -> None:
     for data in GALLERY:
         existing = (
@@ -302,6 +367,9 @@ async def main() -> None:
 
             await _upsert_by_title(db, ServiceItem, SERVICES)
             print(f"  [OK] {len(SERVICES)} services")
+
+            await _upsert_stages(db)
+            print(f"  [OK] {len(STAGES)} stages")
 
             await _upsert_gallery(db)
             print(f"  [OK] {len(GALLERY)} gallery items")

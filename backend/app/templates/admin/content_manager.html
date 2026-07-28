@@ -681,6 +681,7 @@
       <button type="button" data-panel="hero">★ Inicio (Hero)</button>
       <button type="button" data-panel="about">✎ Nosotros</button>
       <button type="button" data-panel="services">◆ Servicios</button>
+      <button type="button" data-panel="stages">★ Escenarios</button>
       <button type="button" data-panel="news">📰 Noticias</button>
       <button type="button" data-panel="gallery">▧ Galería</button>
       <button type="button" data-panel="contacts">✉ Solicitudes</button>
@@ -723,6 +724,10 @@
         <article class="stat-card">
           <span>Noticias publicadas</span>
           <strong id="stat-news">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Escenarios activos</span>
+          <strong id="stat-stages">0</strong>
         </article>
         <article class="stat-card">
           <span>Imágenes en galería</span>
@@ -882,6 +887,63 @@
               </tr>
             </thead>
             <tbody id="services-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- STAGES -->
+    <section class="admin-panel" id="panel-stages">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Crear escenario</h2>
+            <p>Tarjetas de "Grandes Escenarios" en la home pública.</p>
+          </div>
+        </div>
+        <form id="stage-form" class="form-grid">
+          <input type="hidden" id="stage-id">
+          <div class="form-field">
+            <label for="stage-label">Etiqueta (eyebrow) *</label>
+            <input id="stage-label" required maxlength="80" placeholder="Artista internacional">
+          </div>
+          <div class="form-field">
+            <label for="stage-order">Orden</label>
+            <input id="stage-order" type="number" min="0" value="0">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="stage-title">Título *</label>
+            <input id="stage-title" required maxlength="160" placeholder="J Balvin — Los Lobos Tour">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="stage-image">URL imagen de fondo *</label>
+            <input id="stage-image" data-image-upload required placeholder="/static/content/escenario.jpg">
+          </div>
+          <div class="form-field form-field-full">
+            <button class="admin-btn admin-btn-primary" type="submit" id="stage-submit">Crear escenario</button>
+            <button class="admin-btn" type="button" id="stage-cancel" style="display:none">Cancelar edición</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h2>Escenarios actuales</h2>
+            <p>Edita o elimina los escenarios visibles en la home.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Escenario</th>
+                <th>Etiqueta</th>
+                <th>Orden</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="stages-table-body"></tbody>
           </table>
         </div>
       </div>
@@ -1148,6 +1210,7 @@
     hero: ['Sección de inicio', 'Edita el encabezado principal de la home.'],
     about: ['Sección nosotros', 'Edita la presentación de la empresa.'],
     services: ['Servicios', 'Crea, edita y ordena los servicios.'],
+    stages: ['Escenarios', 'Tarjetas de "Grandes Escenarios".'],
     news: ['Noticias', 'Crea, publica y elimina noticias.'],
     gallery: ['Galería', 'Sube y administra imágenes de eventos.'],
     contacts: ['Solicitudes de contacto', 'Revisa los formularios recibidos.'],
@@ -1364,6 +1427,9 @@
     document.getElementById('service-form').addEventListener('submit', saveService);
     document.getElementById('service-cancel').addEventListener('click', resetServiceForm);
 
+    document.getElementById('stage-form').addEventListener('submit', saveStage);
+    document.getElementById('stage-cancel').addEventListener('click', resetStageForm);
+
     document.getElementById('news-form').addEventListener('submit', saveNews);
     document.getElementById('news-cancel').addEventListener('click', resetNewsForm);
 
@@ -1389,7 +1455,7 @@
 
   // --- Load all data ---
   async function loadAll() {
-    await Promise.all([loadHomepage(), loadServices(), loadNews(), loadGallery(), loadContacts()]);
+    await Promise.all([loadHomepage(), loadServices(), loadStages(), loadNews(), loadGallery(), loadContacts()]);
   }
 
   async function loadHomepage() {
@@ -1532,6 +1598,90 @@
       await apiSend('DELETE', 'services/' + id);
       toast('Servicio eliminado.', 'success');
       await loadServices();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  // --- Stages ---
+  let stages = [];
+  async function loadStages() {
+    try { stages = await apiGet('stages'); } catch { stages = []; }
+    renderStages();
+    updateStats();
+  }
+
+  function renderStages() {
+    const body = document.getElementById('stages-table-body');
+    if (!stages.length) {
+      body.innerHTML = '<tr><td colspan="4" class="empty-state">No hay escenarios. Crea el primero arriba.</td></tr>';
+      return;
+    }
+    body.innerHTML = stages.map(s => `
+      <tr>
+        <td>
+          <div class="content-title">${escapeHtml(s.title)}</div>
+        </td>
+        <td>${escapeHtml(s.label)}</td>
+        <td>${s.sort_order}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" type="button" data-stg-edit="${s.id}" title="Editar">✎</button>
+            <button class="icon-btn delete" type="button" data-stg-del="${s.id}" title="Eliminar">×</button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    body.querySelectorAll('[data-stg-edit]').forEach(b => b.addEventListener('click', () => editStage(b.dataset.stgEdit)));
+    body.querySelectorAll('[data-stg-del]').forEach(b => b.addEventListener('click', () => deleteStage(b.dataset.stgDel)));
+  }
+
+  function editStage(id) {
+    const s = stages.find(x => x.id === id);
+    if (!s) return;
+    document.getElementById('stage-id').value = s.id;
+    document.getElementById('stage-label').value = s.label;
+    document.getElementById('stage-title').value = s.title;
+    document.getElementById('stage-image').value = s.image_url || '';
+    document.getElementById('stage-order').value = s.sort_order;
+    document.getElementById('stage-submit').textContent = 'Guardar cambios';
+    document.getElementById('stage-cancel').style.display = 'inline-flex';
+    document.querySelector('[data-panel="stages"]').click();
+  }
+
+  function resetStageForm() {
+    document.getElementById('stage-form').reset();
+    document.getElementById('stage-id').value = '';
+    document.getElementById('stage-submit').textContent = 'Crear escenario';
+    document.getElementById('stage-cancel').style.display = 'none';
+  }
+
+  async function saveStage(e) {
+    e.preventDefault();
+    const id = document.getElementById('stage-id').value;
+    const body = {
+      label: val('stage-label'),
+      title: val('stage-title'),
+      image_url: val('stage-image'),
+      sort_order: parseInt(val('stage-order') || '0', 10),
+    };
+    try {
+      if (id) {
+        await apiSend('PUT', 'stages/' + id, body);
+        toast('Escenario actualizado.', 'success');
+      } else {
+        await apiSend('POST', 'stages', body);
+        toast('Escenario creado.', 'success');
+      }
+      resetStageForm();
+      await loadStages();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function deleteStage(id) {
+    if (!confirm('¿Eliminar este escenario?')) return;
+    try {
+      await apiSend('DELETE', 'stages/' + id);
+      toast('Escenario eliminado.', 'success');
+      await loadStages();
     } catch (e) { toast('Error: ' + e.message, 'error'); }
   }
 
@@ -1762,6 +1912,7 @@
   // --- Dashboard stats ---
   function updateStats() {
     document.getElementById('stat-services').textContent = services.length;
+    document.getElementById('stat-stages').textContent = stages.length;
     document.getElementById('stat-news').textContent = news.filter(n => n.status === 'published').length;
     document.getElementById('stat-images').textContent = gallery.length;
     document.getElementById('stat-contacts').textContent = contacts.filter(c => c.status === 'new').length;
@@ -1771,6 +1922,7 @@
       <div style="padding:1.2rem;font-size:.82rem;line-height:1.8;color:var(--admin-muted)">
         <strong style="color:var(--admin-white);font-family:Cinzel,serif">Resumen actual</strong><br>
         • Servicios visibles en la home: <strong style="color:var(--admin-gold)">${services.length}</strong><br>
+        • Escenarios activos: <strong style="color:var(--admin-gold)">${stages.length}</strong><br>
         • Noticias publicadas: <strong style="color:var(--admin-gold)">${news.filter(n => n.status === 'published').length}</strong><br>
         • Imágenes en galería: <strong style="color:var(--admin-gold)">${gallery.length}</strong><br>
         • Solicitudes nuevas sin leer: <strong style="color:var(--admin-gold)">${contacts.filter(c => c.status === 'new').length}</strong>
