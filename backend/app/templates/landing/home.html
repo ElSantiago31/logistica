@@ -521,16 +521,10 @@
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    min-height: 330px;
+    min-height: 300px;
     margin: 0;
     border: 1px solid var(--ayc-border);
     background: #101010;
-  }
-
-  .stage-card:nth-child(5),
-  .stage-card:nth-child(6) {
-    grid-row: span 2;
-    min-height: 675px;
   }
 
   .stage-card::before {
@@ -545,32 +539,6 @@
     background-size: cover;
     background-repeat: no-repeat;
     transition: transform .65s cubic-bezier(.2, .7, .2, 1), filter .4s ease;
-  }
-
-  .stage-card:nth-child(1)::before,
-  .stage-card:nth-child(2)::before {
-    background-position: center top;
-    background-size: contain;
-    background-color: #090909;
-  }
-
-  .stage-card:nth-child(3)::before,
-  .stage-card:nth-child(4)::before {
-    background-position: center top;
-    background-size: cover;
-  }
-
-  .stage-card:nth-child(5)::before,
-  .stage-card:nth-child(6)::before,
-  .stage-card:nth-child(7)::before {
-    background-position: center top;
-    background-size: contain;
-    background-color: #090909;
-  }
-
-  .stage-card:nth-child(8)::before {
-    background-position: center;
-    background-size: cover;
   }
 
   .stage-card::after {
@@ -907,12 +875,6 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .stage-card:nth-child(5),
-    .stage-card:nth-child(6) {
-      grid-row: span 2;
-      min-height: 675px;
-    }
-
     .services-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1058,10 +1020,8 @@
       margin-top: 2rem;
     }
 
-    .stage-card,
-    .stage-card:nth-child(5),
-    .stage-card:nth-child(6) {
-      min-height: 310px;
+    .stage-card {
+      min-height: 280px;
       grid-row: auto;
     }
 
@@ -1240,8 +1200,7 @@
           <h2 class="section-title">{{ services_intro.title or 'Soluciones que se adaptan a cada evento.' }}</h2>
         </div>
         <p class="section-copy">
-          {{ services_intro["copy"] or 'Construimos equipos y operaciones a la medida para eventos corporativos,
-          culturales, institucionales, comerciales y de entretenimiento.' }}
+          {{ services_intro.get('copy') or 'Construimos equipos y operaciones a la medida para eventos corporativos, culturales, institucionales, comerciales y de entretenimiento.' }}
         </p>
       </div>
 
@@ -1269,7 +1228,7 @@
           <h2 class="section-title reveal">{{ stages_intro.title or 'Nuestra Huella en los Grandes Escenarios' }}</h2>
         </div>
         <p class="section-copy reveal">
-          {{ stages_intro["copy"] or 'Hemos acompañado la logística, producción y operación de eventos de gran formato, aportando equipos preparados, presencia en campo y capacidad de respuesta en cada jornada.' }}
+          {{ stages_intro.get('copy') or 'Hemos acompañado la logística, producción y operación de eventos de gran formato, aportando equipos preparados, presencia en campo y capacidad de respuesta en cada jornada.' }}
         </p>
       </div>
 
