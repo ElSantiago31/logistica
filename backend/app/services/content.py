@@ -149,6 +149,7 @@ async def get_homepage_content(db: AsyncSession) -> dict[str, Any]:
             "id": str(s.id),
             "label": s.label,
             "title": s.title,
+            "event_date": s.event_date,
             "image_url": s.image_url,
         }
         for s in stage_result.scalars().all()
@@ -314,7 +315,7 @@ async def update_stage(
     if not item:
         return None
     for key, value in kwargs.items():
-        if value is not None and hasattr(item, key):
+        if hasattr(item, key):
             setattr(item, key, value)
     await db.commit()
     await db.refresh(item)
@@ -406,6 +407,17 @@ async def update_contact_status(
     await db.commit()
     await db.refresh(item)
     return item
+
+
+async def delete_contact_request(
+    db: AsyncSession, item_id: uuid.UUID
+) -> bool:
+    item = await db.get(ContactRequest, item_id)
+    if not item:
+        return False
+    await db.delete(item)
+    await db.commit()
+    return True
 
 
 # ---------------------------------------------------------------------------

@@ -1020,8 +1020,10 @@
       margin-top: 2rem;
     }
 
-    .stage-card {
-      min-height: 280px;
+    .stage-card,
+    .stage-card:nth-child(5),
+    .stage-card:nth-child(6) {
+      min-height: 310px;
       grid-row: auto;
     }
 
@@ -1238,7 +1240,7 @@
         <figure class="stage-card reveal" style="--stage-image:url('{{ s.image_url }}')" role="img"
           aria-label="{{ s.title }}">
           <figcaption>
-            <small>{{ s.label }}</small>
+            <small>{{ s.label }}{% if s.event_date %} · {{ s.event_date }}{% endif %}</small>
             <strong>{{ s.title }}</strong>
           </figcaption>
         </figure>

@@ -905,7 +905,7 @@
           <input type="hidden" id="stage-id">
           <div class="form-field">
             <label for="stage-label">Etiqueta (eyebrow) *</label>
-            <input id="stage-label" required maxlength="80" placeholder="Artista internacional">
+            <input id="stage-label" required maxlength="80" placeholder="Etiqueta pequeña">
           </div>
           <div class="form-field">
             <label for="stage-order">Orden</label>
@@ -913,7 +913,11 @@
           </div>
           <div class="form-field form-field-full">
             <label for="stage-title">Título *</label>
-            <input id="stage-title" required maxlength="160" placeholder="J Balvin — Los Lobos Tour">
+            <input id="stage-title" required maxlength="160" placeholder="Titulo Evento">
+          </div>
+          <div class="form-field form-field-full">
+            <label for="stage-date">Fecha / Periodo (opcional)</label>
+            <input id="stage-date" maxlength="40" placeholder="Ej: 2024, Nov 2024, Marzo 2023">
           </div>
           <div class="form-field form-field-full">
             <label for="stage-image">URL imagen de fondo *</label>
@@ -939,6 +943,7 @@
               <tr>
                 <th>Escenario</th>
                 <th>Etiqueta</th>
+                <th>Fecha</th>
                 <th>Orden</th>
                 <th>Acciones</th>
               </tr>
@@ -1142,6 +1147,7 @@
       window.location.href = '/admin/login';
       return;
     }
+
     try {
       const res = await fetch('/api/auth/me', { headers: authHeaders() });
       if (!res.ok) throw new Error();
@@ -1163,6 +1169,7 @@
     document.getElementById('admin-content-shell').style.visibility = 'visible';
     bindUI();
     await loadAll();
+    initContactsWS();
   }
 
   // --- API helpers ---
@@ -1612,7 +1619,7 @@
   function renderStages() {
     const body = document.getElementById('stages-table-body');
     if (!stages.length) {
-      body.innerHTML = '<tr><td colspan="4" class="empty-state">No hay escenarios. Crea el primero arriba.</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="empty-state">No hay escenarios. Crea el primero arriba.</td></tr>';
       return;
     }
     body.innerHTML = stages.map(s => `
@@ -1621,6 +1628,7 @@
           <div class="content-title">${escapeHtml(s.title)}</div>
         </td>
         <td>${escapeHtml(s.label)}</td>
+        <td>${escapeHtml(s.event_date || '—')}</td>
         <td>${s.sort_order}</td>
         <td>
           <div class="row-actions">
@@ -1640,6 +1648,7 @@
     document.getElementById('stage-id').value = s.id;
     document.getElementById('stage-label').value = s.label;
     document.getElementById('stage-title').value = s.title;
+    document.getElementById('stage-date').value = s.event_date || '';
     document.getElementById('stage-image').value = s.image_url || '';
     document.getElementById('stage-order').value = s.sort_order;
     document.getElementById('stage-submit').textContent = 'Guardar cambios';
@@ -1660,6 +1669,7 @@
     const body = {
       label: val('stage-label'),
       title: val('stage-title'),
+      event_date: val('stage-date') || null,
       image_url: val('stage-image'),
       sort_order: parseInt(val('stage-order') || '0', 10),
     };
@@ -1894,9 +1904,16 @@
             ${c.status === 'new' ? 'Nueva' : c.status === 'read' ? 'Leída' : 'Archivada'}
           </span>
         </td>
-        <td></td>
+        <td>
+          <div class="row-actions">
+            ${c.phone ? `<a class="icon-btn" href="https://wa.me/${escapeHtml(String(c.phone).replace(/[^0-9]/g, ''))}" target="_blank" rel="noopener" title="WhatsApp">✆</a>` : ''}
+            <a class="icon-btn" href="mailto:${escapeHtml(c.email)}" title="Email">@</a>
+            <button class="icon-btn delete" type="button" data-contact-del="${c.id}" title="Eliminar">-</button>
+          </div>
+        </td>
       </tr>`).join('');
     body.querySelectorAll('[data-contact-cycle]').forEach(b => b.addEventListener('click', () => cycleContact(b.dataset.contactCycle)));
+    body.querySelectorAll('[data-contact-del]').forEach(b => b.addEventListener('click', () => deleteContact(b.dataset.contactDel)));
   }
 
   async function cycleContact(id) {
@@ -1905,6 +1922,15 @@
     const next = c.status === 'new' ? 'read' : c.status === 'read' ? 'archived' : 'new';
     try {
       await apiSend('PUT', 'contacts/' + id, { status: next });
+      await loadContacts();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function deleteContact(id) {
+    if (!confirm('¿Eliminar esta solicitud de contacto?')) return;
+    try {
+      await apiSend('DELETE', 'contacts/' + id);
+      toast('Solicitud eliminada.', 'success');
       await loadContacts();
     } catch (e) { toast('Error: ' + e.message, 'error'); }
   }
@@ -1927,6 +1953,89 @@
         • Imágenes en galería: <strong style="color:var(--admin-gold)">${gallery.length}</strong><br>
         • Solicitudes nuevas sin leer: <strong style="color:var(--admin-gold)">${contacts.filter(c => c.status === 'new').length}</strong>
       </div>`;
+  }
+
+  // --- WebSocket para nuevas solicitudes de contacto ---
+  // Escucha el canal /ws/admin/contacts y recarga la bandeja cuando llega una
+  // nueva solicitud. Incluye reconexión automática con backoff exponencial.
+  function initContactsWS() {
+    const token = getToken();
+    if (!token) return;
+
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    const url = `${scheme}://${location.host}/ws/admin/contacts?token=${encodeURIComponent(token)}`;
+    let ws = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+    let manualClose = false;
+
+    function connect() {
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+      };
+
+      ws.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch { return; }
+        if (!msg || typeof msg !== 'object') return;
+
+        if (msg.type === 'ping') {
+          try { ws.send('pong'); } catch {}
+          return;
+        }
+
+        if (msg.type === 'new_contact') {
+          // Refrescar la bandeja y mostrar notificación al admin
+          loadContacts();
+          const d = msg.data || {};
+          toast('✉ Nueva solicitud de ' + (d.full_name || 'contacto'), 'success');
+          // Cambiar el título temporalmente para llamar la atención
+          const orig = document.title;
+          document.title = '✉ Nueva solicitud | ' + orig;
+          setTimeout(() => { document.title = orig; }, 5000);
+        }
+      };
+
+      ws.onclose = (e) => {
+        ws = null;
+        if (manualClose) return;
+        // 4401/4403 = no reintentar (token inválido/sin permisos)
+        if (e.code === 4401 || e.code === 4403) return;
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        try { ws.close(); } catch {}
+      };
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimer) return;
+      reconnectAttempts += 1;
+      // Backoff: 2s, 4s, 8s, ... máx 30s
+      const delay = Math.min(30000, 2000 * Math.pow(2, reconnectAttempts - 1));
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, delay);
+    }
+
+    // Reconectar al volver a la pestaña (el navegador puede cerrar WS ocultos)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !ws && !manualClose) {
+        reconnectAttempts = 0;
+        connect();
+      }
+    });
+
+    connect();
   }
 
   // --- Start ---

@@ -200,42 +200,66 @@ SERVICES = [
 # --------------------------------------------------------------------------- #
 # Stages (Grandes Escenarios)                                                  #
 # --------------------------------------------------------------------------- #
+# Mirror of the values originally hardcoded in home.html so they become
+# manageable from the admin panel. Images live under /static/frontend/landing/events/.
+EVENTS_BASE = "/static/frontend/landing/events"
+
 STAGES = [
     {
         "label": "Artista internacional",
-        "title": "J Balvin — Los Lobos Tour",
-        "image_url": f"{GALLERY_BASE}/gallery_2.jpg",
+        "title": "J Balvin",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_01.jpg",
         "sort_order": 1,
     },
     {
-        "label": "Festival de música",
-        "title": "Rock al Parque",
-        "image_url": f"{GALLERY_BASE}/gallery_3.jpg",
+        "label": "Artista internacional",
+        "title": "Maluma",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_02.jpg",
         "sort_order": 2,
     },
     {
-        "label": "Evento corporativo",
-        "title": "Convención Andina",
-        "image_url": f"{GALLERY_BASE}/gallery_5.jpg",
+        "label": "Producción de gran formato",
+        "title": "Shakira",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_03.jpg",
         "sort_order": 3,
     },
     {
-        "label": "Marca global",
-        "title": "Bavaria Live",
-        "image_url": f"{GALLERY_BASE}/gallery_7.jpg",
+        "label": "Producción nacional",
+        "title": "Yeison Jiménez",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_04.jpg",
         "sort_order": 4,
     },
     {
-        "label": "Gran formato",
-        "title": "Estéreo Picnic",
-        "image_url": f"{GALLERY_BASE}/gallery_1.jpg",
+        "label": "Evento masivo",
+        "title": "Claro Fútbol Fest",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_05.jpg",
         "sort_order": 5,
     },
     {
-        "label": "Deporte y entretenimiento",
-        "title": "Copa América Fan Zone",
-        "image_url": f"{GALLERY_BASE}/gallery_4.jpg",
+        "label": "Concierto de gran formato",
+        "title": "Viva el Merengue",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_06.jpg",
         "sort_order": 6,
+    },
+    {
+        "label": "Experiencia de entretenimiento",
+        "title": "Karol G Viewing Party",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_07.jpg",
+        "sort_order": 7,
+    },
+    {
+        "label": "Logística integral",
+        "title": "Bogotá Eats",
+        "event_date": "",
+        "image_url": f"{EVENTS_BASE}/event_08.jpg",
+        "sort_order": 8,
     },
 ]
 

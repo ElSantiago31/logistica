@@ -24,17 +24,18 @@ Endpoints:
     - POST   /api/content/cleanup          Limpia imágenes huérfanas
     - GET    /api/content/contacts         Lista solicitudes de contacto
     - PUT    /api/content/contacts/{id}    Cambia estado (new|read|archived)
+    - DELETE /api/content/contacts/{id}    Elimina solicitud de contacto
 """
-from __future__ import annotations
 
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies.auth import require_content_manager
+from app.dependencies.rate_limit import limiter
 from app.models.content import (
     GalleryItem,
     NewsItem,
@@ -64,8 +65,13 @@ from app.schemas.content import (
     StageItemUpdate,
 )
 from app.services import content as content_service
+from app.websockets.manager import manager
 
 router = APIRouter(prefix="/api/content", tags=["Site Content"])
+
+# Sala global usada para notificaciones del panel admin (contenido/solicitudes)
+_GLOBAL_EVENT_ID = "_global_"
+_CONTENT_CHANNEL = "content"
 
 
 # ---------------------------------------------------------------------------
@@ -79,11 +85,16 @@ async def get_public_homepage(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/contact", response_model=ContactRequestResponse, status_code=201)
+@limiter.limit("5/minute")
 async def submit_contact_form(
-    payload: ContactRequestCreate,
+    request: Request,
+    payload: ContactRequestCreate = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Formulario público de contacto — sin autenticación."""
+    """Formulario público de contacto — sin autenticación.
+
+    Rate limited (5/min por IP) para prevenir spam/abuso del endpoint público.
+    """
     item = await content_service.create_contact_request(
         db,
         full_name=payload.full_name,
@@ -93,6 +104,24 @@ async def submit_contact_form(
         event_type=payload.event_type,
         message=payload.message,
     )
+
+    # Notificar en tiempo real al panel admin (si hay alguien conectado)
+    try:
+        await manager.publish(
+            _GLOBAL_EVENT_ID,
+            _CONTENT_CHANNEL,
+            "new_contact",
+            {
+                "id": str(item.id),
+                "full_name": item.full_name,
+                "event_type": item.event_type or "General",
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            },
+        )
+    except Exception:
+        # Las notificaciones en tiempo real no deben romper el flujo público
+        pass
+
     return ContactRequestResponse.model_validate(item)
 
 
@@ -267,6 +296,7 @@ async def create_stage(
         db,
         label=payload.label,
         title=payload.title,
+        event_date=payload.event_date,
         image_url=payload.image_url,
         sort_order=payload.sort_order,
     )
@@ -401,3 +431,15 @@ async def update_contact_status(
     if not item:
         raise HTTPException(404, "Solicitud de contacto no encontrada")
     return ContactRequestResponse.model_validate(item)
+
+
+@router.delete("/contacts/{contact_id}", status_code=204)
+async def delete_contact(
+    contact_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_content_manager),
+):
+    """Elimina una solicitud de contacto de la bandeja."""
+    ok = await content_service.delete_contact_request(db, contact_id)
+    if not ok:
+        raise HTTPException(404, "Solicitud de contacto no encontrada")

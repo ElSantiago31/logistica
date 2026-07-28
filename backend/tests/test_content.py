@@ -171,6 +171,34 @@ class TestContentService:
         assert updated.status == "published"
         assert updated.published_at is not None
 
+    async def test_stage_create_update_event_date(self, db):
+        """Los escenarios soportan event_date y permiten limpiarlo a null."""
+        # Crear con fecha
+        stage = await content_service.create_stage(
+            db,
+            label="Concierto",
+            title="Artista X",
+            event_date="Nov 2024",
+            image_url="/static/content/stage.jpg",
+            sort_order=0,
+        )
+        assert stage.event_date == "Nov 2024"
+
+        # Actualizar la fecha
+        updated = await content_service.update_stage(
+            db, stage.id, event_date="Marzo 2025"
+        )
+        assert updated.event_date == "Marzo 2025"
+
+        # Limpiar la fecha (debe permitir setear a None)
+        cleared = await content_service.update_stage(
+            db, stage.id, event_date=None
+        )
+        assert cleared.event_date is None
+
+        # Limpieza
+        await content_service.delete_stage(db, stage.id)
+
     async def test_contact_status_workflow(self, db):
         """Las solicitudes de contacto cambian de estado correctamente."""
         item = await content_service.create_contact_request(

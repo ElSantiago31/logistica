@@ -193,6 +193,55 @@ async def ws_event_channel(
         await manager.disconnect(websocket)
 
 
+@router.websocket("/admin/contacts")
+async def ws_admin_contacts(
+    websocket: WebSocket,
+    token: str = Query(default=""),
+):
+    """Canal global para notificaciones del panel admin (contenido/solicitudes).
+
+    No depende de un evento concreto. Se usa la sala especial ``_global_``
+    con canal ``content`` para broadcasting (ej. nueva solicitud de contacto).
+    """
+    user = await _validate_ws_token(token)
+    if user is None:
+        await websocket.close(code=4401, reason="Token inválido o expirado")
+        return
+
+    if user.user_type not in ("superadmin", "admin", "web_admin"):
+        await websocket.close(code=4403, reason="Sin permisos para este canal")
+        return
+
+    GLOBAL_EVENT_ID = "_global_"
+    CHANNEL = "content"
+    user_label = user.email or f"admin_{user.id}"
+
+    await manager.connect(websocket, GLOBAL_EVENT_ID, CHANNEL, user_label)
+    await websocket.send_text(
+        json_dumps(
+            {
+                "type": "connected",
+                "channel": CHANNEL,
+                "message": "Notificaciones de contenido activas",
+            }
+        )
+    )
+
+    heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            if msg in ("pong", "ping", ""):
+                continue
+    except WebSocketDisconnect:
+        logger.info("[ws] admin content desconectado: %s", user_label)
+    except Exception as exc:
+        logger.warning("[ws] error en admin content (%s): %s", user_label, exc)
+    finally:
+        heartbeat_task.cancel()
+        await manager.disconnect(websocket)
+
+
 @router.get("/stats")
 async def ws_stats():
     """Endpoint de monitoreo: cuántas conexiones activas hay (solo admin)."""

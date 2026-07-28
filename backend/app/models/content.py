@@ -95,6 +95,10 @@ class StageItem(BaseModel):
         String(160), nullable=False,
         comment="Texto fuerte: ej. 'J Balvin'",
     )
+    event_date: Mapped[str | None] = mapped_column(
+        String(40), nullable=True,
+        comment="Fecha/periodo del evento (texto libre): ej. '2024', 'Nov 2023'",
+    )
     image_url: Mapped[str] = mapped_column(String(255), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
 

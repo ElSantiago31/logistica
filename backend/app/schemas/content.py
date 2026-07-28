@@ -94,6 +94,7 @@ class NewsItemResponse(BaseModel):
 class StageItemCreate(BaseModel):
     label: str = Field(..., min_length=2, max_length=80, description="Eyebrow (ej. 'Artista internacional')")
     title: str = Field(..., min_length=2, max_length=160, description="Título fuerte (ej. 'J Balvin')")
+    event_date: Optional[str] = Field(None, max_length=40, description="Fecha/periodo (ej. '2024', 'Nov 2023')")
     image_url: str = Field(..., min_length=1, max_length=255)
     sort_order: int = Field(0, ge=0)
 
@@ -101,6 +102,7 @@ class StageItemCreate(BaseModel):
 class StageItemUpdate(BaseModel):
     label: Optional[str] = Field(None, min_length=2, max_length=80)
     title: Optional[str] = Field(None, min_length=2, max_length=160)
+    event_date: Optional[str] = Field(None, max_length=40)
     image_url: Optional[str] = Field(None, min_length=1, max_length=255)
     sort_order: Optional[int] = Field(None, ge=0)
 
@@ -109,6 +111,7 @@ class StageItemResponse(BaseModel):
     id: uuid.UUID
     label: str
     title: str
+    event_date: Optional[str] = None
     image_url: str
     sort_order: int
 
