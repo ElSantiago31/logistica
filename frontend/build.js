@@ -30,6 +30,61 @@ const TAILWIND_OUTPUT = path.join(PUBLIC_DIR, "tailwind.css");
 const BACKEND_FRONTEND_PUBLIC = path.join(ROOT, "..", "backend", "frontend", "public");
 
 // ----------------------------------------------------------------
+//  Fase 0: Sincronizar assets estáticos (imágenes, fuentes, etc.)
+// ----------------------------------------------------------------
+// Copia recursiva de frontend/public/ → backend/frontend/public/ para que
+// el servidor de desarrollo local (uvicorn en backend/) pueda servir TODOS
+// los estáticos (no solo tailwind.css) en /static/frontend/.
+function syncPublicAssets() {
+  console.log("\n=== Fase 0: Sincronizar assets públicos ===");
+
+  if (!fs.existsSync(PUBLIC_DIR)) {
+    console.warn(`  ⚠ No existe ${PUBLIC_DIR} — se omite la sincronización.`);
+    return;
+  }
+
+  if (!fs.existsSync(BACKEND_FRONTEND_PUBLIC)) {
+    fs.mkdirSync(BACKEND_FRONTEND_PUBLIC, { recursive: true });
+  }
+
+  let copied = 0;
+  let skipped = 0;
+
+  function copyRecursive(src, dest) {
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    for (const entry of entries) {
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+
+      if (entry.isDirectory()) {
+        fs.mkdirSync(destPath, { recursive: true });
+        copyRecursive(srcPath, destPath);
+      } else {
+        // Solo copiar si no existe o si cambió (comparar tamaño + mtime)
+        let needsCopy = true;
+        if (fs.existsSync(destPath)) {
+          const srcStat = fs.statSync(srcPath);
+          const destStat = fs.statSync(destPath);
+          if (srcStat.size === destStat.size && srcStat.mtimeMs <= destStat.mtimeMs) {
+            needsCopy = false;
+          }
+        }
+
+        if (needsCopy) {
+          fs.copyFileSync(srcPath, destPath);
+          copied++;
+        } else {
+          skipped++;
+        }
+      }
+    }
+  }
+
+  copyRecursive(PUBLIC_DIR, BACKEND_FRONTEND_PUBLIC);
+  console.log(`  ✓ ${copied} archivo(s) copiado(s), ${skipped} sin cambios → backend/frontend/public/`);
+}
+
+// ----------------------------------------------------------------
 //  Fase 1: Tailwind CSS (compilar + purge + minificar)
 // ----------------------------------------------------------------
 function buildTailwind() {
@@ -142,6 +197,7 @@ async function buildJs() {
 // ----------------------------------------------------------------
 (async function main() {
   console.log("🔨 Build de assets frontend (Tailwind CSS + Terser JS)\n");
+  syncPublicAssets();
   buildTailwind();
   await buildJs();
   console.log("\n✅ Build completo.");

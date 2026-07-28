@@ -74,6 +74,14 @@ COPY --from=js-builder /build/js/*.min.js /app/frontend/js/
 # Se sirve en /static/frontend/tailwind.css (montado en main.py).
 COPY --from=js-builder /build/public/tailwind.css /app/frontend/public/tailwind.css
 
+# Assets estáticos (imágenes de landing, galería, eventos, fuentes, etc.).
+# main.py monta /static/frontend/ sobre /app/frontend/public/ en runtime.
+# Estos archivos viven en frontend/public/ (raíz del repo) y deben copiarse
+# al espejo que usa el backend dentro del contenedor.
+COPY frontend/public/ /app/frontend/public/
+# Sobreescribir tailwind.css con la versión compilada del Stage 1 (siempre fresca).
+COPY --from=js-builder /build/public/tailwind.css /app/frontend/public/tailwind.css
+
 # Entrypoint permissions
 RUN chmod +x /app/entrypoint.sh
 
