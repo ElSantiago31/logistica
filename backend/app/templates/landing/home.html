@@ -1259,20 +1259,32 @@
   </section>
   {% endif %}
 
+  {% set stages_intro = (content.sections.get("stages_intro") if content else None) or {} %}
+  {% set stages = (content.stages if content else None) or [] %}
   <section class="section stage-section" id="grandes-escenarios">
     <div class="container-ayc">
       <div class="stage-heading">
         <div>
-          <span class="eyebrow reveal">Experiencia comprobada</span>
-          <h2 class="section-title reveal">Nuestra Huella en los Grandes Escenarios</h2>
+          <span class="eyebrow reveal">{{ stages_intro.eyebrow or 'Experiencia comprobada' }}</span>
+          <h2 class="section-title reveal">{{ stages_intro.title or 'Nuestra Huella en los Grandes Escenarios' }}</h2>
         </div>
         <p class="section-copy reveal">
-          Hemos acompañado la logística, producción y operación de eventos de gran formato,
-          aportando equipos preparados, presencia en campo y capacidad de respuesta en cada jornada.
+          {{ stages_intro["copy"] or 'Hemos acompañado la logística, producción y operación de eventos de gran formato, aportando equipos preparados, presencia en campo y capacidad de respuesta en cada jornada.' }}
         </p>
       </div>
 
       <div class="stage-grid" aria-label="Eventos destacados en los que ha participado A&C">
+        {% if stages %}
+        {% for s in stages %}
+        <figure class="stage-card reveal" style="--stage-image:url('{{ s.image_url }}')" role="img"
+          aria-label="{{ s.title }}">
+          <figcaption>
+            <small>{{ s.label }}</small>
+            <strong>{{ s.title }}</strong>
+          </figcaption>
+        </figure>
+        {% endfor %}
+        {% else %}
         <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_01.jpg')"
           role="img" aria-label="Participación de A&C en eventos relacionados con J Balvin">
           <figcaption>
@@ -1336,6 +1348,7 @@
             <strong>Bogotá Eats</strong>
           </figcaption>
         </figure>
+        {% endif %}
       </div>
     </div>
   </section>
