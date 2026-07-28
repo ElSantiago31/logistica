@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 class SectionUpsert(BaseModel):
     """Payload para crear/actualizar una sección (JSON libre)."""
-    section_key: Literal["hero", "about", "contact"] = Field(..., description="Clave de la sección")
+    section_key: Literal["hero", "about", "contact", "services_intro", "stages_intro"] = Field(..., description="Clave de la sección")
     content: dict[str, Any] = Field(..., description="Contenido serializable (JSON)")
 
 
@@ -89,6 +89,33 @@ class NewsItemResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# StageItem (Grandes Escenarios)
+# ---------------------------------------------------------------------------
+class StageItemCreate(BaseModel):
+    label: str = Field(..., min_length=2, max_length=80, description="Eyebrow (ej. 'Artista internacional')")
+    title: str = Field(..., min_length=2, max_length=160, description="Título fuerte (ej. 'J Balvin')")
+    image_url: str = Field(..., min_length=1, max_length=255)
+    sort_order: int = Field(0, ge=0)
+
+
+class StageItemUpdate(BaseModel):
+    label: Optional[str] = Field(None, min_length=2, max_length=80)
+    title: Optional[str] = Field(None, min_length=2, max_length=160)
+    image_url: Optional[str] = Field(None, min_length=1, max_length=255)
+    sort_order: Optional[int] = Field(None, ge=0)
+
+
+class StageItemResponse(BaseModel):
+    id: uuid.UUID
+    label: str
+    title: str
+    image_url: str
+    sort_order: int
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # GalleryItem
 # ---------------------------------------------------------------------------
 class GalleryItemCreate(BaseModel):
@@ -154,5 +181,6 @@ class HomepageContent(BaseModel):
     """Agrega todo el contenido público necesario para renderizar la home."""
     sections: dict[str, dict[str, Any]] = Field(default_factory=dict)
     services: list[ServiceItemResponse] = Field(default_factory=list)
+    stages: list[StageItemResponse] = Field(default_factory=list)
     news: list[NewsItemResponse] = Field(default_factory=list)
     gallery: list[GalleryItemResponse] = Field(default_factory=list)

@@ -79,6 +79,29 @@ class NewsItem(BaseModel):
         return f"<NewsItem {self.title} [{self.status}]>"
 
 
+class StageItem(BaseModel):
+    """Una tarjeta de 'Grandes Escenarios' en la home.
+
+    Representa un evento/artista/escenario destacado en el que A&C ha
+    participado. Se renderiza como tarjetas con imagen de fondo.
+    """
+    __tablename__ = "site_stages"
+
+    label: Mapped[str] = mapped_column(
+        String(80), nullable=False,
+        comment="Texto pequeño (eyebrow): ej. 'Artista internacional'",
+    )
+    title: Mapped[str] = mapped_column(
+        String(160), nullable=False,
+        comment="Texto fuerte: ej. 'J Balvin'",
+    )
+    image_url: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+
+    def __repr__(self):
+        return f"<StageItem {self.title}>"
+
+
 class GalleryItem(BaseModel):
     """An image in the public gallery."""
     __tablename__ = "site_gallery"

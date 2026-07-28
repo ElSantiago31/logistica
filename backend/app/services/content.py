@@ -29,6 +29,7 @@ from app.models.content import (
     NewsItem,
     ServiceItem,
     SiteSection,
+    StageItem,
 )
 
 # Tipos MIME permitidos para imágenes de contenido (noticias/galería).
@@ -137,9 +138,26 @@ async def get_homepage_content(db: AsyncSession) -> dict[str, Any]:
         for g in gal_result.scalars().all()
     ]
 
+    # Stages (Grandes Escenarios)
+    stage_result = await db.execute(
+        select(StageItem)
+        .where(StageItem.is_active == True)
+        .order_by(StageItem.sort_order, StageItem.created_at)
+    )
+    stages = [
+        {
+            "id": str(s.id),
+            "label": s.label,
+            "title": s.title,
+            "image_url": s.image_url,
+        }
+        for s in stage_result.scalars().all()
+    ]
+
     return {
         "sections": sections,
         "services": services,
+        "stages": stages,
         "news": news,
         "gallery": gallery,
     }
@@ -264,6 +282,47 @@ async def update_news(
 
 async def delete_news(db: AsyncSession, item_id: uuid.UUID) -> bool:
     item = await db.get(NewsItem, item_id)
+    if not item:
+        return False
+    await db.delete(item)
+    await db.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Stages (Grandes Escenarios)
+# ---------------------------------------------------------------------------
+async def list_stages(db: AsyncSession) -> list[StageItem]:
+    result = await db.execute(
+        select(StageItem).order_by(StageItem.sort_order, StageItem.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def create_stage(db: AsyncSession, **kwargs: Any) -> StageItem:
+    item = StageItem(**kwargs)
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+async def update_stage(
+    db: AsyncSession, item_id: uuid.UUID, **kwargs: Any
+) -> Optional[StageItem]:
+    item = await db.get(StageItem, item_id)
+    if not item:
+        return None
+    for key, value in kwargs.items():
+        if value is not None and hasattr(item, key):
+            setattr(item, key, value)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+async def delete_stage(db: AsyncSession, item_id: uuid.UUID) -> bool:
+    item = await db.get(StageItem, item_id)
     if not item:
         return False
     await db.delete(item)

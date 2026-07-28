@@ -40,6 +40,7 @@ from app.models.content import (
     NewsItem,
     ServiceItem,
     SiteSection,
+    StageItem,
 )
 from app.models.users import User
 from app.schemas.content import (
@@ -58,6 +59,9 @@ from app.schemas.content import (
     ServiceItemCreate,
     ServiceItemResponse,
     ServiceItemUpdate,
+    StageItemCreate,
+    StageItemResponse,
+    StageItemUpdate,
 )
 from app.services import content as content_service
 
@@ -116,7 +120,7 @@ async def list_sections(
 
 @router.put("/sections/{section_key}", response_model=SectionResponse)
 async def upsert_section(
-    section_key: Literal["hero", "about", "contact"],
+    section_key: Literal["hero", "about", "contact", "services_intro", "stages_intro"],
     payload: SectionUpsert,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_content_manager),
@@ -239,6 +243,59 @@ async def delete_news(
     ok = await content_service.delete_news(db, item_id)
     if not ok:
         raise HTTPException(404, "Noticia no encontrada")
+
+
+# ---------------------------------------------------------------------------
+# Stages (management)
+# ---------------------------------------------------------------------------
+@router.get("/stages", response_model=list[StageItemResponse])
+async def list_stages(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_content_manager),
+):
+    items = await content_service.list_stages(db)
+    return [StageItemResponse.model_validate(s) for s in items]
+
+
+@router.post("/stages", response_model=StageItemResponse, status_code=201)
+async def create_stage(
+    payload: StageItemCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_content_manager),
+):
+    item = await content_service.create_stage(
+        db,
+        label=payload.label,
+        title=payload.title,
+        image_url=payload.image_url,
+        sort_order=payload.sort_order,
+    )
+    return StageItemResponse.model_validate(item)
+
+
+@router.put("/stages/{item_id}", response_model=StageItemResponse)
+async def update_stage(
+    item_id: uuid.UUID,
+    payload: StageItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_content_manager),
+):
+    data = payload.model_dump(exclude_unset=True)
+    item = await content_service.update_stage(db, item_id, **data)
+    if not item:
+        raise HTTPException(404, "Escenario no encontrado")
+    return StageItemResponse.model_validate(item)
+
+
+@router.delete("/stages/{item_id}", status_code=204)
+async def delete_stage(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_content_manager),
+):
+    ok = await content_service.delete_stage(db, item_id)
+    if not ok:
+        raise HTTPException(404, "Escenario no encontrado")
 
 
 # ---------------------------------------------------------------------------
