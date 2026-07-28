@@ -58,6 +58,7 @@
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
     <!-- Navigation bar -->
+    {% block navbar %}
     <nav class="text-white shadow-lg" id="main-nav"
         style="background: linear-gradient(135deg, #5d4224 0%, #785631 100%);">
         <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -123,6 +124,7 @@
             </div>
         </div>
     </nav>
+    {% endblock %}
 
     <!-- Toast container -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>

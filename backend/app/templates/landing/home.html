@@ -2,6 +2,17 @@
 
 {% block title %}A&C Eventos | Logística, producción y personal para eventos{% endblock %}
 
+{% block navbar %}
+<header class="home-nav" id="main-nav">
+  <div class="container-ayc home-nav-inner">
+    <a href="#inicio" class="home-nav-brand" aria-label="A&C Eventos — Inicio">
+      <img src="/static/frontend/logo.jpeg" alt="Logo A&C Eventos" class="home-nav-logo">
+      <span class="home-nav-title">A&C Eventos Logística y Producción de Eventos</span>
+    </a>
+  </div>
+</header>
+{% endblock %}
+
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,57 +54,78 @@
     background: var(--ayc-black);
   }
 
-  #nav-enroll-d,
-  #nav-enroll-m {
-    display: none !important;
-  }
-
-  #main-nav {
+  /* --- Minimal navbar for the public home --- */
+  .home-nav {
     position: fixed;
     inset: 0 0 auto 0;
     z-index: 100;
-    background: rgba(5, 5, 5, 0.82) !important;
+    background: rgba(5, 5, 5, 0.82);
     border-bottom: 1px solid rgba(207, 155, 98, 0.14);
-    box-shadow: none !important;
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     transition: background .3s ease, border-color .3s ease;
   }
 
-  #main-nav.nav-scrolled {
-    background: rgba(5, 5, 5, 0.96) !important;
+  .home-nav.nav-scrolled {
+    background: rgba(5, 5, 5, 0.96);
     border-color: rgba(207, 155, 98, 0.28);
   }
 
-  #main-nav>div:first-child {
-    max-width: 1320px !important;
+  .home-nav-inner {
+    display: flex;
+    align-items: center;
+    min-height: 68px;
+    max-width: 1320px;
   }
 
-  #main-nav img {
-    width: 46px !important;
-    height: 46px !important;
+  .home-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    text-decoration: none;
   }
 
-  #main-nav a[href="/colaboradores"] {
+  .home-nav-logo {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--ayc-gold);
+    flex-shrink: 0;
+  }
+
+  .home-nav-title {
     font-family: 'Cinzel', serif;
-    font-size: .84rem !important;
-    letter-spacing: .08em;
-    color: var(--ayc-white) !important;
-    max-width: 330px;
+    font-size: clamp(.82rem, 1.8vw, 1.05rem);
+    font-weight: 600;
+    letter-spacing: .06em;
+    color: var(--ayc-white);
+    line-height: 1.3;
+    text-wrap: balance;
   }
 
-  #nav-enroll-d,
-  #nav-enroll-m,
-  #nav-logout-d,
-  #nav-logout-m {
-    border-radius: 999px !important;
-    padding: .72rem 1.1rem !important;
-    background: var(--ayc-gold) !important;
-    color: var(--ayc-black) !important;
+  @media (max-width: 760px) {
+    .home-nav-title {
+      font-size: .72rem;
+      letter-spacing: .04em;
+      max-width: 220px;
+    }
+
+    .home-nav-logo {
+      width: 40px;
+      height: 40px;
+    }
+
+    .home-nav-inner {
+      min-height: 60px;
+    }
   }
 
-  #mobile-menu {
-    background: rgba(5, 5, 5, .98);
+  @media (max-width: 480px) {
+    .home-nav-title {
+      font-size: .66rem;
+      max-width: 180px;
+    }
   }
 
   .home-page {
