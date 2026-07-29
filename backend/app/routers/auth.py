@@ -467,7 +467,10 @@ async def update_admin(
         raise HTTPException(status_code=403, detail="Solo puedes editar usuarios checkin")
 
     # SECURITY: validate user_type changes to prevent privilege escalation.
-    if "user_type" in request:
+    # Nota: si el frontend reenvía el mismo user_type que ya tiene el usuario
+    # (caso típico cuando un superadmin edita su propia cuenta), no hay cambio
+    # real de rol y omitimos la validación para permitir el guardado.
+    if "user_type" in request and request["user_type"] != admin.user_type:
         new_type = request["user_type"]
         if permissions.is_superadmin(current_user):
             allowed_update = permissions.CREATABLE_BY_SUPERADMIN | {permissions.ADMIN}

@@ -112,6 +112,7 @@
         document.getElementById('editId').value='';
         document.getElementById('adminForm').reset();
         document.getElementById('password').required=true;
+        document.getElementById('userType').disabled=false;
         document.getElementById('modal').classList.remove('hidden');
     }
 
@@ -127,6 +128,10 @@
             document.getElementById('email').value=a.email||'';
             document.getElementById('phone').value=a.phone||'';
             document.getElementById('userType').value=a.user_type;
+            // El rol de un superadmin es fijo: no se puede cambiar ni degradar desde el panel.
+            const ut=document.getElementById('userType');
+            if(a.user_type==='superadmin'){ut.disabled=true;ut.value='superadmin'}
+            else{ut.disabled=false}
             document.getElementById('password').value='';
             document.getElementById('password').required=false;
             document.getElementById('modal').classList.remove('hidden');
