@@ -351,7 +351,8 @@ async def search_operators_for_staff(
     """Busca operadores por nombre o cédula.
 
     Pensado para el buscador de la sección 'Personal del Sistema' al crear/editar
-    eventos: permite asignar operadores como checkin/intendencia de un evento.
+    eventos: permite asignar operadores (y usuarios checkin/intendencia) como
+    checkin/intendencia de un evento.
     Devuelve {user_id, full_name, document_number, photo}.
     """
     from sqlalchemy import or_, func as sql_func
@@ -361,7 +362,7 @@ async def search_operators_for_staff(
         select(User, Operator)
         .outerjoin(Operator, Operator.user_id == User.id)
         .where(
-            User.user_type == "operator",
+            User.user_type.in_(["operator", "checkin", "intendencia"]),
             User.is_active == True,
             or_(
                 sql_func.lower(User.first_name).like(term),
@@ -391,28 +392,36 @@ async def list_coordinators(
     current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lista SOLO coordinadores reales (user_type='coordinator').
+    """Lista candidatos para coordinador de evento (selector de cupos).
 
-    Devuelve campos normalizados para el selector de cupos en crear/editar evento:
-    operator_id, user_id, full_name, document_number, phone, user_type.
+    Devuelve operadores y coordinadores activos para poder asignarles cupos en
+    crear/editar evento. Un operador común puede ser elegido como coordinador.
 
-    No incluye operadores comunes para evitar que aparezcan como sugerencia.
+    Criterio (OR):
+      - Operadores activos (user_type='operator') con perfil Operator.
+      - Usuarios cuyo rol tiene hierarchy_level 1 (Coordinador General) o
+        2 (Coordinador de área) con perfil Operator.
+
+    Campos: operator_id, user_id, full_name, document_number, phone, user_type.
     Los coordinadores legacy (importados de Excel, sin FK) se manejan como
     texto libre en el frontend, no aparecen acá.
     """
-    # SOLO coordinadores reales (user_type='coordinator'). No incluir operadores
-    # comunes, para evitar que aparezcan como sugerencia en el selector de cupos.
+    from sqlalchemy import or_
+
     result = await db.execute(
         select(Operator, User)
         .join(User, User.id == Operator.user_id)
+        .outerjoin(Role, User.role_id == Role.id)
         .where(
             User.is_active == True,
-            User.user_type == "coordinator",
+            or_(
+                User.user_type == "operator",
+                Role.hierarchy_level.in_([1, 2]),
+            ),
         )
         .order_by(User.first_name, User.last_name)
     )
     rows = result.all()
-    rows.sort(key=lambda r: (r[1].first_name, r[1].last_name))
     return {
         "items": [
             {

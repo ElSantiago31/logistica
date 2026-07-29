@@ -533,6 +533,7 @@ async def assign_operators(
     db: AsyncSession, event_id: uuid.UUID, operator_ids: List[uuid.UUID],
     role_id: Optional[uuid.UUID] = None, rate: Optional[float] = None,
     programmed_by_operator_id: Optional[uuid.UUID] = None,
+    programmed_by_name: Optional[str] = None,
 ) -> List[EventAssignment]:
     """Assign operators to an event. operator_ids can be user_ids or operator_ids.
     If no rate is provided, uses the rate_per_shift from EventStaffNeed for the role.
@@ -542,6 +543,11 @@ async def assign_operators(
     programmed_by_operator_id / admitted_by_operator_id y los strings
     programmed_by / admitted_by (nombre en MAYÚSCULAS del coordinador).
     El cupo es informativo: nunca bloquea la asignación.
+
+    programmed_by_name (fallback): nombre del coordinador en texto libre.
+    Se usa cuando NO hay operator_id (cuotas legacy) o cuando la FK no se
+    pudo resolver, para garantizar que SIEMPRE quede estampado el nombre
+    en programmed_by / admitted_by. Se normaliza a MAYÚSCULAS.
     """
     # Resolver coordinador (si vino el nuevo flujo): objeto Operator + nombre.
     coord_operator: Optional[Operator] = None
@@ -550,6 +556,9 @@ async def assign_operators(
         coord_operator = await _resolve_coordinator(db, programmed_by_operator_id)
         if coord_operator:
             coord_name = await _resolve_coordinator_name(db, programmed_by_operator_id)
+    # Fallback: si no se resolvió nombre por FK, usar el nombre en texto libre.
+    if not coord_name and programmed_by_name:
+        coord_name = str(programmed_by_name).strip().upper() or None
     # Auto-fill rate from EventStaffNeed if not provided
     if not rate and role_id:
         sn_result = await db.execute(
@@ -626,9 +635,10 @@ async def assign_operators(
         if coord_operator:
             assignment_kwargs["programmed_by_operator_id"] = coord_operator.id
             assignment_kwargs["admitted_by_operator_id"] = coord_operator.id
-            if coord_name:
-                assignment_kwargs["programmed_by"] = coord_name
-                assignment_kwargs["admitted_by"] = coord_name
+        # Siempre estampar los strings (FK resuelta o nombre legacy/fallback).
+        if coord_name:
+            assignment_kwargs["programmed_by"] = coord_name
+            assignment_kwargs["admitted_by"] = coord_name
         assignment = EventAssignment(**assignment_kwargs)
         db.add(assignment)
         assignments.append(assignment)

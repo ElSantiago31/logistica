@@ -58,7 +58,7 @@ async def _resolve_staff_access(
     Raises:
         HTTPException(403) si no tiene permisos.
     """
-    base_roles = {"admin", "superadmin"}
+    base_roles = {"admin", "superadmin", "intendencia"}
     if allow_checkin:
         base_roles.add("checkin")
 
@@ -70,6 +70,7 @@ async def _resolve_staff_access(
         allowed = set()
         if allow_checkin:
             allowed.add("checkin")
+            allowed.add("intendencia")
         result = await db.execute(
             select(EventStaffAssignment.staff_role).where(
                 EventStaffAssignment.event_id == event_id,
@@ -91,7 +92,7 @@ def _can_manage_uniform(user: User, staff_role: Optional[str] = None) -> bool:
     Pueden: admin, superadmin, coordinator, checkin (rol base), u operador
     cuyo staff_role en el evento sea 'checkin'.
     """
-    if user.user_type in ("admin", "superadmin", "checkin"):
+    if user.user_type in ("admin", "superadmin", "checkin", "intendencia"):
         return True
     if user.user_type == "operator" and staff_role == "checkin":
         return True
@@ -155,6 +156,7 @@ async def get_offline_data(
             "coordinator_name": coord_name,
             "coordinator_role_name": coord_role,
             "admitted_by": assignment.admitted_by,
+            "programmed_by": assignment.programmed_by,
         })
 
     # Log sync session (non-critical)
@@ -177,7 +179,7 @@ async def get_offline_data(
     # --- Cupos por coordinador (para tarjetas) ---
     quotas = await _get_coordinator_quotas(db, event_id)
 
-    # --- Cargos requeridos por rol (EventStaffNeed) ---
+    # --- Roles requeridos del evento (para tarjetas de check-in por rol) ---
     staff_needs = await _get_event_staff_needs(db, event_id)
 
     return {
@@ -190,9 +192,59 @@ async def get_offline_data(
         "description": event.description,
         "assignments": assignments,
         "coordinator_quotas": quotas,
+        "staff_needs": staff_needs,
         "staff_role": staff_role,
         "can_manage_uniform": can_manage_uniform,
     }
+
+
+async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID):
+    """Retorna los roles requeridos del evento con conteo de check-in en vivo.
+
+    Estructura por rol:
+      role_id: UUID del rol
+      role_name: nombre del rol
+      quantity_needed: cantidad requerida (del plan de personal)
+      checked_in: cuántos operadores con ese rol ya hicieron check-in
+    """
+    from app.models.roles import Role
+
+    result = await db.execute(
+        select(EventStaffNeed, Role)
+        .join(Role, Role.id == EventStaffNeed.role_id)
+        .where(EventStaffNeed.event_id == event_id)
+        .order_by(Role.name)
+    )
+    needs = result.all()
+
+    if not needs:
+        return []
+
+    # Conteo en vivo: checked_in agrupado por role_id
+    counts_result = await db.execute(
+        select(
+            EventAssignment.role_id,
+            func.count(EventAssignment.id).label("cnt"),
+        )
+        .where(
+            EventAssignment.event_id == event_id,
+            EventAssignment.status == "checked_in",
+            EventAssignment.role_id.isnot(None),
+        )
+        .group_by(EventAssignment.role_id)
+    )
+    checked_in_counts = {row.role_id: row.cnt for row in counts_result.all()}
+
+    out = []
+    for need, role in needs:
+        ci = checked_in_counts.get(need.role_id, 0)
+        out.append({
+            "role_id": str(need.role_id),
+            "role_name": role.name,
+            "quantity_needed": need.quantity_needed,
+            "checked_in": ci,
+        })
+    return out
 
 
 async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
@@ -553,7 +605,7 @@ async def sync_status(
 ):
     """Get sync status for dashboard."""
     # Solo roles administrativos ven el historial de sincronización
-    if user.user_type not in ("admin", "superadmin", "checkin", "operator"):
+    if user.user_type not in ("admin", "superadmin", "checkin", "intendencia", "operator"):
         raise HTTPException(403, "Sin permisos")
 
     query = select(SyncSession)

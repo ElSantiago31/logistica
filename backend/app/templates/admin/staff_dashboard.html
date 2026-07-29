@@ -39,7 +39,7 @@
     const u = JSON.parse(localStorage.getItem('user') || '{}');
     // Operadores asignados como checkin también pueden acceder.
     // Coordinadores con cupos también usan esta vista (reportar novedades/vetos).
-    if (!t || !['checkin', 'superadmin', 'admin', 'operator'].includes(u.user_type)) {
+    if (!t || !['checkin', 'intendencia', 'superadmin', 'admin', 'operator'].includes(u.user_type)) {
         location.href = '/admin/login';
         return;
     }
@@ -47,6 +47,7 @@
     const badge = document.getElementById('roleBadge');
     const roleMap = {
         checkin: {text: 'Check-in', bg: 'bg-green-600'},
+        intendencia: {text: 'Intendencia', bg: 'bg-emerald-600'},
         superadmin: {text: 'Superadmin', bg: 'bg-purple-600'},
         operator: {text: 'Operador', bg: 'bg-blue-600'},
         coordinator: {text: 'Coordinador', bg: 'bg-amber-600'},

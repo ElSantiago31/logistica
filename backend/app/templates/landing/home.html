@@ -1131,6 +1131,35 @@
     </div>
   </section>
 
+  {% set services_intro = (content.sections.get("services_intro") if content else None) or {} %}
+  {% set services = (content.services if content else None) or [] %}
+  {% if services %}
+  <section class="section services-section" id="servicios">
+    <div class="container-ayc">
+      <div class="section-heading-row reveal">
+        <div>
+          <span class="eyebrow">{{ services_intro.eyebrow or 'Nuestros servicios' }}</span>
+          <h2 class="section-title">{{ services_intro.title or 'Soluciones que se adaptan a cada evento.' }}</h2>
+        </div>
+        <p class="section-copy">
+          {{ services_intro.get('copy') or 'Construimos equipos y operaciones a la medida para eventos corporativos, culturales, institucionales, comerciales y de entretenimiento.' }}
+        </p>
+      </div>
+
+      <div class="services-grid">
+        {% for svc in services %}
+        <article class="service-card reveal" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {%
+          endif %}>
+          <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
+          <h3>{{ svc.title }}</h3>
+          <p>{{ svc.description }}</p>
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {% set about = (content.sections.get("about") if content else None) or {} %}
   <section class="section" id="nosotros">
     <div class="container-ayc intro-grid">
@@ -1190,35 +1219,6 @@
       </div>
     </div>
   </section>
-
-  {% set services_intro = (content.sections.get("services_intro") if content else None) or {} %}
-  {% set services = (content.services if content else None) or [] %}
-  {% if services %}
-  <section class="section services-section" id="servicios">
-    <div class="container-ayc">
-      <div class="section-heading-row reveal">
-        <div>
-          <span class="eyebrow">{{ services_intro.eyebrow or 'Nuestros servicios' }}</span>
-          <h2 class="section-title">{{ services_intro.title or 'Soluciones que se adaptan a cada evento.' }}</h2>
-        </div>
-        <p class="section-copy">
-          {{ services_intro.get('copy') or 'Construimos equipos y operaciones a la medida para eventos corporativos, culturales, institucionales, comerciales y de entretenimiento.' }}
-        </p>
-      </div>
-
-      <div class="services-grid">
-        {% for svc in services %}
-        <article class="service-card reveal" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {%
-          endif %}>
-          <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
-          <h3>{{ svc.title }}</h3>
-          <p>{{ svc.description }}</p>
-        </article>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
-  {% endif %}
 
   {% set stages_intro = (content.sections.get("stages_intro") if content else None) or {} %}
   {% set stages = (content.stages if content else None) or [] %}

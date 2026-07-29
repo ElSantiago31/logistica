@@ -22,20 +22,21 @@ from app.models.users import User
 SUPERADMIN = "superadmin"
 ADMIN = "admin"
 CHECKIN = "checkin"
+INTENDENCIA = "intendencia"
 OPERATOR = "operator"
 WEB_ADMIN = "web_admin"
 
-ALL_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, OPERATOR, WEB_ADMIN})
+ALL_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, OPERATOR, WEB_ADMIN})
 
 # Management = users who run the back-office (dashboard, events, operators).
 MANAGEMENT_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN})
 
 # All staff (non-operator) accounts that may appear in admin views.
-ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, WEB_ADMIN})
+ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN})
 
 # Roles allowed to be CREATED from /admin/superadmin (depending on caller).
-CREATABLE_BY_ADMIN: frozenset[str] = frozenset({CHECKIN})
-CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({ADMIN, CHECKIN, WEB_ADMIN})
+CREATABLE_BY_ADMIN: frozenset[str] = frozenset({CHECKIN, INTENDENCIA})
+CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN})
 
 
 # ------------------------------------------------------------------

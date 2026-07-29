@@ -160,6 +160,10 @@ class AssignOperatorsRequest(BaseModel):
     rate_applied: Optional[float] = None
     # Operador-coordinador que programa/admite a estos operadores (nuevo flujo).
     programmed_by_operator_id: Optional[uuid.UUID] = None
+    # Nombre del coordinador (flujo legacy / fallback si no hay operator_id).
+    # Se envía desde el frontend para garantizar que SIEMPRE quede estampado
+    # el coordinador, incluso si la cuota es legacy (texto libre, sin FK).
+    programmed_by_name: Optional[str] = Field(None, max_length=200)
 
 
 # --- Importación masiva desde Excel ---

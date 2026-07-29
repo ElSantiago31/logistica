@@ -147,7 +147,7 @@ async function loadStaffUsers() {
     const token = getToken();
     const res = await fetch('/api/auth/admins', {headers: {'Authorization': 'Bearer ' + token}});
     const admins = await res.json();
-    allStaffUsers = admins.filter(a => a.user_type === 'checkin');
+    allStaffUsers = admins.filter(a => ['checkin','intendencia'].includes(a.user_type));
     renderStaffLists();
 }
 
@@ -184,7 +184,9 @@ async function loadCurrentStaffAssignments() {
 function renderStaffLists() {
     const render = (containerId, role) => {
         const container = document.getElementById(containerId);
-        const users = allStaffUsers.filter(u => u.user_type === role);
+        // 'checkin' incluye 'intendencia' (roles fusionados para staff de evento).
+        const roleFilter = role === 'checkin' ? ['checkin','intendencia'] : [role];
+        const users = allStaffUsers.filter(u => roleFilter.includes(u.user_type));
         const ops = addedOperators.filter(o => o.staffRole === role);
         if (!users.length && !ops.length) {
             container.innerHTML = '<p class="text-xs text-gray-400">No hay usuarios ' + role + '. Usa el buscador para asignar operadores.</p>';

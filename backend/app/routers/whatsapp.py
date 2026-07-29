@@ -118,4 +118,23 @@ async def update_assignment_status(
     assignment = await svc.update_assignment_status(db, assignment_id, new_status)
     if not assignment:
         raise HTTPException(404, "Asignacion no encontrada")
+    # FIX: Notificar vía WebSocket para que el panel de check-in refresque
+    # contadores (asignados/pendientes) en tiempo real cuando un operador
+    # cambia de estado (invited→confirmed, confirmed→rejected, etc.).
+    # Antes no se emitía ningún evento, así que el contador quedaba "congelado".
+    try:
+        event_id = getattr(assignment, "event_id", None)
+        if event_id is not None:
+            await ws_manager.publish_broadcast(
+                str(event_id),
+                "status_change",
+                {
+                    "assignment_id": str(assignment_id),
+                    "new_status": new_status,
+                    "by": getattr(user, "full_name", None) or getattr(user, "email", None),
+                },
+            )
+    except Exception:
+        # El broadcast no debe romper el flujo principal
+        pass
     return {"status": new_status, "message": f"Estado actualizado a {new_status}"}

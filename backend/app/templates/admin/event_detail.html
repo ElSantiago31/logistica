@@ -360,7 +360,8 @@ function showAssignModal(){
                 const avail=q.quota-used;
                 const warn=avail<=0?' ⚠️ lleno':(avail<=2?` (${avail} disp.)`:'');
                 const opId=q.coordinator_operator_id||'';
-                return `<option value="${opId}">📋 ${q.coordinator} — cupo ${q.quota} (uso ${used})${warn}</option>`;
+                const name=(q.coordinator||'').replace(/"/g,'"');
+                return `<option value="${opId}" data-name="${name}">📋 ${q.coordinator} — cupo ${q.quota} (uso ${used})${warn}</option>`;
             }).join('');
         coordSel.classList.remove('hidden');
     }else{
@@ -482,8 +483,12 @@ async function assignSelected(){
     if(!selectedOps.size){showToast('Selecciona al menos uno','bg-yellow-500');return}
     const token=getToken();
     const roleId=document.getElementById('assignRole').value||null;
-    const coordId=document.getElementById('assignCoordinator').value||null;
-    const body={operator_ids:Array.from(selectedOps),role_id:roleId,programmed_by_operator_id:coordId};
+    const coordSel=document.getElementById('assignCoordinator');
+    const coordId=coordSel.value||null;
+    // Nombre del coordinador seleccionado (fallback para cuotas legacy sin FK).
+    const coordOpt=coordSel.options[coordSel.selectedIndex];
+    const coordName=coordOpt?coordOpt.getAttribute('data-name')||null:null;
+    const body={operator_ids:Array.from(selectedOps),role_id:roleId,programmed_by_operator_id:coordId,programmed_by_name:coordName};
     const res=await fetch(`/api/events/${EVENT_ID}/assign`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
     if(res.ok){showToast('Asignados','bg-green-500');closeAssignModal();loadEvent()}
     else{const d=await res.json().catch(()=>({}));showToast(d.detail||'Error','bg-red-500')}

@@ -77,6 +77,17 @@
         </div>
     </div>
 
+    <!-- Check-in por Rol (progreso de ingresos agrupado por rol) -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold" style="color:#5d4224;">Check-in por Rol</h3>
+            <span class="text-xs text-gray-400" id="roles-updated"></span>
+        </div>
+        <div id="roles-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;">
+            <p class="text-xs text-gray-400 col-span-full text-center py-3">Cargando roles...</p>
+        </div>
+    </div>
+
     <div class="grid md:grid-cols-2 gap-6">
         <!-- Left: Search -->
         <div>
@@ -213,6 +224,7 @@ const EVENT_ID = "{{ event_id }}";
 let currentOperator = null;
 let eventAssignments = [];
 let coordinatorQuotas = [];  // FASE 3: cupos por coordinador
+let staffNeeds = [];            // roles requeridos del evento (quantity_needed)
 let staffRole = null;            // staff_role del backend (ej: 'checkin')
 let canManageUniformBackend = null;  // bool del backend (null = no recibido)
 
@@ -392,7 +404,18 @@ function _onWsMessage(msg) {
             pollQuotas();
             break;
         default:
-            // Otros tipos: ignorar
+            // FIX: Cualquier otro evento (status_change, confirmed, assignment,
+            // quota, etc.) también puede afectar los contadores. Refrescar por
+            // si acaso, en lugar de ignorar silenciosamente.
+            if (msg.data && msg.data.by) _wsLastBy = msg.data.by;
+            _wsPendingCount++;
+            if (_wsRefreshTimer) clearTimeout(_wsRefreshTimer);
+            _wsRefreshTimer = setTimeout(() => {
+                pollCheckinStatus();
+                pollQuotas();
+                _flashLiveIndicator();
+                _wsPendingCount = 0;
+            }, 800);
             break;
     }
 }
@@ -427,6 +450,7 @@ async function loadEventData() {
                 document.getElementById('event-name').textContent = data.name;
                 eventAssignments = data.assignments || [];
                 coordinatorQuotas = data.coordinator_quotas || [];  // FASE 3
+                staffNeeds = data.staff_needs || [];                // roles requeridos
                 staffRole = data.staff_role || null;
                 canManageUniformBackend = data.can_manage_uniform;
                 renderQuotaCards(coordinatorQuotas);
@@ -472,11 +496,89 @@ function updateStats(total, checked) {
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-checked').textContent = checked;
     document.getElementById('stat-pending').textContent = total - checked;
+    // Actualiza también el progreso de check-in agrupado por rol
+    try { renderRoleCards(); } catch(e) { console.error('renderRoleCards error:', e); }
 }
 
 // Cuenta solo operadores relevantes para check-in: confirmados + ya ingresados
 function countRelevantForCheckin(assignments) {
     return assignments.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+}
+
+// ============================================================
+//  CHECK-IN POR ROL — progreso de ingresos agrupado por rol
+// ============================================================
+// Genera tarjetas tipo "Brigadistas 1/100" basándose en los roles
+// REQUERIDOS del evento (staff_needs / quantity_needed) y el conteo de
+// check-in en vivo desde eventAssignments. Si el evento no tiene plan de
+// personal definido, cae al agrupado legacy por role_name.
+function renderRoleCards() {
+    const grid = document.getElementById('roles-grid');
+    if (!grid) return;
+
+    // Conteo en vivo: checked_in agrupado por role_name (instantáneo al
+    // hacer check-in, sin esperar recarga del backend).
+    const checkedMap = {};
+    for (const a of eventAssignments) {
+        const role = (a.role_name || 'Operador').trim() || 'Operador';
+        if (a.status === 'checked_in') {
+            checkedMap[role] = (checkedMap[role] || 0) + 1;
+        }
+    }
+
+    // Base: roles requeridos del evento (quantity_needed).
+    let roles = [];
+    if (staffNeeds && staffNeeds.length) {
+        roles = staffNeeds.map(n => ({
+            role: (n.role_name || 'Operador').trim() || 'Operador',
+            total: n.quantity_needed || 0,
+            checked: checkedMap[(n.role_name || 'Operador').trim()] || 0,
+        })).sort((a, b) => b.total - a.total);
+    } else if (eventAssignments && eventAssignments.length) {
+        // Fallback legacy: agrupar assignments por role_name
+        const roleMap = {};
+        for (const a of eventAssignments) {
+            const role = (a.role_name || 'Operador').trim() || 'Operador';
+            if (!roleMap[role]) roleMap[role] = { total: 0, checked: 0 };
+            if (a.status === 'confirmed' || a.status === 'checked_in') {
+                roleMap[role].total++;
+                if (a.status === 'checked_in') roleMap[role].checked++;
+            }
+        }
+        roles = Object.entries(roleMap)
+            .map(([role, d]) => ({ role, total: d.total, checked: d.checked }))
+            .sort((a, b) => b.total - a.total);
+    }
+
+    if (!roles.length) {
+        grid.innerHTML = '<p class="text-xs text-gray-400 col-span-full text-center py-3">Sin roles definidos para el evento</p>';
+        const upd = document.getElementById('roles-updated');
+        if (upd) upd.textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+        return;
+    }
+
+    grid.innerHTML = roles.map(({ role, total, checked }) => {
+        const pct = total > 0 ? Math.min(100, (checked / total) * 100) : 0;
+        // Color: verde completo, ámbar >=80%, gris si no hay progresión
+        let cls = 'available';
+        let barColor = '#22c55e';
+        if (checked === 0) { cls = ''; barColor = '#9ca3af'; }
+        else if (pct >= 100) { cls = 'full'; barColor = '#22c55e'; }
+        else if (pct >= 80) { cls = 'warning'; barColor = '#f59e0b'; }
+
+        const cardCls = cls ? 'quota-card ' + cls : 'quota-card';
+        const remaining = total - checked;
+        return `
+        <div class="${cardCls}" title="${role}: ${checked} de ${total} requeridos con check-in">
+            <div class="qc-name">${role}</div>
+            <div class="qc-count">${checked}/${total}</div>
+            <div class="text-[10px] text-gray-400">${remaining} pendiente${remaining === 1 ? '' : 's'}</div>
+            <div class="qc-bar"><div class="qc-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
+        </div>`;
+    }).join('');
+
+    const upd = document.getElementById('roles-updated');
+    if (upd) upd.textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
 }
 
 async function updateSyncCount() {

@@ -166,6 +166,7 @@ async def assign_operators(
     assignments, unavailable = await svc.assign_operators(
         db, event_id, data.operator_ids, data.role_id, data.rate_applied,
         programmed_by_operator_id=data.programmed_by_operator_id,
+        programmed_by_name=data.programmed_by_name,
     )
     # Return updated assignments + any conflicts
     all_assignments = await svc.get_assignments(db, event_id)
@@ -390,7 +391,7 @@ async def get_assignments(
 ):
     """Get all assignments for an event.
     Operadores asignados como staff (checkin) también pueden verlas."""
-    if user.user_type not in ("superadmin", "admin", "checkin"):
+    if user.user_type not in ("superadmin", "admin", "checkin", "intendencia"):
         # Operador: validar asignación de staff para este evento
         from sqlalchemy import select as sel
         from app.models.events import EventStaffAssignment
@@ -466,9 +467,12 @@ async def set_event_staff(
     )
 
     created = 0
+    # 'intendencia' se normaliza a 'checkin' (roles fusionados funcionalmente).
+    VALID_STAFF_ROLES = {"checkin", "intendencia"}
     for staff_role, user_ids in data.items():
-        if staff_role not in ("checkin",):
+        if staff_role not in VALID_STAFF_ROLES:
             continue
+        effective_role = "checkin" if staff_role == "intendencia" else staff_role
         for uid_str in (user_ids or []):
             try:
                 uid = uuid.UUID(str(uid_str))
@@ -477,7 +481,7 @@ async def set_event_staff(
             sa = EventStaffAssignment(
                 event_id=event_id,
                 user_id=uid,
-                staff_role=staff_role,
+                staff_role=effective_role,
             )
             db.add(sa)
             created += 1
@@ -540,7 +544,7 @@ async def update_assignment_uniform(
         raise HTTPException(404, "Asignación no encontrada")
 
     # Validar permisos
-    if user.user_type not in ("superadmin", "admin", "checkin"):
+    if user.user_type not in ("superadmin", "admin", "checkin", "intendencia"):
         # Operador: debe tener asignación de staff checkin para este evento
         sa_r = await db.execute(
             sel(EventStaffAssignment).where(
@@ -579,7 +583,7 @@ async def checkin_assignment(
         raise HTTPException(404, "Asignaciรณn no encontrada")
 
     # Validar permisos
-    if user.user_type not in ("superadmin", "admin", "checkin"):
+    if user.user_type not in ("superadmin", "admin", "checkin", "intendencia"):
         # Operador: debe tener asignaciรณn de staff checkin para este evento
         sa_r = await db.execute(
             sel(EventStaffAssignment).where(
