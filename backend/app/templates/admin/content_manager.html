@@ -597,6 +597,46 @@
 
   .mobile-admin-menu { display: none; }
 
+  /* Overlay/backdrop para el sidebar móvil */
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(0,0,0,.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+  }
+
+  .sidebar-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Botón de cerrar dentro del sidebar (solo móvil) */
+  .sidebar-close {
+    display: none;
+    position: absolute;
+    top: .8rem;
+    right: .8rem;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--admin-white);
+    font-size: 1.1rem;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+  .sidebar-close:hover {
+    border-color: var(--admin-gold);
+    color: var(--admin-gold);
+  }
+
   .hero-preview {
     padding: 1rem;
     border-radius: 10px;
@@ -623,13 +663,16 @@
       position: fixed;
       inset: 0 auto 0 0;
       z-index: 200;
-      width: 265px;
+      width: 280px;
+      max-width: 85vw;
+      overflow-y: auto;
       transform: translateX(-105%);
       transition: transform .25s ease;
     }
 
     .admin-sidebar.open { transform: translateX(0); }
     .mobile-admin-menu { display: inline-flex; }
+    .sidebar-close { display: flex; }
 
     .stats-grid,
     .gallery-admin-grid {
@@ -643,6 +686,15 @@
       flex-direction: column;
     }
 
+    .admin-actions {
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .admin-actions .admin-btn {
+      flex: 1 1 auto;
+    }
+
     .stats-grid,
     .gallery-admin-grid,
     .form-grid {
@@ -653,6 +705,11 @@
 
     .gallery-admin-card { min-height: 250px; }
     .gallery-admin-card img { height: 195px; }
+
+    .section-card-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 </style>
 {% endblock %}
@@ -666,8 +723,11 @@
   </div>
 </div>
 
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
 <div class="admin-shell" id="admin-content-shell" style="visibility:hidden">
   <aside class="admin-sidebar" id="admin-sidebar">
+    <button type="button" class="sidebar-close" id="close-admin-menu" aria-label="Cerrar menú">✕</button>
     <div class="admin-brand">
       <img src="/static/frontend/logo.jpeg" alt="A&C Eventos">
       <div>
@@ -1410,6 +1470,16 @@
     });
   }
 
+  // --- Sidebar móvil (abrir/cerrar con backdrop) ---
+  function openSidebar() {
+    document.getElementById('admin-sidebar').classList.add('open');
+    document.getElementById('sidebar-backdrop').classList.add('show');
+  }
+  function closeSidebar() {
+    document.getElementById('admin-sidebar').classList.remove('open');
+    document.getElementById('sidebar-backdrop').classList.remove('show');
+  }
+
   function bindUI() {
     document.querySelectorAll('[data-panel]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1420,12 +1490,17 @@
         document.getElementById('panel-' + name).classList.add('active');
         document.getElementById('admin-page-title').textContent = panelMeta[name][0];
         document.getElementById('admin-page-description').textContent = panelMeta[name][1];
-        document.getElementById('admin-sidebar').classList.remove('open');
+        closeSidebar();
       });
     });
 
-    document.getElementById('open-admin-menu').addEventListener('click', () => {
-      document.getElementById('admin-sidebar').classList.toggle('open');
+    document.getElementById('open-admin-menu').addEventListener('click', openSidebar);
+    document.getElementById('close-admin-menu').addEventListener('click', closeSidebar);
+    document.getElementById('sidebar-backdrop').addEventListener('click', closeSidebar);
+
+    // Cerrar sidebar con tecla Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeSidebar();
     });
 
     document.getElementById('hero-form').addEventListener('submit', e => saveSection(e, 'hero'));
