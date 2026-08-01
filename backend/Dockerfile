@@ -85,8 +85,10 @@ COPY --from=js-builder /build/public/tailwind.css /app/frontend/public/tailwind.
 # Entrypoint permissions
 RUN chmod +x /app/entrypoint.sh
 
-# Create data dirs (StaticFiles requiere que existan en build time)
-RUN mkdir -p /app/data/photos/thumbnails /app/data/rut
+# Create data dirs (StaticFiles requiere que existan en build time).
+# NOTA: En producción estos directorios se montan como volumes (docker-compose.prod.yml),
+# pero deben existir en build time para que StaticFiles no falle al arrancar.
+RUN mkdir -p /app/data/photos/thumbnails /app/data/rut /app/data/static/content
 
 EXPOSE 8000
 

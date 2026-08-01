@@ -36,6 +36,11 @@ services:
       JS_SUFFIX: ".min"
     volumes:
       - photo_data:/app/data/photos
+      # Contenido del home (servicios, galería, noticias, hero, escenarios).
+      # Sin este volume, cada deploy pierde las imágenes subidas desde el panel admin.
+      - content_data:/app/data/static
+      # PDFs de RUT de operadores (registro de proveedores).
+      - rut_data:/app/data/rut
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,6 +65,9 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
       - photo_data:/app/data/photos:ro
+      # Servir imágenes de contenido de la home y PDFs de RUT directamente desde nginx.
+      - content_data:/app/data/static:ro
+      - rut_data:/app/data/rut:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -96,6 +104,8 @@ services:
 volumes:
   postgres_data:
   photo_data:
+  content_data:
+  rut_data:
 
 networks:
   internal:

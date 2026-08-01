@@ -99,6 +99,50 @@ cat backup_20260616.sql | docker exec -i logistica_postgres psql -U logistica_us
 
 ---
 
+## 📁 PERSISTENCIA DE ARCHIVOS (Volumes)
+
+El sistema guarda archivos subidos por usuarios en 3 Docker volumes persistentes.
+**Sin estos volumes, cada deploy pierde los archivos subidos desde el panel admin.**
+
+| Volume | Path en contenedor | Contenido |
+|--------|-------------------|-----------|
+| `photo_data` | `/app/data/photos` | Fotos de operadores (registro de personal) |
+| `content_data` | `/app/data/static` | Imágenes de la home: servicios, galería, noticias, hero, escenarios |
+| `rut_data` | `/app/data/rut` | PDFs de RUT de operadores (registro de proveedores) |
+| `postgres_data` | `/var/lib/postgresql/data` | Base de datos PostgreSQL |
+
+### Migración de imágenes existentes (recuperación)
+
+Si tienes un contenedor backend corriendo con imágenes que aún NO están en el
+nuevo volume `content_data`, hay que copiarlas ANTES de recrear el contenedor:
+
+```bash
+# 1. En la VPS, copiar imágenes del contenedor viejo al volume nuevo:
+docker cp logistica_backend:/app/data/static/content/. /tmp/content_backup/
+
+# 2. Hacer el deploy con los nuevos volumes:
+cd /opt/logistica
+git pull origin master
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Copiar las imágenes al volume ya montado:
+docker cp /tmp/content_backup/. logistica_backend:/app/data/static/content/
+```
+
+### Listar archivos en cada volume
+```bash
+# Imágenes de contenido (servicios, galería, noticias)
+docker exec logistica_backend ls -la /app/data/static/content/
+
+# Fotos de operadores
+docker exec logistica_backend ls /app/data/photos/ | head -20
+
+# PDFs de RUT
+docker exec logistica_backend ls /app/data/rut/ | head -20
+```
+
+---
+
   ## ☁️ CLOUDFLARE (CDN + Protección)
 
   El dominio `ayceventos.com.co` está detrás de **Cloudflare** (proxy naranja).
