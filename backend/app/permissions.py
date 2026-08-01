@@ -36,7 +36,7 @@ ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, 
 
 # Roles allowed to be CREATED from /admin/superadmin (depending on caller).
 CREATABLE_BY_ADMIN: frozenset[str] = frozenset({CHECKIN, INTENDENCIA})
-CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN})
+CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN})
 
 
 # ------------------------------------------------------------------

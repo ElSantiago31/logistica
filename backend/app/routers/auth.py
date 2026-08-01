@@ -478,9 +478,10 @@ async def update_admin(
             allowed_update = permissions.CREATABLE_BY_ADMIN  # {checkin}
         else:
             allowed_update = set()
-        # Block any attempt to set superadmin (only seed/DB can create superadmin)
-        if new_type == permissions.SUPERADMIN:
-            raise HTTPException(status_code=403, detail="No se puede asignar el rol SuperAdmin")
+        # Only superadmin can assign the SuperAdmin role.
+        # Admins cannot promote anyone to superadmin.
+        if new_type == permissions.SUPERADMIN and not permissions.is_superadmin(current_user):
+            raise HTTPException(status_code=403, detail="No tienes permiso para asignar el rol SuperAdmin")
         if new_type not in allowed_update:
             raise HTTPException(status_code=403, detail=f"No tienes permiso para asignar el rol '{new_type}'")
         admin.user_type = new_type
