@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -532,6 +532,89 @@ async def delete_admin(
 
     admin.is_active = False
     await db.commit()
+
+
+@router.delete("/admins/{admin_id}/permanent")
+async def delete_admin_permanent(
+    admin_id: uuid.UUID,
+    current_user: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete a staff user (hard delete).
+
+    Reglas:
+    - Solo superadmin puede eliminar permanentemente.
+    - No se puede eliminar a ningún superadmin (ni a sí mismo).
+    - Limpia registros relacionados antes de eliminar.
+    """
+    from app import permissions
+    from app.models.events import EventStaffAssignment
+    from sqlalchemy import text
+
+    result = await db.execute(select(User).where(User.id == admin_id))
+    admin = result.scalar_one_or_none()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # No se puede eliminar a ningún superadmin.
+    if permissions.is_superadmin(admin):
+        raise HTTPException(
+            status_code=403,
+            detail="No puedes eliminar a un superadmin.",
+        )
+
+    # No se puede eliminar a sí mismo permanentemente.
+    if admin.id == current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="No puedes eliminar tu propia cuenta permanentemente. Usa desactivar en su lugar.",
+        )
+
+    admin_name = f"{admin.first_name} {admin.last_name}"
+    admin_email = admin.email
+
+    # Nullify SET NULL references (compatibilidad con SQLite)
+    set_null_refs = [
+        ("events", "created_by"), ("events", "programmed_by"),
+        ("incidents", "recorded_by"), ("incidents", "banned_by"), ("incidents", "unbanned_by"),
+        ("payroll_records", "evaluated_by"), ("payroll_records", "signed_by"), ("payroll_records", "paid_by"),
+        ("sync_batches", "synced_by"), ("sync_batches", "verified_by"),
+        ("blocked_documents", "blocked_by"), ("blocked_documents", "operator_user_id"),
+        ("audit_logs", "user_id"),
+    ]
+    for table_name, col in set_null_refs:
+        try:
+            await db.execute(
+                text(f"UPDATE {table_name} SET {col} = NULL WHERE {col} = :uid"),
+                {"uid": str(admin_id)},
+            )
+        except Exception:
+            pass  # Tabla o columna podría no existir
+
+    # Eliminar registros con CASCADE
+    await db.execute(delete(EventStaffAssignment).where(EventStaffAssignment.user_id == admin_id))
+    await db.execute(delete(Operator).where(Operator.user_id == admin_id))
+    await db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == admin_id))
+    try:
+        await db.execute(text("DELETE FROM revoked_tokens WHERE user_id = :uid"), {"uid": str(admin_id)})
+    except Exception:
+        pass
+
+    # Finalmente, eliminar el usuario
+    await db.execute(delete(User).where(User.id == admin_id))
+
+    # Audit log
+    audit = AuditLog(
+        user_id=current_user.id,
+        action="delete_admin_permanent",
+        resource_type="user",
+        resource_id=admin_id,
+        details=f"Usuario eliminado permanentemente: {admin_name} ({admin_email})",
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {"message": f"Usuario '{admin_name}' eliminado permanentemente"}
 
 
 @router.post("/forgot-password")

@@ -100,7 +100,11 @@
                     :(a.is_active
                         ?`<button onclick="deactivateAdmin('${a.id}')" title="Desactivar" class="bg-red-500 text-white px-3 py-1 rounded text-xs">🚫</button>`
                         :`<button onclick="activateAdmin('${a.id}')" title="Reactivar" class="bg-green-500 text-white px-3 py-1 rounded text-xs">✅</button>`);
-                h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${toggleBtn}</td></tr>`;
+                const canDeletePerm=me.user_type==='superadmin'&&!isOtherSuperadmin&&a.id!==me.id;
+                const deleteBtn=canDeletePerm
+                    ?`<button onclick="deleteAdminPermanent('${a.id}','${a.first_name} ${a.last_name}')" title="Eliminar permanentemente" class="bg-gray-800 text-white px-3 py-1 rounded text-xs">🗑️ Eliminar</button>`
+                    :'';
+                h+=`<tr class="hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium">${a.first_name} ${a.last_name}</td><td class="px-4 py-3 text-sm text-gray-500">${a.document_number}</td><td class="px-4 py-3">${role}</td><td class="px-4 py-3">${status}</td><td class="px-4 py-3 text-center space-x-2"><button onclick="editAdmin('${a.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">✏️ Editar</button>${toggleBtn}${deleteBtn}</td></tr>`;
             });
             h+='</tbody></table>';
             container.innerHTML=h;
@@ -170,6 +174,19 @@
             const r=await fetch('/api/auth/admins/'+id,{method:'PUT',headers:{...authH(),'Content-Type':'application/json'},body:JSON.stringify({is_active:true})});
             if(r.ok){toast('Administrador reactivado','success');loadAdmins()}
             else{const e=await r.json();toast(e.detail||'Error','error')}
+        }catch(e){toast('Error','error')}
+    }
+
+    async function deleteAdminPermanent(id,name){
+        // Doble confirmación para eliminación permanente
+        const step1=confirm('⚠️ ELIMINACIÓN PERMANENTE\n\nVas a eliminar DEFINITIVAMENTE a "'+name+'".\nEsta acción NO se puede deshacer.\n\n¿Continuar?');
+        if(!step1)return;
+        const step2=confirm('ÚLTIMA CONFIRMACIÓN\n\n¿Estás absolutamente seguro de eliminar permanentemente a "'+name+'"?');
+        if(!step2)return;
+        try{
+            const r=await fetch('/api/auth/admins/'+id+'/permanent',{method:'DELETE',headers:authH()});
+            if(r.ok||r.status===204){toast('Usuario eliminado permanentemente','success');loadAdmins()}
+            else{const e=await r.json().catch((()=>({})));toast(e.detail||'Error','error')}
         }catch(e){toast('Error','error')}
     }
 
