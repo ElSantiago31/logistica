@@ -486,6 +486,107 @@
     line-height: 1.65;
   }
 
+  /* ===== INFINITE MARQUEE DE SERVICIOS ===== */
+  .services-marquee {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .marquee-row {
+    position: relative;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  }
+
+  .marquee-track {
+    display: flex;
+    gap: 1rem;
+    width: max-content;
+    will-change: transform;
+    animation: marquee-left 40s linear infinite;
+  }
+
+  .marquee-track[data-direction="right"] {
+    animation: marquee-right 40s linear infinite;
+  }
+
+  .marquee-row:hover .marquee-track {
+    animation-play-state: paused;
+  }
+
+  .marquee-card {
+    flex: 0 0 auto;
+    width: 320px;
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: 1.5rem;
+    border: 1px solid var(--ayc-border);
+    background: var(--ayc-surface-soft);
+    border-radius: 14px;
+  }
+
+  .marquee-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background: var(--service-image) center / cover no-repeat;
+    transition: transform .6s cubic-bezier(.2, .7, .2, 1);
+  }
+
+  .marquee-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(to top, rgba(5,5,5,.97) 5%, rgba(5,5,5,.58) 55%, rgba(5,5,5,.15));
+  }
+
+  .marquee-card:hover::before {
+    transform: scale(1.055);
+  }
+
+  .marquee-card .service-index {
+    color: var(--ayc-gold);
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .16em;
+  }
+
+  .marquee-card h3 {
+    margin: .65rem 0;
+    font-family: 'Cinzel', serif;
+    font-size: 1.25rem;
+  }
+
+  .marquee-card p {
+    margin: 0;
+    color: #c1bbb4;
+    font-size: .85rem;
+    line-height: 1.6;
+  }
+
+  @keyframes marquee-left {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  @keyframes marquee-right {
+    from { transform: translateX(-50%); }
+    to   { transform: translateX(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track { animation: none; }
+  }
+
   .stage-section {
     padding-top: clamp(2.75rem, 4vw, 4rem);
     padding-bottom: clamp(2.75rem, 4vw, 4rem);
@@ -1146,15 +1247,36 @@
         </p>
       </div>
 
-      <div class="services-grid">
-        {% for svc in services %}
-        <article class="service-card reveal" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {%
-          endif %}>
-          <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
-          <h3>{{ svc.title }}</h3>
-          <p>{{ svc.description }}</p>
-        </article>
-        {% endfor %}
+      <div class="services-marquee reveal" id="services-marquee">
+        {# Fila 1 — dirección izquierda (servicios impares) #}
+        <div class="marquee-row" data-direction="left">
+          <div class="marquee-track">
+            {% for svc in services %}
+            {% if loop.index is odd %}
+            <article class="marquee-card" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {% endif %}>
+              <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
+              <h3>{{ svc.title }}</h3>
+              <p>{{ svc.description }}</p>
+            </article>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Fila 2 — dirección derecha (servicios pares) #}
+        <div class="marquee-row" data-direction="right">
+          <div class="marquee-track">
+            {% for svc in services %}
+            {% if loop.index is even %}
+            <article class="marquee-card" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {% endif %}>
+              <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
+              <h3>{{ svc.title }}</h3>
+              <p>{{ svc.description }}</p>
+            </article>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1591,6 +1713,83 @@
         }
       });
     }
+  })();
+
+  // ===== INFINITE MARQUEE: duplicación automática =====
+  function debounce(fn, ms) {
+    let t;
+    return function () {
+      clearTimeout(t);
+      const args = arguments;
+      t = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
+  function initServicesMarquee() {
+    const rows = document.querySelectorAll('.marquee-row');
+    if (!rows.length) return;
+
+    const viewport = window.innerWidth;
+
+    rows.forEach(function (row) {
+      const track = row.querySelector('.marquee-track');
+      if (!track) return;
+
+      // Limpiar clones previos (por si se llamó en resize)
+      track.querySelectorAll('[data-clone]').forEach(function (c) { c.remove(); });
+
+      // Tarjetas originales
+      const originals = Array.prototype.slice.call(track.querySelectorAll('.marquee-card'));
+      if (!originals.length) return;
+
+      // Duplicar hasta superar 2× viewport
+      let copies = 0;
+      while (track.scrollWidth < viewport * 2 && copies < 20) {
+        originals.forEach(function (card) {
+          const clone = card.cloneNode(true);
+          clone.setAttribute('data-clone', 'true');
+          clone.setAttribute('aria-hidden', 'true');
+          track.appendChild(clone);
+        });
+        copies++;
+        if (track.scrollWidth >= viewport * 2) break;
+      }
+
+      // Si el ancho original ya es mayor que viewport pero menor que 2×,
+      // asegurar al menos una duplicación para loop sin saltos
+      if (copies === 0) {
+        originals.forEach(function (card) {
+          const clone = card.cloneNode(true);
+          clone.setAttribute('data-clone', 'true');
+          clone.setAttribute('aria-hidden', 'true');
+          track.appendChild(clone);
+        });
+      }
+
+      // Duración proporcional al ancho final (velocidad visual constante)
+      const finalWidth = track.scrollWidth;
+      const speed = 60; // px por segundo
+      const duration = Math.max(20, Math.round(finalWidth / speed));
+      track.style.animationDuration = duration + 's';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', initServicesMarquee);
+  window.addEventListener('resize', debounce(initServicesMarquee, 300));
+
+  // Pausar animación fuera del viewport (ahorro de GPU)
+  (function () {
+    const marquee = document.getElementById('services-marquee');
+    if (!marquee || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        const tracks = marquee.querySelectorAll('.marquee-track');
+        tracks.forEach(function (t) {
+          t.style.animationPlayState = entry.isIntersecting ? 'running' : 'paused';
+        });
+      });
+    }, { threshold: 0.05 });
+    io.observe(marquee);
   })();
 </script>
 {% endblock %}
