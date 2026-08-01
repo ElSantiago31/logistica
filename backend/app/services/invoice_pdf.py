@@ -317,7 +317,7 @@ class _ThermalRenderer:
         self.center("A&C LOGISTICA & PRODUCCION", "Courier-Bold", 9)
         self.center("DE EVENTOS LTDA", "Courier-Bold", 9)
         for line in ("NIT: 900.227.354", "Direccion: KR 59 D # 131 - 72",
-                     "Bogota - Suba", "Tel: [TELEFONO]",
+                     "Bogota - Suba", "Tel: (601) 6438375",
                      "Email: Facturacion@ayceventos.com.co"):
             self.center(line, "Courier", 7.5)
         self.y -= 1.0
