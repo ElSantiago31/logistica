@@ -486,9 +486,29 @@ async def update_admin(
             raise HTTPException(status_code=403, detail=f"No tienes permiso para asignar el rol '{new_type}'")
         admin.user_type = new_type
 
-    for field in ["first_name", "last_name", "phone", "is_active"]:
+    for field in ["first_name", "last_name", "phone", "is_active", "document_type"]:
         if field in request:
             setattr(admin, field, request[field])
+
+    # Document number (with duplicate check on change)
+    if "document_number" in request and request["document_number"] != admin.document_number:
+        new_doc = request["document_number"]
+        existing = await db.execute(
+            select(User).where(User.document_number == new_doc, User.id != admin.id)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="El número de documento ya está registrado")
+        admin.document_number = new_doc
+
+    # Email (with duplicate check on change)
+    if "email" in request and request["email"] and request["email"] != admin.email:
+        new_email = request["email"]
+        existing = await db.execute(
+            select(User).where(User.email == new_email, User.id != admin.id)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado")
+        admin.email = new_email
 
     if request.get("password"):
         if len(request["password"]) < 6:
