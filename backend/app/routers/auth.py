@@ -575,12 +575,19 @@ async def delete_admin_permanent(
 
     # Nullify SET NULL references (compatibilidad con SQLite)
     set_null_refs = [
-        ("events", "created_by"), ("events", "programmed_by"),
-        ("incidents", "recorded_by"), ("incidents", "banned_by"), ("incidents", "unbanned_by"),
-        ("payroll_records", "evaluated_by"), ("payroll_records", "signed_by"), ("payroll_records", "paid_by"),
-        ("sync_batches", "synced_by"), ("sync_batches", "verified_by"),
-        ("blocked_documents", "blocked_by"), ("blocked_documents", "operator_user_id"),
-        ("audit_logs", "user_id"),
+        ("events", "created_by"),
+        ("event_audit_logs", "user_id"),
+        ("operator_incidents", "recorded_by"),
+        ("operator_bans", "banned_by"),
+        ("operator_bans", "unbanned_by"),
+        ("evaluations", "evaluated_by"),
+        ("payroll_records", "signed_by"),
+        ("payroll_records", "paid_by"),
+        ("sync_sessions", "synced_by"),
+        ("attendance_log", "verified_by"),
+        ("blocked_documents", "blocked_by"),
+        ("blocked_documents", "operator_user_id"),
+        ("audit_log", "user_id"),
     ]
     for table_name, col in set_null_refs:
         try:
