@@ -486,11 +486,12 @@
     line-height: 1.65;
   }
 
-  /* ===== INFINITE MARQUEE DE SERVICIOS ===== */
-  .services-marquee {
+  /* ===== INFINITE MARQUEE DE ESCENARIOS ===== */
+  .stages-marquee {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    margin-top: 3rem;
   }
 
   .marquee-row {
@@ -516,61 +517,20 @@
     animation-play-state: paused;
   }
 
-  .marquee-card {
+  /* Tarjetas de escenario dentro del marquee */
+  .marquee-track .stage-card {
     flex: 0 0 auto;
-    width: 320px;
-    min-height: 240px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    padding: 1.5rem;
-    border: 1px solid var(--ayc-border);
-    background: var(--ayc-surface-soft);
+    width: 300px;
+    min-height: 340px;
+    margin: 0;
     border-radius: 14px;
   }
 
-  .marquee-card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -2;
-    background: var(--service-image) center / cover no-repeat;
-    transition: transform .6s cubic-bezier(.2, .7, .2, 1);
-  }
-
-  .marquee-card::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: linear-gradient(to top, rgba(5,5,5,.97) 5%, rgba(5,5,5,.58) 55%, rgba(5,5,5,.15));
-  }
-
-  .marquee-card:hover::before {
-    transform: scale(1.055);
-  }
-
-  .marquee-card .service-index {
-    color: var(--ayc-gold);
-    font-size: .72rem;
-    font-weight: 800;
-    letter-spacing: .16em;
-  }
-
-  .marquee-card h3 {
-    margin: .65rem 0;
-    font-family: 'Cinzel', serif;
-    font-size: 1.25rem;
-  }
-
-  .marquee-card p {
-    margin: 0;
-    color: #c1bbb4;
-    font-size: .85rem;
-    line-height: 1.6;
+  @media (max-width: 768px) {
+    .marquee-track .stage-card {
+      width: 240px;
+      min-height: 280px;
+    }
   }
 
   @keyframes marquee-left {
@@ -1247,36 +1207,15 @@
         </p>
       </div>
 
-      <div class="services-marquee reveal" id="services-marquee">
-        {# Fila 1 — dirección izquierda (servicios impares) #}
-        <div class="marquee-row" data-direction="left">
-          <div class="marquee-track">
-            {% for svc in services %}
-            {% if loop.index is odd %}
-            <article class="marquee-card" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {% endif %}>
-              <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
-              <h3>{{ svc.title }}</h3>
-              <p>{{ svc.description }}</p>
-            </article>
-            {% endif %}
-            {% endfor %}
-          </div>
-        </div>
-
-        {# Fila 2 — dirección derecha (servicios pares) #}
-        <div class="marquee-row" data-direction="right">
-          <div class="marquee-track">
-            {% for svc in services %}
-            {% if loop.index is even %}
-            <article class="marquee-card" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {% endif %}>
-              <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
-              <h3>{{ svc.title }}</h3>
-              <p>{{ svc.description }}</p>
-            </article>
-            {% endif %}
-            {% endfor %}
-          </div>
-        </div>
+      <div class="services-grid">
+        {% for svc in services %}
+        <article class="service-card reveal" {% if svc.image_url %}style="--service-image:url('{{ svc.image_url }}')" {%
+          endif %}>
+          <span class="service-index">SERVICIO {{ '%02d' % loop.index }}</span>
+          <h3>{{ svc.title }}</h3>
+          <p>{{ svc.description }}</p>
+        </article>
+        {% endfor %}
       </div>
     </div>
   </section>
@@ -1356,82 +1295,68 @@
         </p>
       </div>
 
-      <div class="stage-grid" aria-label="Eventos destacados en los que ha participado A&C">
-        {% if stages %}
-        {% for s in stages %}
-        <figure class="stage-card reveal" style="--stage-image:url('{{ s.image_url }}')" role="img"
-          aria-label="{{ s.title }}">
-          <figcaption>
-            <small>{{ s.label }}{% if s.event_date %} · {{ s.event_date }}{% endif %}</small>
-            <strong>{{ s.title }}</strong>
-          </figcaption>
-        </figure>
-        {% endfor %}
-        {% else %}
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_01.jpg')"
-          role="img" aria-label="Participación de A&C en eventos relacionados con J Balvin">
-          <figcaption>
-            <small>Artista internacional</small>
-            <strong>J Balvin</strong>
-          </figcaption>
-        </figure>
+      <div class="stages-marquee reveal" id="stages-marquee" aria-label="Eventos destacados en los que ha participado A&C">
+        {# Fila 1 — dirección izquierda #}
+        <div class="marquee-row" data-direction="left">
+          <div class="marquee-track">
+            {% if stages %}
+            {% for s in stages %}
+            {% if loop.index is odd %}
+            <figure class="stage-card" style="--stage-image:url('{{ s.image_url }}')" role="img" aria-label="{{ s.title }}">
+              <figcaption>
+                <small>{{ s.label }}{% if s.event_date %} · {{ s.event_date }}{% endif %}</small>
+                <strong>{{ s.title }}</strong>
+              </figcaption>
+            </figure>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_01.jpg')" role="img" aria-label="Participación de A&C en eventos relacionados con J Balvin">
+              <figcaption><small>Artista internacional</small><strong>J Balvin</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_03.jpg')" role="img" aria-label="Participación de A&C en el concierto de Shakira">
+              <figcaption><small>Producción de gran formato</small><strong>Shakira</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_05.jpg')" role="img" aria-label="Operación logística de A&C en Claro Fútbol Fest">
+              <figcaption><small>Evento masivo</small><strong>Claro Fútbol Fest</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_07.jpg')" role="img" aria-label="Operación de A&C en la experiencia Karol G Viewing Party">
+              <figcaption><small>Experiencia de entretenimiento</small><strong>Karol G Viewing Party</strong></figcaption>
+            </figure>
+            {% endif %}
+          </div>
+        </div>
 
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_02.jpg')"
-          role="img" aria-label="Participación de A&C en eventos relacionados con Maluma">
-          <figcaption>
-            <small>Artista internacional</small>
-            <strong>Maluma</strong>
-          </figcaption>
-        </figure>
-
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_03.jpg')"
-          role="img" aria-label="Participación de A&C en el concierto de Shakira">
-          <figcaption>
-            <small>Producción de gran formato</small>
-            <strong>Shakira</strong>
-          </figcaption>
-        </figure>
-
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_04.jpg')"
-          role="img" aria-label="Participación de A&C en eventos relacionados con Yeison Jiménez">
-          <figcaption>
-            <small>Producción nacional</small>
-            <strong>Yeison Jiménez</strong>
-          </figcaption>
-        </figure>
-
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_05.jpg')"
-          role="img" aria-label="Operación logística de A&C en Claro Fútbol Fest">
-          <figcaption>
-            <small>Evento masivo</small>
-            <strong>Claro Fútbol Fest</strong>
-          </figcaption>
-        </figure>
-
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_06.jpg')"
-          role="img" aria-label="Participación de A&C en Viva el Merengue">
-          <figcaption>
-            <small>Concierto de gran formato</small>
-            <strong>Viva el Merengue</strong>
-          </figcaption>
-        </figure>
-
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_07.jpg')"
-          role="img" aria-label="Operación de A&C en la experiencia Karol G Viewing Party">
-          <figcaption>
-            <small>Experiencia de entretenimiento</small>
-            <strong>Karol G Viewing Party</strong>
-          </figcaption>
-        </figure>
-
-        <figure class="stage-card reveal" style="--stage-image:url('/static/frontend/landing/events/event_08.jpg')"
-          role="img" aria-label="Equipo operativo de A&C en Bogotá Eats">
-          <figcaption>
-            <small>Logística integral</small>
-            <strong>Bogotá Eats</strong>
-          </figcaption>
-        </figure>
-        {% endif %}
+        {# Fila 2 — dirección derecha #}
+        <div class="marquee-row" data-direction="right">
+          <div class="marquee-track">
+            {% if stages %}
+            {% for s in stages %}
+            {% if loop.index is even %}
+            <figure class="stage-card" style="--stage-image:url('{{ s.image_url }}')" role="img" aria-label="{{ s.title }}">
+              <figcaption>
+                <small>{{ s.label }}{% if s.event_date %} · {{ s.event_date }}{% endif %}</small>
+                <strong>{{ s.title }}</strong>
+              </figcaption>
+            </figure>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_02.jpg')" role="img" aria-label="Participación de A&C en eventos relacionados con Maluma">
+              <figcaption><small>Artista internacional</small><strong>Maluma</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_04.jpg')" role="img" aria-label="Participación de A&C en eventos relacionados con Yeison Jiménez">
+              <figcaption><small>Producción nacional</small><strong>Yeison Jiménez</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_06.jpg')" role="img" aria-label="Participación de A&C en Viva el Merengue">
+              <figcaption><small>Concierto de gran formato</small><strong>Viva el Merengue</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_08.jpg')" role="img" aria-label="Equipo operativo de A&C en Bogotá Eats">
+              <figcaption><small>Logística integral</small><strong>Bogotá Eats</strong></figcaption>
+            </figure>
+            {% endif %}
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1715,7 +1640,7 @@
     }
   })();
 
-  // ===== INFINITE MARQUEE: duplicación automática =====
+  // ===== INFINITE MARQUEE DE ESCENARIOS: duplicación automática =====
   function debounce(fn, ms) {
     let t;
     return function () {
@@ -1738,8 +1663,8 @@
       // Limpiar clones previos (por si se llamó en resize)
       track.querySelectorAll('[data-clone]').forEach(function (c) { c.remove(); });
 
-      // Tarjetas originales
-      const originals = Array.prototype.slice.call(track.querySelectorAll('.marquee-card'));
+      // Tarjetas originales (cualquier hijo directo del track)
+      const originals = Array.prototype.slice.call(track.children);
       if (!originals.length) return;
 
       // Duplicar hasta superar 2× viewport
@@ -1779,7 +1704,7 @@
 
   // Pausar animación fuera del viewport (ahorro de GPU)
   (function () {
-    const marquee = document.getElementById('services-marquee');
+    const marquee = document.getElementById('stages-marquee');
     if (!marquee || !('IntersectionObserver' in window)) return;
     const io = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
