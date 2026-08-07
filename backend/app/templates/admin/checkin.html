@@ -12,7 +12,8 @@
     .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
     /* FASE 3: Tarjetas de cupos por coordinador */
     #quotas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
-    .quota-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; text-align:center; transition:all .2s; }
+    .quota-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; text-align:center; transition:all .2s; cursor:pointer; }
+    .quota-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.10); transform:translateY(-1px); }
     .quota-card.full { border-color:#ef4444; background:#fef2f2; }
     .quota-card.warning { border-color:#f59e0b; background:#fffbeb; }
     .quota-card.available { border-color:#22c55e; background:#f0fdf4; }
@@ -26,6 +27,10 @@
        Esta regla con doble clase (0,2,0) garantiza que el modal se oculte al añadir 'hidden'. */
     .reassign-modal.hidden { display:none; }
     .reassign-modal .box { background:#fff; border-radius:14px; padding:24px; max-width:400px; width:90%; }
+    /* Modal de detalle de coordinador (check-ins) */
+    .coord-detail-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:50; }
+    .coord-detail-modal.hidden { display:none; }
+    .coord-detail-modal .box { background:#fff; border-radius:14px; padding:24px; max-width:420px; width:90%; }
 </style>
 {% endblock %}
 {% block content %}
@@ -202,6 +207,17 @@
             <div id="reassign-options" class="space-y-2 max-h-60 overflow-y-auto"></div>
             <button onclick="document.getElementById('reassign-modal').classList.add('hidden')"
                 class="w-full mt-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Modal de detalle de coordinador (check-ins) -->
+    <div id="coord-detail-modal" class="coord-detail-modal hidden" onclick="if(event.target===this) closeCoordDetailModal()">
+        <div class="box">
+            <h3 id="coord-detail-title" class="text-lg font-bold mb-1" style="color:#5d4224;">Coordinador</h3>
+            <p id="coord-detail-count" class="text-xs text-gray-500 mb-3">Check-ins: 0</p>
+            <div id="coord-detail-list" class="space-y-1 max-h-72 overflow-y-auto"></div>
+            <button onclick="closeCoordDetailModal()"
+                class="w-full mt-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600">Cerrar</button>
         </div>
     </div>
 
@@ -1671,16 +1687,59 @@ function renderQuotaCards(quotas) {
         if (cededTotal > 0) tooltipParts.push(`Cedidos: ${cededTotal} (${Object.entries(cededBy).map(([k,v]) => `${v} de ${k}`).join(', ')})`);
         const title = tooltipParts.join(' | ');
 
+        const safeCoord = (q.coordinator || '').replace(/'/g, "\\'");
         return `
-        <div class="quota-card ${cls}" title="${title}">
+        <div class="quota-card ${cls} cursor-pointer" title="${title}" onclick="showCoordinatorDetail('${safeCoord}')">
             <div class="qc-name">${icon} ${q.coordinator}</div>
             <div class="qc-count">${q.checked_in}/${q.quota}</div>
+            <div class="text-[10px] text-gray-500">Programados: ${q.programmed || 0}</div>
             <div class="text-[10px] text-gray-400">Cupo: ${q.available} disp.</div>
             <div class="qc-bar"><div class="qc-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
             ${cededHtml}
         </div>`;
     }).join('');
     document.getElementById('quotas-updated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+}
+
+// ============================================================
+// Modal de detalle de coordinador (lista de check-ins)
+// ============================================================
+function showCoordinatorDetail(coordinatorName) {
+    const modal = document.getElementById('coord-detail-modal');
+    const list = document.getElementById('coord-detail-list');
+    const titleEl = document.getElementById('coord-detail-title');
+    const countEl = document.getElementById('coord-detail-count');
+    if (!modal || !list) return;
+
+    const coordKey = (coordinatorName || '').trim().toUpperCase();
+    titleEl.textContent = coordinatorName || 'Coordinador';
+
+    // Filtrar assignments: admitted_by == coordinador Y status == checked_in
+    const checkedIn = (eventAssignments || [])
+        .filter(a => (a.admitted_by || '').trim().toUpperCase() === coordKey && a.status === 'checked_in')
+        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+    countEl.textContent = `Check-ins: ${checkedIn.length}`;
+
+    if (checkedIn.length === 0) {
+        list.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Sin check-ins registrados</p>';
+    } else {
+        list.innerHTML = checkedIn.map(a => {
+            const role = a.role_name ? ` &middot; ${a.role_name}` : '';
+            const doc = a.document_number ? ` &middot; CC ${a.document_number}` : '';
+            return `<div class="px-3 py-2 rounded-lg bg-gray-50 border border-gray-100">
+                <div class="text-sm font-medium text-gray-800">${a.full_name || 'Sin nombre'}</div>
+                <div class="text-[11px] text-gray-400">${doc}${role}</div>
+            </div>`;
+        }).join('');
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeCoordDetailModal() {
+    const modal = document.getElementById('coord-detail-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 // FASE 5: Polling de cupos cada 5s
