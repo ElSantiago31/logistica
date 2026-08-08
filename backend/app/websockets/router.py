@@ -12,12 +12,13 @@ import asyncio
 import logging
 import uuid
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal
 from app.models.users import User
+from app.dependencies.auth import get_current_user
 from app.services.auth import decode_token, is_token_revoked
 from app.websockets.manager import manager
 
@@ -243,10 +244,15 @@ async def ws_admin_contacts(
 
 
 @router.get("/stats")
-async def ws_stats():
-    """Endpoint de monitoreo: cuántas conexiones activas hay (solo admin)."""
-    # No depende de get_current_user para no complicar el wiring; se protege
-    # externamente por nginx/Cloudflare si hace falta. Es solo info de estado.
+async def ws_stats(user: User = Depends(get_current_user)):
+    """Endpoint de monitoreo: cuántas conexiones activas hay (solo admin).
+
+    Requiere autenticación (JWT) y rol admin/superadmin. Antes era público,
+    lo que filtraba métricas internas (conteo de conexiones y salas activas)
+    a cualquiera sin token.
+    """
+    if user.user_type not in ("superadmin", "admin", "web_admin"):
+        raise HTTPException(403, "Sin permisos")
     return {
         "total_connections": manager.get_connection_count(),
         "rooms": manager.get_rooms_summary(),

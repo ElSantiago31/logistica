@@ -20,11 +20,15 @@ async def webhook_receive(request: Request, db: AsyncSession = Depends(get_db)):
     """Receive incoming Zenvia webhook events (messages + status updates).
 
     Configure this URL in Zenvia dashboard as webhook.
-    Optional: validate token via query param for security.
+    Requires ZENVIA_WEBHOOK_TOKEN to be set; validates it via query param.
     """
-    # Optional token validation
+    # Fail-safe: si no hay token configurado, rechazar todo (endpoint inactivo).
+    # Esto evita que cualquiera pueda inyectar webhooks falsos cuando la
+    # integración con WhatsApp todavía no está en uso.
+    if not settings.ZENVIA_WEBHOOK_TOKEN:
+        return Response(content="Webhook no configurado", status_code=503)
     token = request.query_params.get("token", "")
-    if settings.ZENVIA_WEBHOOK_TOKEN and token != settings.ZENVIA_WEBHOOK_TOKEN:
+    if token != settings.ZENVIA_WEBHOOK_TOKEN:
         return Response(content="Unauthorized", status_code=401)
 
     payload = await request.json()
