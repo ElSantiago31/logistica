@@ -1,7 +1,7 @@
 # 📖 Runbook VPS — Guía de Operaciones
 
-> Comandos para gestionar el servidor de producción
-> Todos los comandos se ejecutan por **SSH en la VPS**, dentro de `/opt/logistica`.
+> Comandos para gestionar el servidor de producción (`ayceventos.com.co`).
+> Todos los comandos se ejecutan por **SSH en la VPS**, dentro de `/home/server/Logistica`.
 
 ---
 
@@ -40,14 +40,14 @@ docker compose -f docker-compose.prod.yml restart
 
 ### Cambios de código (sin migraciones nuevas)
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 git pull origin master
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ### Cambios con migraciones nuevas
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 git pull origin master
 docker compose -f docker-compose.prod.yml up -d --build
 # Las migraciones se ejecutan automáticamente al arrancar el backend
@@ -94,30 +94,30 @@ Cada backup incluye: **BD completa (PostgreSQL) + fotos + imágenes de contenido
 
 Después de hacer `git pull`, ejecutar:
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 sudo bash scripts/install_backup_cron.sh
 ```
 
 Esto configura el cron job diario. **Verificar que quedó instalado:**
 ```bash
 crontab -l | grep logistica
-# Debe mostrar: 0 3 * * * cd /opt/logistica && bash scripts/backup.sh ...
+# Debe mostrar: 0 3 * * * cd /home/server/Logistica && bash scripts/backup.sh ...
 ```
 
 ### 📋 Backup manual (antes de cambios importantes)
 
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 bash scripts/backup.sh
 ```
 
 ### 🔙 Restaurar un backup
 
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 
 # Ver backups disponibles
-ls /opt/backups/logistica/
+ls /home/server/backups/logistica/
 
 # Restaurar uno específico
 bash scripts/restore_backup.sh 20260808_030000
@@ -130,13 +130,13 @@ docker restart logistica_backend
 
 ```bash
 # Ver los backups generados
-ls -lh /opt/backups/logistica/
+ls -lh /home/server/backups/logistica/
 
 # Ver el log de backups
 tail -50 /var/log/logistica-backup.log
 
 # Ver tamaño total de los backups
-du -sh /opt/backups/logistica/
+du -sh /home/server/backups/logistica/
 ```
 
 ### ⚙️ Configuración
@@ -145,7 +145,7 @@ du -sh /opt/backups/logistica/
 |-----------|-------------------|---------------|
 | Frecuencia | Diario 3:00 AM | `scripts/install_backup_cron.sh` |
 | Retención | 30 días | `scripts/backup.sh` (`KEEP_DAYS`) |
-| Destino | `/opt/backups/logistica/` | `scripts/backup.sh` (`BACKUP_DIR`) |
+| Destino | `/home/server/backups/logistica/` | `scripts/backup.sh` (`BACKUP_DIR`) |
 
 ### 🛑 Desinstalar el cron (si necesario)
 
@@ -177,7 +177,7 @@ nuevo volume `content_data`, hay que copiarlas ANTES de recrear el contenedor:
 docker cp logistica_backend:/app/data/static/content/. /tmp/content_backup/
 
 # 2. Hacer el deploy con los nuevos volumes:
-cd /opt/logistica
+cd /home/server/Logistica
 git pull origin master
 docker compose -f docker-compose.prod.yml up -d --build
 
@@ -249,7 +249,7 @@ docker exec logistica_backend ls /app/data/rut/ | head -20
 
   3. Obtener certificado inicial con DNS-01:
      ```bash
-     cd /opt/logistica
+     cd /home/server/Logistica
      bash certbot/obtain-cert.sh
      ```
 
@@ -302,7 +302,7 @@ docker start logistica_nginx
 
 ### El VPS se reinició (corte de luz, mantenimiento)
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 docker compose -f docker-compose.prod.yml up -d
 ```
 Todo debería arrancar solo. Si no, verificar con `ps`.
@@ -321,7 +321,7 @@ docker logs logistica_backend --tail 50
 
 ### Rollback urgente (volver a versión anterior)
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 
 # Ver últimos commits
 git log --oneline -10
@@ -335,7 +335,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ### Reset completo (¡PELIGRO! Borra todos los datos)
 ```bash
-cd /opt/logistica
+cd /home/server/Logistica
 docker compose -f docker-compose.prod.yml down -v
 docker compose -f docker-compose.prod.yml up -d --build
 ```

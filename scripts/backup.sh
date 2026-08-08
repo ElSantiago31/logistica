@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # ---------- Configuración ----------
-BACKUP_DIR="/opt/backups/logistica"
+BACKUP_DIR="/home/server/backups/logistica"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_SUBDIR="${BACKUP_DIR}/${DATE}"

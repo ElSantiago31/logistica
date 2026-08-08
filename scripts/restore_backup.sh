@@ -19,11 +19,11 @@ if [ "$#" -ne 1 ]; then
   echo "Ejemplo: bash scripts/restore_backup.sh 20260808_160200"
   echo ""
   echo "Backups disponibles:"
-  ls -1 /opt/backups/logistica/ 2>/dev/null | grep -E '^[0-9]{8}_[0-9]{6}$' || echo "  (ninguno)"
+  ls -1 /home/server/backups/logistica/ 2>/dev/null | grep -E '^[0-9]{8}_[0-9]{6}$' || echo "  (ninguno)"
   exit 1
 fi
 
-BACKUP_DIR="/opt/backups/logistica"
+BACKUP_DIR="/home/server/backups/logistica"
 DATE="$1"
 BACKUP_PATH="${BACKUP_DIR}/${DATE}"
 

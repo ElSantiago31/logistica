@@ -12,7 +12,7 @@
 # ============================================================
 set -euo pipefail
 
-REPO_DIR="/opt/logistica"
+REPO_DIR="/home/server/Logistica"
 BACKUP_SCRIPT="${REPO_DIR}/scripts/backup.sh"
 LOG_FILE="/var/log/logistica-backup.log"
 CRON_SCHEDULE="0 3 * * *"   # Diario a las 3:00 AM
@@ -23,7 +23,7 @@ echo "=== Instalador de backup automático ==="
 # ---------- 1. Validar que el script exista ----------
 if [ ! -f "${BACKUP_SCRIPT}" ]; then
   echo "ERROR: No se encuentra ${BACKUP_SCRIPT}"
-  echo "¿Estás en /opt/logistica? ¿Hiciste git pull?"
+  echo "¿Estás en /home/server/Logistica? ¿Hiciste git pull?"
   exit 1
 fi
 
@@ -31,8 +31,8 @@ chmod +x "${BACKUP_SCRIPT}"
 echo "OK: Script encontrado en ${BACKUP_SCRIPT}"
 
 # ---------- 2. Crear directorio de backups ----------
-mkdir -p /opt/backups/logistica
-echo "OK: Directorio de backups: /opt/backups/logistica"
+mkdir -p /home/server/backups/logistica
+echo "OK: Directorio de backups: /home/server/backups/logistica"
 
 # ---------- 3. Instalar cron ----------
 # Eliminar entrada previa (si existe) para no duplicar
@@ -50,7 +50,7 @@ echo "OK: Cron instalado (diario a las 03:00 AM)"
 echo ""
 echo "=== Instalación completada ==="
 echo "  Script:     ${BACKUP_SCRIPT}"
-echo "  Destino:    /opt/backups/logistica/"
+echo "  Destino:    /home/server/backups/logistica/"
 echo "  Log:        ${LOG_FILE}"
 echo "  Cron:       ${CRON_SCHEDULE} (diario)"
 echo "  Retención:  30 días"
