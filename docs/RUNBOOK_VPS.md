@@ -1,6 +1,6 @@
 # 📖 Runbook VPS — Guía de Operaciones
 
-> Comandos para gestionar el servidor de producción (`ayceventos.com.co`).
+> Comandos para gestionar el servidor de producción
 > Todos los comandos se ejecutan por **SSH en la VPS**, dentro de `/opt/logistica`.
 
 ---
@@ -85,16 +85,72 @@ Presionar `Ctrl+C` para salir.
 
 ---
 
-## 💾 BACKUP DE BASE DE DATOS
+## 💾 BACKUP AUTOMÁTICO
 
-### Backup completo (antes de cambios importantes)
+El sistema genera backups **diarios automáticos** (3:00 AM) con retención de 30 días.
+Cada backup incluye: **BD completa (PostgreSQL) + fotos + imágenes de contenido + PDFs de RUT**.
+
+### 🚀 Instalación inicial (una sola vez, en la VPS)
+
+Después de hacer `git pull`, ejecutar:
 ```bash
-docker exec logistica_postgres pg_dump -U logistica_user logistica_db > backup_$(date +%Y%m%d_%H%M%S).sql
+cd /opt/logistica
+sudo bash scripts/install_backup_cron.sh
 ```
 
-### Restaurar un backup
+Esto configura el cron job diario. **Verificar que quedó instalado:**
 ```bash
-cat backup_20260616.sql | docker exec -i logistica_postgres psql -U logistica_user logistica_db
+crontab -l | grep logistica
+# Debe mostrar: 0 3 * * * cd /opt/logistica && bash scripts/backup.sh ...
+```
+
+### 📋 Backup manual (antes de cambios importantes)
+
+```bash
+cd /opt/logistica
+bash scripts/backup.sh
+```
+
+### 🔙 Restaurar un backup
+
+```bash
+cd /opt/logistica
+
+# Ver backups disponibles
+ls /opt/backups/logistica/
+
+# Restaurar uno específico
+bash scripts/restore_backup.sh 20260808_030000
+
+# Reiniciar backend para que relea los datos
+docker restart logistica_backend
+```
+
+### 📊 Monitorear los backups
+
+```bash
+# Ver los backups generados
+ls -lh /opt/backups/logistica/
+
+# Ver el log de backups
+tail -50 /var/log/logistica-backup.log
+
+# Ver tamaño total de los backups
+du -sh /opt/backups/logistica/
+```
+
+### ⚙️ Configuración
+
+| Parámetro | Valor por defecto | dónde cambiar |
+|-----------|-------------------|---------------|
+| Frecuencia | Diario 3:00 AM | `scripts/install_backup_cron.sh` |
+| Retención | 30 días | `scripts/backup.sh` (`KEEP_DAYS`) |
+| Destino | `/opt/backups/logistica/` | `scripts/backup.sh` (`BACKUP_DIR`) |
+
+### 🛑 Desinstalar el cron (si necesario)
+
+```bash
+crontab -l | grep -v 'logistica-auto-backup' | crontab -
 ```
 
 ---
@@ -295,7 +351,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 | Reiniciar backend | `docker restart logistica_backend` |
 | Reiniciar todo | `docker compose -f docker-compose.prod.yml restart` |
 | Ver logs backend | `docker logs logistica_backend --tail 50` |
-| Backup DB | `docker exec logistica_postgres pg_dump -U logistica_user logistica_db > backup.sql` |
+| Backup DB | `bash scripts/backup.sh` (manual) o automático vía cron |
+| Restaurar backup | `bash scripts/restore_backup.sh <fecha>` |
 | Actualizar (deploy) | `git pull && docker compose -f docker-compose.prod.yml up -d --build` |
 | Espacio en disco | `docker system df` |
 | Limpiar imágenes viejas | `docker image prune -f` |
