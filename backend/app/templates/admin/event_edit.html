@@ -30,10 +30,6 @@
                         <input type="text" id="location" required class="w-full border rounded-lg px-3 py-2">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-                        <input type="text" id="address" class="w-full border rounded-lg px-3 py-2">
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
                         <select id="city" class="w-full border rounded-lg px-3 py-2"><option value="">Seleccionar ciudad</option></select>
                     </div>
@@ -309,7 +305,6 @@ async function loadEvent(){
     }
     document.getElementById('name').value=ev.name||'';
     document.getElementById('location').value=ev.location||'';
-    document.getElementById('address').value=ev.address||'';
     // city will be set after loadCities populates the select
     window._eventCity=ev.city||'';
     document.getElementById('client_name').value=ev.client_name||'';
@@ -359,7 +354,6 @@ document.getElementById('eventForm').addEventListener('submit',async(e)=>{
         name:document.getElementById('name').value,
         description:document.getElementById('description').value||null,
         location:document.getElementById('location').value,
-        address:document.getElementById('address').value||null,
         city:document.getElementById('city').value||null,
         start_date:document.getElementById('start_date').value,
         end_date:document.getElementById('end_date').value,
