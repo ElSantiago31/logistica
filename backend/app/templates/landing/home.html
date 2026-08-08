@@ -197,8 +197,8 @@
     padding: 8.5rem 0 4rem;
     background:
       linear-gradient(90deg, rgba(5, 5, 5, .94) 0%, rgba(5, 5, 5, .70) 42%, rgba(5, 5, 5, .22) 100%),
-      linear-gradient(0deg, rgba(5, 5, 5, .90) 0%, rgba(5, 5, 5, 0) 55%);
-    background-color: var(--ayc-black);
+      linear-gradient(0deg, rgba(5, 5, 5, .90) 0%, rgba(5, 5, 5, 0) 55%),
+      url('/static/frontend/landing/gallery/gallery_2.jpg') center 38% / cover no-repeat;
   }
 
   .hero::after {
@@ -717,7 +717,8 @@
   .news-card.featured {
     min-height: 440px;
     background:
-      linear-gradient(to top, rgba(5, 5, 5, .95), rgba(5, 5, 5, .2));
+      linear-gradient(to top, rgba(5, 5, 5, .95), rgba(5, 5, 5, .2)),
+      url('/static/frontend/landing/gallery/gallery_3.jpg') center / cover;
   }
 
   .news-tag {
@@ -974,7 +975,8 @@
       align-items: end;
       padding-top: 7rem;
       background:
-        linear-gradient(0deg, rgba(5, 5, 5, .97) 0%, rgba(5, 5, 5, .58) 58%, rgba(5, 5, 5, .22) 100%);
+        linear-gradient(0deg, rgba(5, 5, 5, .97) 0%, rgba(5, 5, 5, .58) 58%, rgba(5, 5, 5, .22) 100%),
+        url('/static/frontend/landing/gallery/gallery_2.jpg') 62% center / cover no-repeat;
     }
 
     .hero h1 {
@@ -1224,12 +1226,10 @@
   <section class="section" id="nosotros">
     <div class="container-ayc intro-grid">
       <div class="intro-media reveal">
-        <img class="intro-main" src="{{ about.main_image or '' }}"
-          alt="Brigadista de A&C durante un evento"
-          {% if not about.main_image %}style="display:none"{% endif %}>
-        <img class="intro-detail" src="{{ about.detail_image or '' }}"
-          alt="Equipo de producción y montaje de A&C"
-          {% if not about.detail_image %}style="display:none"{% endif %}>
+        <img class="intro-main" src="{{ about.main_image or '/static/frontend/landing/gallery/gallery_7.jpg' }}"
+          alt="Brigadista de A&C durante un evento">
+        <img class="intro-detail" src="{{ about.detail_image or '/static/frontend/landing/gallery/gallery_3.jpg' }}"
+          alt="Equipo de producción y montaje de A&C">
         <div class="intro-badge">{{ about.badge or 'Operación humana, técnica y confiable' }}</div>
       </div>
 
@@ -1311,6 +1311,19 @@
             </figure>
             {% endif %}
             {% endfor %}
+            {% else %}
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_01.jpg')" role="img" aria-label="Participación de A&C en eventos relacionados con J Balvin">
+              <figcaption><small>Artista internacional</small><strong>J Balvin</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_03.jpg')" role="img" aria-label="Participación de A&C en el concierto de Shakira">
+              <figcaption><small>Producción de gran formato</small><strong>Shakira</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_05.jpg')" role="img" aria-label="Operación logística de A&C en Claro Fútbol Fest">
+              <figcaption><small>Evento masivo</small><strong>Claro Fútbol Fest</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_07.jpg')" role="img" aria-label="Operación de A&C en la experiencia Karol G Viewing Party">
+              <figcaption><small>Experiencia de entretenimiento</small><strong>Karol G Viewing Party</strong></figcaption>
+            </figure>
             {% endif %}
           </div>
         </div>
@@ -1329,6 +1342,19 @@
             </figure>
             {% endif %}
             {% endfor %}
+            {% else %}
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_02.jpg')" role="img" aria-label="Participación de A&C en eventos relacionados con Maluma">
+              <figcaption><small>Artista internacional</small><strong>Maluma</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_04.jpg')" role="img" aria-label="Participación de A&C en eventos relacionados con Yeison Jiménez">
+              <figcaption><small>Producción nacional</small><strong>Yeison Jiménez</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_06.jpg')" role="img" aria-label="Participación de A&C en Viva el Merengue">
+              <figcaption><small>Concierto de gran formato</small><strong>Viva el Merengue</strong></figcaption>
+            </figure>
+            <figure class="stage-card" style="--stage-image:url('/static/frontend/landing/events/event_08.jpg')" role="img" aria-label="Equipo operativo de A&C en Bogotá Eats">
+              <figcaption><small>Logística integral</small><strong>Bogotá Eats</strong></figcaption>
+            </figure>
             {% endif %}
           </div>
         </div>
@@ -1354,6 +1380,23 @@
           <figcaption>{{ g.title or g.caption or '' }}</figcaption>
         </figure>
         {% endfor %}
+        {% else %}
+        <figure class="gallery-card reveal">
+          <img src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Brigadista de A&C en operación">
+          <figcaption>Prevención y respuesta</figcaption>
+        </figure>
+        <figure class="gallery-card reveal">
+          <img src="/static/frontend/landing/gallery/gallery_2.jpg" alt="Equipo A&C frente a escenario">
+          <figcaption>Grandes formatos</figcaption>
+        </figure>
+        <figure class="gallery-card reveal">
+          <img src="/static/frontend/landing/gallery/gallery_5.jpg" alt="Personal logístico de A&C">
+          <figcaption>Equipo operativo</figcaption>
+        </figure>
+        <figure class="gallery-card reveal">
+          <img src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Equipo A&C en montaje de escenario">
+          <figcaption>Producción y montaje</figcaption>
+        </figure>
         {% endif %}
       </div>
     </div>
@@ -1368,8 +1411,7 @@
       <div class="news-grid">
         {% if news %}
         {% for n in news[:3] %}
-        <article class="news-card {{ 'featured' if loop.first else '' }} reveal"
-          {% if loop.first and n.image_url %}style="background-image: linear-gradient(to top, rgba(5,5,5,.95), rgba(5,5,5,.2)), url('{{ n.image_url }}') center / cover;"{% endif %}>
+        <article class="news-card {{ 'featured' if loop.first else '' }} reveal">
           <span class="news-tag">{{ n.category or 'Actualidad' }}</span>
           <div>
             <h3>{{ n.title }}</h3>
