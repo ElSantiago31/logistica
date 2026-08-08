@@ -71,7 +71,7 @@ class TestJWTTokens:
 
     def test_decode_expired_token(self):
         # Manually create an expired token
-        from jose import jwt
+        import jwt
         from datetime import datetime, timedelta, timezone
         expired_payload = {
             "sub": str(uuid.uuid4()),

@@ -106,7 +106,7 @@ def _process_image(raw: bytes) -> tuple[bytes, bytes]:
         img = img.convert("RGB")
 
     # Resize full image if too large (keep aspect ratio)
-    img.thumbnail((_PHOTO_MAX_DIM, _PHOTO_MAX_DIM), Image.LANCZOS)
+    img.thumbnail((_PHOTO_MAX_DIM, _PHOTO_MAX_DIM), Image.Resampling.LANCZOS)
 
     # Full photo -> JPEG
     full_buf = io.BytesIO()
@@ -114,7 +114,7 @@ def _process_image(raw: bytes) -> tuple[bytes, bytes]:
     full_bytes = full_buf.getvalue()
 
     # Thumbnail (square center-crop, biased toward face area)
-    thumb = ImageOps.fit(img, _THUMB_SIZE, method=Image.LANCZOS, bleed=0.0, centering=(0.5, 0.4))
+    thumb = ImageOps.fit(img, _THUMB_SIZE, method=Image.Resampling.LANCZOS, bleed=0.0, centering=(0.5, 0.4))
     thumb_buf = io.BytesIO()
     thumb.save(thumb_buf, format="JPEG", quality=_THUMB_QUALITY, optimize=True)
     thumb_bytes = thumb_buf.getvalue()
