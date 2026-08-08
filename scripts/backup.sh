@@ -6,7 +6,7 @@
 #   1. Dump de PostgreSQL (base de datos completa)
 #   2. Tarball de los volumes de Docker (fotos, contenido, RUTs)
 #
-# Retención: KEEP_DAYS (por defecto 30 días)
+# Retención: KEEP_DAYS (por defecto 7 días)
 # Uso manual:  bash scripts/backup.sh
 # Uso automático: ver scripts/install_backup_cron.sh
 # ============================================================
@@ -14,7 +14,7 @@ set -euo pipefail
 
 # ---------- Configuración ----------
 BACKUP_DIR="/home/server/backups/logistica"
-KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+KEEP_DAYS="${BACKUP_KEEP_DAYS:-7}"
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_SUBDIR="${BACKUP_DIR}/${DATE}"
 

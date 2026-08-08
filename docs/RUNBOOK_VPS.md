@@ -87,7 +87,7 @@ Presionar `Ctrl+C` para salir.
 
 ## 💾 BACKUP AUTOMÁTICO
 
-El sistema genera backups **diarios automáticos** (3:00 AM) con retención de 30 días.
+El sistema genera backups **diarios automáticos** (3:00 AM) con retención de 7 días.
 Cada backup incluye: **BD completa (PostgreSQL) + fotos + imágenes de contenido + PDFs de RUT**.
 
 ### 🚀 Instalación inicial (una sola vez, en la VPS)
@@ -144,7 +144,7 @@ du -sh /home/server/backups/logistica/
 | Parámetro | Valor por defecto | dónde cambiar |
 |-----------|-------------------|---------------|
 | Frecuencia | Diario 3:00 AM | `scripts/install_backup_cron.sh` |
-| Retención | 30 días | `scripts/backup.sh` (`KEEP_DAYS`) |
+| Retención | 7 días | `scripts/backup.sh` (`KEEP_DAYS`) |
 | Destino | `/home/server/backups/logistica/` | `scripts/backup.sh` (`BACKUP_DIR`) |
 
 ### 🛑 Desinstalar el cron (si necesario)

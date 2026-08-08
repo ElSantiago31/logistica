@@ -5,7 +5,7 @@
 # Configura cron para ejecutar backups automáticos:
 #   - Diario a las 03:00 AM (backup completo)
 #
-# Retención por defecto: 30 días (configurable en el script backup.sh)
+# Retención por defecto: 7 días (configurable en el script backup.sh)
 #
 # Uso (en la VPS, como root):
 #   sudo bash scripts/install_backup_cron.sh
@@ -53,7 +53,7 @@ echo "  Script:     ${BACKUP_SCRIPT}"
 echo "  Destino:    /home/server/backups/logistica/"
 echo "  Log:        ${LOG_FILE}"
 echo "  Cron:       ${CRON_SCHEDULE} (diario)"
-echo "  Retención:  30 días"
+echo "  Retención:  7 días"
 echo ""
 echo "Para ver los cron jobs instalados:"
 echo "  crontab -l"
