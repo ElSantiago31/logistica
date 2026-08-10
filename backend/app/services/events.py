@@ -266,6 +266,7 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
                 new_naive = new_dt.replace(tzinfo=None)
                 if old_naive != new_naive:
                     changed_fields[key] = {"antes": str(old_val), "despues": str(value)}
+                    setattr(event, key, value)
                 continue
             except (ValueError, TypeError):
                 pass
