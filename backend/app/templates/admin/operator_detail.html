@@ -59,6 +59,7 @@
     <div class="max-w-4xl mx-auto px-4 py-8">
         <a href="/admin/operators" class="text-primary-600 hover:text-primary-800 text-sm font-medium mb-4 inline-block">← Volver a operadores</a>
         <div id="detail" class="bg-white rounded-xl shadow-lg overflow-hidden"><div class="p-8 text-center text-gray-400">Cargando...</div></div>
+        <div id="evaluations-section" class="mt-6 hidden"></div>
     </div>
     <script>
     (function(){
@@ -96,7 +97,105 @@
             const rr=await fetch('/api/operators/dashboard/stats',{headers:authH()});
             if(rr.ok){const sd=await rr.json();allRoles=sd.operators_by_role||[]}
             render(o);
+            loadEvaluations();
         }catch(e){toast('Error al cargar','error')}
+    }
+
+    async function loadEvaluations(){
+        const section=document.getElementById('evaluations-section');
+        try{
+            const r=await fetch('/api/operators/'+opId+'/evaluations',{headers:authH()});
+            if(!r.ok){section.classList.add('hidden');return}
+            const data=await r.json();
+            renderEvaluations(data);
+        }catch(e){section.classList.add('hidden')}
+    }
+
+    function scoreColor(score){
+        if(score>=4.5)return 'text-green-600 bg-green-50 border-green-200';
+        if(score>=3.5)return 'text-blue-600 bg-blue-50 border-blue-200';
+        if(score>=2.5)return 'text-amber-600 bg-amber-50 border-amber-200';
+        return 'text-red-600 bg-red-50 border-red-200';
+    }
+
+    function renderEvaluations(data){
+        const section=document.getElementById('evaluations-section');
+        const evals=data.evaluations||[];
+        const summary=data.summary;
+
+        if(!evals.length){
+            section.classList.add('hidden');
+            return;
+        }
+        section.classList.remove('hidden');
+
+        let summaryHtml='';
+        if(summary){
+            summaryHtml=`
+            <div class="bg-white rounded-xl shadow-lg p-5 mb-3">
+                <div class="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                        <p class="text-2xl font-bold text-primary-700">${summary.total_evaluations}</p>
+                        <p class="text-xs text-gray-500">Evaluaciones</p>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold ${summary.avg_overall>=4?'text-green-600':summary.avg_overall>=3?'text-amber-600':'text-red-600'}">⭐ ${summary.avg_overall}</p>
+                        <p class="text-xs text-gray-500">Promedio General</p>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold ${summary.would_hire_rate>=70?'text-green-600':summary.would_hire_rate>=50?'text-amber-600':'text-red-600'}">${summary.would_hire_rate}%</p>
+                        <p class="text-xs text-gray-500">Recontrataría</p>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        const evalsHtml=evals.map(e=>{
+            const dateStr=e.event_date?new Date(e.event_date).toLocaleDateString('es-CO',{year:'numeric',month:'short',day:'numeric'}):'-';
+            const scoreClass=scoreColor(e.overall);
+            return `
+            <div class="bg-white rounded-xl shadow p-4 mb-3">
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <p class="font-semibold text-gray-800">${e.event_name||'Evento'}</p>
+                        <p class="text-xs text-gray-500">${dateStr} • Evaluado por: ${e.evaluator_name||'-'}</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-lg text-sm font-bold border ${scoreClass}">${e.overall.toFixed(1)}/5</span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                    <div class="text-center bg-gray-50 rounded-lg py-2">
+                        <p class="text-xs text-gray-500">⏰ Puntualidad</p>
+                        <p class="font-bold text-gray-800">${'★'.repeat(e.punctuality)}${'☆'.repeat(5-e.punctuality)}</p>
+                    </div>
+                    <div class="text-center bg-gray-50 rounded-lg py-2">
+                        <p class="text-xs text-gray-500">💪 Desempeño</p>
+                        <p class="font-bold text-gray-800">${'★'.repeat(e.performance)}${'☆'.repeat(5-e.performance)}</p>
+                    </div>
+                    <div class="text-center bg-gray-50 rounded-lg py-2">
+                        <p class="text-xs text-gray-500">👔 Presentación</p>
+                        <p class="font-bold text-gray-800">${'★'.repeat(e.appearance)}${'☆'.repeat(5-e.appearance)}</p>
+                    </div>
+                    <div class="text-center bg-gray-50 rounded-lg py-2">
+                        <p class="text-xs text-gray-500">😊 Actitud</p>
+                        <p class="font-bold text-gray-800">${'★'.repeat(e.attitude)}${'☆'.repeat(5-e.attitude)}</p>
+                    </div>
+                </div>
+                ${e.comments?`<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2"><p class="text-xs text-gray-500">💬 Comentarios</p><p class="text-sm text-gray-700 italic">"${e.comments}"</p></div>`:''}
+                <div class="flex items-center gap-2">
+                    ${e.would_hire_again
+                        ?'<span class="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">✓ Lo volvería a contratar</span>'
+                        :'<span class="text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded-full">✗ No lo volvería a contratar</span>'}
+                </div>
+            </div>`;
+        }).join('');
+
+        section.innerHTML=`
+            <h2 class="text-lg font-bold text-gray-700 mb-3 flex items-center gap-2">
+                📋 Historial de Evaluaciones
+            </h2>
+            ${summaryHtml}
+            ${evalsHtml}
+        `;
     }
 
     function renderRoleBadges(o){

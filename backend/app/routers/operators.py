@@ -463,6 +463,69 @@ async def list_operators(
     )
     return OperatorListResponse(items=operators, total=total)
 
+@router.get("/{user_id}/evaluations")
+async def get_operator_evaluations(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Obtiene el historial de evaluaciones de un operador.
+
+    Devuelve todas las evaluaciones que el operador ha recibido, con datos
+    del evento, el evaluador y los puntajes. Ordenado por fecha descendente.
+    """
+    from app.models.payroll import Evaluation
+    from app.models.events import Event
+
+    is_admin = current_user.user_type in ("superadmin", "admin")
+    if not is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    # Obtener operator_id desde user_id
+    op_result = await db.execute(select(Operator).where(Operator.user_id == user_id))
+    operator = op_result.scalar_one_or_none()
+    if not operator:
+        return {"evaluations": [], "summary": None}
+
+    result = await db.execute(
+        select(Evaluation, Event, User)
+        .join(Event, Evaluation.event_id == Event.id)
+        .join(User, Evaluation.evaluated_by == User.id)
+        .where(Evaluation.operator_id == operator.id)
+        .order_by(Event.start_date.desc())
+    )
+    rows = result.all()
+
+    evals = []
+    for evl, ev, evaluator in rows:
+        evals.append({
+            "id": str(evl.id),
+            "event_name": ev.name,
+            "event_date": ev.start_date.isoformat() if ev.start_date else None,
+            "evaluator_name": f"{evaluator.first_name} {evaluator.last_name}".strip(),
+            "punctuality": evl.punctuality_score,
+            "performance": evl.performance_score,
+            "appearance": evl.appearance_score,
+            "attitude": evl.attitude_score,
+            "overall": evl.overall_score,
+            "would_hire_again": evl.would_hire_again,
+            "comments": evl.comments,
+        })
+
+    # Resumen agregado
+    summary = None
+    if evals:
+        avg_overall = round(sum(e["overall"] for e in evals) / len(evals), 2)
+        would_hire_count = sum(1 for e in evals if e["would_hire_again"])
+        summary = {
+            "total_evaluations": len(evals),
+            "avg_overall": avg_overall,
+            "would_hire_rate": round(would_hire_count / len(evals) * 100, 0),
+        }
+
+    return {"evaluations": evals, "summary": summary}
+
+
 @router.get("/{user_id}/block-info")
 async def get_block_info(
     user_id: uuid.UUID,
