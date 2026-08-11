@@ -59,7 +59,13 @@ async def my_coordinator_events(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Eventos donde el usuario actual es coordinador confirmado (level 1 o 2)."""
+    """Eventos donde el usuario actual es coordinador.
+
+    Dos fuentes:
+      1. Coordinador con rol asignado (hierarchy_level 1/2) — flujo clásico.
+      2. Coordinador con cupo asignado (EventCoordinatorQuota) — flujo de cupos.
+         Estos pueden evaluar a los operadores que ellos mismos admitieron.
+    """
     op_result = await db.execute(
         select(Operator).where(Operator.user_id == user.id)
     )
@@ -67,6 +73,10 @@ async def my_coordinator_events(
     if not operator:
         return {"events": []}
 
+    events_out = {}
+    seen_event_ids = set()
+
+    # --- Fuente 1: coordinador con rol asignado (hierarchy 1/2) ---
     result = await db.execute(
         select(EventAssignment, Event, Role)
         .join(Event, EventAssignment.event_id == Event.id)
@@ -80,23 +90,49 @@ async def my_coordinator_events(
         )
         .order_by(Event.start_date.desc())
     )
-    rows = result.all()
+    for asn, ev, role in result.all():
+        seen_event_ids.add(ev.id)
+        events_out[ev.id] = {
+            "id": str(ev.id),
+            "name": ev.name,
+            "start_date": ev.start_date.isoformat() if ev.start_date else None,
+            "end_date": ev.end_date.isoformat() if ev.end_date else None,
+            "status": ev.status,
+            "my_role": role.name,
+            "my_level": role.hierarchy_level,
+            "my_area": role.area,
+            "via_quota": False,
+        }
 
-    return {
-        "events": [
-            {
-                "id": str(ev.id),
-                "name": ev.name,
-                "start_date": ev.start_date.isoformat() if ev.start_date else None,
-                "end_date": ev.end_date.isoformat() if ev.end_date else None,
-                "status": ev.status,
-                "my_role": role.name,
-                "my_level": role.hierarchy_level,
-                "my_area": role.area,
-            }
-            for asn, ev, role in rows
-        ]
-    }
+    # --- Fuente 2: coordinador con cupo asignado ---
+    quota_result = await db.execute(
+        select(EventCoordinatorQuota, Event)
+        .join(Event, EventCoordinatorQuota.event_id == Event.id)
+        .where(
+            EventCoordinatorQuota.coordinator_operator_id == operator.id,
+            Event.is_active == True,
+            Event.status.in_(["in_progress", "completed"]),
+        )
+        .order_by(Event.start_date.desc())
+    )
+    for quota, ev in quota_result.all():
+        if ev.id in seen_event_ids:
+            # Ya incluido por rol asignado; no duplicar.
+            continue
+        seen_event_ids.add(ev.id)
+        events_out[ev.id] = {
+            "id": str(ev.id),
+            "name": ev.name,
+            "start_date": ev.start_date.isoformat() if ev.start_date else None,
+            "end_date": ev.end_date.isoformat() if ev.end_date else None,
+            "status": ev.status,
+            "my_role": "Coordinador (Cupo)",
+            "my_level": 2,  # Nivel 2 para que pueda evaluar operadores level 3
+            "my_area": None,
+            "via_quota": True,
+        }
+
+    return {"events": list(events_out.values())}
 
 
 @router.get("/events/{event_id}/team")
@@ -105,44 +141,81 @@ async def get_team_to_evaluate(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Personal a evaluar según la jerarquía del coordinador actual."""
-    my_assignment = await _get_my_coordinator_assignment(db, event_id, user)
-    if not my_assignment:
-        raise HTTPException(403, "No eres coordinador confirmado en este evento")
+    """Personal a evaluar según la jerarquía del coordinador actual.
 
-    # Cargar mi rol para saber nivel y área
-    my_role = await db.get(Role, my_assignment.role_id)
-    if not my_role:
-        raise HTTPException(403, "Rol no válido")
+    Dos modos:
+      1. Coordinador con rol asignado (hierarchy 1/2): evalúa según jerarquía clásica.
+      2. Coordinador con cupo (EventCoordinatorQuota): evalúa a los operadores
+         que él mismo admitió (admitted_by_operator_id).
+    """
+    operator = await _get_my_operator(db, user)
 
-    # Construir filtro según jerarquía
-    if my_role.hierarchy_level == 1:
-        # Coordinador General → evalúa a todos los level 2 del evento
-        team_filter = and_(
-            EventAssignment.event_id == event_id,
-            EventAssignment.status.in_(["confirmed", "checked_in"]),
-            Role.hierarchy_level == 2,
+    # Intentar flujo clásico: coordinador con rol asignado
+    my_assignment = await _get_my_coordinator_assignment(db, event_id, user) if operator else None
+
+    if my_assignment:
+        # --- Flujo clásico (rol asignado) ---
+        my_role = await db.get(Role, my_assignment.role_id)
+        if not my_role:
+            raise HTTPException(403, "Rol no válido")
+
+        if my_role.hierarchy_level == 1:
+            team_filter = and_(
+                EventAssignment.event_id == event_id,
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+                Role.hierarchy_level == 2,
+            )
+        elif my_role.hierarchy_level == 2:
+            team_filter = and_(
+                EventAssignment.event_id == event_id,
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+                Role.hierarchy_level == 3,
+                Role.area == my_role.area,
+            )
+        else:
+            raise HTTPException(403, "Tu rol no permite evaluar")
+
+        result = await db.execute(
+            select(EventAssignment, Operator, User, Role)
+            .join(Operator, EventAssignment.operator_id == Operator.id)
+            .join(User, User.id == Operator.user_id)
+            .join(Role, EventAssignment.role_id == Role.id)
+            .where(team_filter)
+            .order_by(User.first_name)
         )
-    elif my_role.hierarchy_level == 2:
-        # Coordinador de área → evalúa a level 3 de su misma área
-        team_filter = and_(
-            EventAssignment.event_id == event_id,
-            EventAssignment.status.in_(["confirmed", "checked_in"]),
-            Role.hierarchy_level == 3,
-            Role.area == my_role.area,
-        )
+        my_role_name = my_role.name
+        my_level = my_role.hierarchy_level
+        my_area = my_role.area
     else:
-        raise HTTPException(403, "Tu rol no permite evaluar")
+        # --- Flujo por cupo: operadores que este coordinador admitió ---
+        if not operator:
+            raise HTTPException(403, "No eres coordinador confirmado en este evento")
 
-    # Consultar equipo a evaluar
-    result = await db.execute(
-        select(EventAssignment, Operator, User, Role)
-        .join(Operator, EventAssignment.operator_id == Operator.id)
-        .join(User, User.id == Operator.user_id)
-        .join(Role, EventAssignment.role_id == Role.id)
-        .where(team_filter)
-        .order_by(User.first_name)
-    )
+        quota_r = await db.execute(
+            select(EventCoordinatorQuota).where(
+                EventCoordinatorQuota.event_id == event_id,
+                EventCoordinatorQuota.coordinator_operator_id == operator.id,
+            )
+        )
+        if not quota_r.scalar_one_or_none():
+            raise HTTPException(403, "No eres coordinador confirmado en este evento")
+
+        result = await db.execute(
+            select(EventAssignment, Operator, User, Role)
+            .join(Operator, EventAssignment.operator_id == Operator.id)
+            .join(User, User.id == Operator.user_id)
+            .outerjoin(Role, Role.id == EventAssignment.role_id)
+            .where(
+                EventAssignment.event_id == event_id,
+                EventAssignment.admitted_by_operator_id == operator.id,
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+            )
+            .order_by(User.first_name)
+        )
+        my_role_name = "Coordinador (Cupo)"
+        my_level = 2
+        my_area = None
+
     rows = result.all()
 
     # Consultar evaluaciones existentes del evaluador actual
@@ -156,18 +229,18 @@ async def get_team_to_evaluate(
 
     return {
         "event_id": str(event_id),
-        "my_role": my_role.name,
-        "my_level": my_role.hierarchy_level,
-        "my_area": my_role.area,
+        "my_role": my_role_name,
+        "my_level": my_level,
+        "my_area": my_area,
         "team": [
             {
                 "assignment_id": str(asn.id),
                 "operator_id": str(op.id),
                 "name": f"{u.first_name} {u.last_name}",
                 "document_number": u.document_number,
-                "role": role.name,
-                "area": role.area,
-                "level": role.hierarchy_level,
+                "role": role.name if role else "N/A",
+                "area": role.area if role else None,
+                "level": role.hierarchy_level if role else 3,
                 "photo": op.photo_thumbnail_path,
                 "already_evaluated": str(op.id) in existing_evals,
                 "overall_score": existing_evals[str(op.id)].overall_score
@@ -194,42 +267,70 @@ async def create_evaluation(
     target_operator_id = uuid.UUID(payload["operator_id"])
 
     # 1. Verificar que yo soy coordinador en este evento
-    my_assignment = await _get_my_coordinator_assignment(db, event_id, user)
-    if not my_assignment:
-        raise HTTPException(403, "No eres coordinador confirmado en este evento")
+    #    Dos modos: rol asignado (jerarquía clásica) o cupo (EventCoordinatorQuota).
+    operator = await _get_my_operator(db, user)
+    my_assignment = await _get_my_coordinator_assignment(db, event_id, user) if operator else None
 
-    my_role = await db.get(Role, my_assignment.role_id)
+    if my_assignment:
+        # --- Flujo clásico: coordinador con rol asignado ---
+        my_role = await db.get(Role, my_assignment.role_id)
 
-    # 2. Verificar que el target está en el evento
-    target_result = await db.execute(
-        select(EventAssignment)
-        .join(Role, EventAssignment.role_id == Role.id)
-        .where(
-            EventAssignment.event_id == event_id,
-            EventAssignment.operator_id == target_operator_id,
-            EventAssignment.status.in_(["confirmed", "checked_in"]),
+        # Verificar que el target está en el evento
+        target_result = await db.execute(
+            select(EventAssignment)
+            .join(Role, EventAssignment.role_id == Role.id)
+            .where(
+                EventAssignment.event_id == event_id,
+                EventAssignment.operator_id == target_operator_id,
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+            )
         )
-    )
-    target_asn = target_result.scalar_one_or_none()
-    if not target_asn:
-        raise HTTPException(404, "Operador no encontrado en este evento")
+        target_asn = target_result.scalar_one_or_none()
+        if not target_asn:
+            raise HTTPException(404, "Operador no encontrado en este evento")
 
-    target_role = await db.get(Role, target_asn.role_id)
+        target_role = await db.get(Role, target_asn.role_id)
 
-    # 3. Validar jerarquía
-    can_eval = False
-    if my_role.hierarchy_level == 1 and target_role.hierarchy_level == 2:
-        can_eval = True
-    elif my_role.hierarchy_level == 2 and target_role.hierarchy_level == 3:
-        if my_role.area == target_role.area:
+        # Validar jerarquía
+        can_eval = False
+        if my_role.hierarchy_level == 1 and target_role.hierarchy_level == 2:
             can_eval = True
+        elif my_role.hierarchy_level == 2 and target_role.hierarchy_level == 3:
+            if my_role.area == target_role.area:
+                can_eval = True
 
-    if not can_eval:
-        raise HTTPException(
-            403,
-            f"No puedes evaluar a este operador. Tu rol ({my_role.name}, nivel {my_role.hierarchy_level}) "
-            f"no es superior jerárquico directo del target ({target_role.name}, nivel {target_role.hierarchy_level})."
+        if not can_eval:
+            raise HTTPException(
+                403,
+                f"No puedes evaluar a este operador. Tu rol ({my_role.name}, nivel {my_role.hierarchy_level}) "
+                f"no es superior jerárquico directo del target ({target_role.name}, nivel {target_role.hierarchy_level})."
+            )
+    else:
+        # --- Flujo por cupo: coordinador evalúa a quien admitió ---
+        if not operator:
+            raise HTTPException(403, "No eres coordinador confirmado en este evento")
+
+        quota_r = await db.execute(
+            select(EventCoordinatorQuota).where(
+                EventCoordinatorQuota.event_id == event_id,
+                EventCoordinatorQuota.coordinator_operator_id == operator.id,
+            )
         )
+        if not quota_r.scalar_one_or_none():
+            raise HTTPException(403, "No eres coordinador confirmado en este evento")
+
+        # El target debe ser un operador que este coordinador admitió.
+        target_result = await db.execute(
+            select(EventAssignment).where(
+                EventAssignment.event_id == event_id,
+                EventAssignment.operator_id == target_operator_id,
+                EventAssignment.admitted_by_operator_id == operator.id,
+                EventAssignment.status.in_(["confirmed", "checked_in"]),
+            )
+        )
+        target_asn = target_result.scalar_one_or_none()
+        if not target_asn:
+            raise HTTPException(403, "Solo puedes evaluar a los operadores que admitiste bajo tu cupo")
 
     # 4. Verificar que no exista ya una evaluación mía para este operador/evento
     existing = await db.execute(
@@ -280,9 +381,21 @@ async def get_my_evaluations(
     user: User = Depends(get_current_user),
 ):
     """Ver las evaluaciones que yo (coordinador) he hecho en este evento."""
-    my_assignment = await _get_my_coordinator_assignment(db, event_id, user)
+    operator = await _get_my_operator(db, user)
+    my_assignment = await _get_my_coordinator_assignment(db, event_id, user) if operator else None
     if not my_assignment:
-        raise HTTPException(403, "No eres coordinador confirmado en este evento")
+        # Si no tiene rol asignado, validar si tiene cupo en el evento.
+        if operator:
+            quota_r = await db.execute(
+                select(EventCoordinatorQuota).where(
+                    EventCoordinatorQuota.event_id == event_id,
+                    EventCoordinatorQuota.coordinator_operator_id == operator.id,
+                )
+            )
+            if not quota_r.scalar_one_or_none():
+                raise HTTPException(403, "No eres coordinador confirmado en este evento")
+        else:
+            raise HTTPException(403, "No eres coordinador confirmado en este evento")
 
     result = await db.execute(
         select(Evaluation, Operator, User)
