@@ -466,13 +466,18 @@ async def list_operators(
 @router.get("/{user_id}/evaluations")
 async def get_operator_evaluations(
     user_id: uuid.UUID,
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(10, ge=1, le=100, description="Máximo de registros a devolver"),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Obtiene el historial de evaluaciones de un operador.
+    """Obtiene el historial de evaluaciones de un operador (paginado).
 
-    Devuelve todas las evaluaciones que el operador ha recibido, con datos
+    Devuelve las evaluaciones que el operador ha recibido, con datos
     del evento, el evaluador y los puntajes. Ordenado por fecha descendente.
+
+    Paginación vía skip/limit. El resumen agregado siempre se calcula sobre
+    TODAS las evaluaciones (no solo la página actual).
     """
     from app.models.payroll import Evaluation
     from app.models.events import Event
@@ -485,14 +490,36 @@ async def get_operator_evaluations(
     op_result = await db.execute(select(Operator).where(Operator.user_id == user_id))
     operator = op_result.scalar_one_or_none()
     if not operator:
-        return {"evaluations": [], "summary": None}
+        return {"evaluations": [], "summary": None, "total": 0, "skip": skip, "limit": limit}
 
+    # --- Resumen agregado (sobre TODAS las evaluaciones) ---
+    from sqlalchemy import func as sa_func
+    summary_result = await db.execute(
+        select(
+            sa_func.count(Evaluation.id),
+            sa_func.avg(Evaluation.overall_score),
+            sa_func.sum(sa_func.cast(Evaluation.would_hire_again, sa_func.Integer)),
+        ).where(Evaluation.operator_id == operator.id)
+    )
+    total_evals, avg_score, would_hire_sum = summary_result.one()
+
+    summary = None
+    if total_evals and total_evals > 0:
+        summary = {
+            "total_evaluations": total_evals,
+            "avg_overall": round(float(avg_score), 2) if avg_score else 0,
+            "would_hire_rate": round((int(would_hire_sum or 0) / total_evals) * 100, 0),
+        }
+
+    # --- Evaluaciones paginadas ---
     result = await db.execute(
         select(Evaluation, Event, User)
         .join(Event, Evaluation.event_id == Event.id)
         .join(User, Evaluation.evaluated_by == User.id)
         .where(Evaluation.operator_id == operator.id)
         .order_by(Event.start_date.desc())
+        .offset(skip)
+        .limit(limit)
     )
     rows = result.all()
 
@@ -512,18 +539,13 @@ async def get_operator_evaluations(
             "comments": evl.comments,
         })
 
-    # Resumen agregado
-    summary = None
-    if evals:
-        avg_overall = round(sum(e["overall"] for e in evals) / len(evals), 2)
-        would_hire_count = sum(1 for e in evals if e["would_hire_again"])
-        summary = {
-            "total_evaluations": len(evals),
-            "avg_overall": avg_overall,
-            "would_hire_rate": round(would_hire_count / len(evals) * 100, 0),
-        }
-
-    return {"evaluations": evals, "summary": summary}
+    return {
+        "evaluations": evals,
+        "summary": summary,
+        "total": int(total_evals or 0),
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.get("/{user_id}/block-info")
