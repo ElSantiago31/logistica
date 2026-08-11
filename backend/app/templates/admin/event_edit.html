@@ -311,13 +311,17 @@ async function loadEvent(){
     document.getElementById('client_phone').value=ev.client_phone||'';
     document.getElementById('description').value=ev.description||'';
     document.getElementById('notes').value=ev.notes||'';
+    // Helper: convierte Date al formato que espera datetime-local (YYYY-MM-DDTHH:MM)
+    // usando timezone LOCAL del navegador (no UTC) para evitar desplazamiento.
+    const pad=n=>String(n).padStart(2,'0');
+    const toLocalInput=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     if(ev.start_date){
         const sd=new Date(ev.start_date);
-        document.getElementById('start_date').value=sd.toISOString().slice(0,16);
+        document.getElementById('start_date').value=toLocalInput(sd);
     }
     if(ev.end_date){
         const ed=new Date(ev.end_date);
-        document.getElementById('end_date').value=ed.toISOString().slice(0,16);
+        document.getElementById('end_date').value=toLocalInput(ed);
     }
     // Load existing staff needs
     await loadRoles();
