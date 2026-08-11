@@ -172,8 +172,15 @@ async def get_operators(
     return list(operators), total
 
 async def get_operator(db: AsyncSession, user_id: uuid.UUID, include_inactive: bool = False) -> Optional[User]:
-    """Get a specific operator by user ID."""
+    """Get a specific operator by user ID.
+
+    Calcula rating_avg y total_events dinámicamente (campos estáticos en BD
+    que nadie mantenía actualizados).
+    """
     from sqlalchemy.orm import joinedload
+    from app.models.payroll import Evaluation
+    from app.models.events import EventAssignment
+
     query = select(User).where(
         User.id == user_id,
         User.user_type == "operator",
@@ -184,9 +191,31 @@ async def get_operator(db: AsyncSession, user_id: uuid.UUID, include_inactive: b
         selectinload(User.operator_profile).joinedload(Operator.eps),
         selectinload(User.operator_profile).joinedload(Operator.pension_fund),
     )
-    
+
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+
+    # --- Cálculo dinámico de rating_avg y total_events ---
+    if user and user.operator_profile:
+        operator_id = user.operator_profile.id
+
+        ev_result = await db.execute(
+            select(func.count()).select_from(EventAssignment).where(
+                EventAssignment.operator_id == operator_id,
+                EventAssignment.status.in_(["confirmed", "checked_in", "completed"]),
+            )
+        )
+        user.operator_profile.total_events = ev_result.scalar() or 0
+
+        rating_result = await db.execute(
+            select(func.avg(Evaluation.overall_score)).where(
+                Evaluation.operator_id == operator_id,
+            )
+        )
+        avg = rating_result.scalar()
+        user.operator_profile.rating_avg = round(float(avg), 2) if avg is not None else None
+
+    return user
 
 async def update_operator(
     db: AsyncSession, 
