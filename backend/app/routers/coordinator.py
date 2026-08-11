@@ -132,7 +132,13 @@ async def my_coordinator_events(
             "via_quota": True,
         }
 
-    return {"events": list(events_out.values())}
+    # Ordenar por start_date descendente (eventos más recientes primero).
+    events_list = sorted(
+        events_out.values(),
+        key=lambda e: e["start_date"] or "",
+        reverse=True,
+    )
+    return {"events": events_list}
 
 
 @router.get("/events/{event_id}/team")
