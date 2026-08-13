@@ -341,6 +341,53 @@
     color: var(--admin-danger);
   }
 
+  /* Botones de acción con texto (Respuesta/Eliminar) en la tabla PQRSF */
+  .action-btn {
+    min-height: 34px;
+    padding: .4rem .85rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--admin-white);
+    font: inherit;
+    font-size: .72rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: .2s ease;
+    white-space: nowrap;
+  }
+  .action-btn:hover {
+    border-color: var(--admin-gold);
+    color: var(--admin-gold);
+  }
+  .action-btn.danger {
+    color: var(--admin-danger);
+    border-color: rgba(239,111,108,.35);
+  }
+  .action-btn.danger:hover {
+    background: rgba(239,111,108,.10);
+    border-color: var(--admin-danger);
+    color: var(--admin-danger);
+  }
+
+  .pqrsf-reply-hint {
+    padding: .65rem .85rem;
+    border-radius: 8px;
+    background: rgba(207,155,98,.06);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-muted);
+    font-size: .72rem;
+    line-height: 1.55;
+  }
+  .pqrsf-reply-hint strong { color: var(--admin-gold); }
+  .pqrsf-reply-hint code {
+    padding: .1rem .35rem;
+    border-radius: 4px;
+    background: rgba(255,255,255,.06);
+    color: var(--admin-white);
+    font-size: .68rem;
+  }
+
   .gallery-admin-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
@@ -658,6 +705,113 @@
   .contact-detail p { margin: .35rem 0; font-size: .78rem; }
   .contact-detail strong { color: var(--admin-gold); }
 
+  /* ===== PQRSF: banner SMTP + modal de respuesta + selects de estado ===== */
+  .pqrsf-smtp-banner {
+    margin: 0;
+    padding: .8rem 1rem;
+    border-radius: 8px;
+    font-size: .76rem;
+    line-height: 1.5;
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+  }
+  .pqrsf-smtp-banner.ok { background: rgba(105,193,139,.10); color: var(--admin-success); border: 1px solid rgba(105,193,139,.30); }
+  .pqrsf-smtp-banner.warn { background: rgba(239,111,108,.08); color: var(--admin-danger); border: 1px solid rgba(239,111,108,.30); }
+  .pqrsf-smtp-banner.info { background: rgba(207,155,98,.08); color: var(--admin-gold); border: 1px solid var(--admin-border); }
+
+  .pqrsf-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: rgba(0,0,0,.65);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .pqrsf-modal-overlay.open { display: flex; }
+  .pqrsf-modal {
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
+    border-radius: 16px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55);
+  }
+  .pqrsf-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.1rem 1.3rem;
+    border-bottom: 1px solid var(--admin-border);
+    position: sticky;
+    top: 0;
+    background: var(--admin-panel);
+    z-index: 1;
+  }
+  .pqrsf-modal-header h3 { margin: 0; font-size: 1rem; font-family: 'Cinzel', serif; }
+  .pqrsf-modal-body { padding: 1.3rem; display: grid; gap: 1rem; }
+  .pqrsf-modal-meta {
+    display: grid;
+    gap: .35rem;
+    padding: .8rem 1rem;
+    border-radius: 8px;
+    background: var(--admin-panel-soft);
+    font-size: .76rem;
+    color: var(--admin-muted);
+  }
+  .pqrsf-modal-meta strong { color: var(--admin-white); }
+  .pqrsf-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: .6rem;
+    padding: 1rem 1.3rem;
+    border-top: 1px solid var(--admin-border);
+    position: sticky;
+    bottom: 0;
+    background: var(--admin-panel);
+  }
+
+  .status-select {
+    min-height: 34px;
+    padding: .35rem .6rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: #080808;
+    color: var(--admin-white);
+    font: inherit;
+    font-size: .72rem;
+    cursor: pointer;
+  }
+  .status-select:focus { outline: none; border-color: var(--admin-gold); }
+
+  .pqrsf-history { display: grid; gap: .6rem; }
+  .pqrsf-history-item {
+    padding: .8rem;
+    border-radius: 8px;
+    background: var(--admin-panel-soft);
+    border: 1px solid var(--admin-border);
+    font-size: .76rem;
+  }
+  .pqrsf-history-item.sent-ok { border-left: 3px solid var(--admin-success); }
+  .pqrsf-history-item.sent-fail { border-left: 3px solid var(--admin-danger); }
+  .pqrsf-history-item .meta { display: flex; justify-content: space-between; gap: .5rem; margin-bottom: .35rem; }
+  .pqrsf-history-item .meta strong { color: var(--admin-white); }
+  .pqrsf-history-item .body { color: var(--admin-muted); white-space: pre-wrap; line-height: 1.5; }
+  .pqrsf-history-item .err {
+    margin-top: .4rem;
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    background: rgba(239,111,108,.10);
+    color: var(--admin-danger);
+    font-size: .72rem;
+  }
+  .pqrsf-history-empty { color: var(--admin-muted); font-size: .76rem; text-align: center; padding: .8rem; }
+
   @media (max-width: 1050px) {
     .admin-shell { grid-template-columns: 1fr; }
 
@@ -747,6 +901,7 @@
       <button type="button" data-panel="news">📰 Noticias</button>
       <button type="button" data-panel="gallery">▧ Galería</button>
       <button type="button" data-panel="contacts">✉ Solicitudes</button>
+      <button type="button" data-panel="pqrsf">⚖ PQRSF</button>
       <a href="/" target="_blank" rel="noopener">↗ Ver página pública</a>
       <a href="/admin">← Volver al panel</a>
     </nav>
@@ -801,6 +956,10 @@
         <article class="stat-card">
           <span>Solicitudes nuevas</span>
           <strong id="stat-contacts">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>PQRSF nuevas</span>
+          <strong id="stat-pqrsf">0</strong>
         </article>
       </div>
 
@@ -1179,7 +1338,84 @@
         </div>
       </div>
     </section>
+
+    <!-- PQRSF -->
+    <section class="admin-panel" id="panel-pqrsf">
+      <div class="section-card">
+        <div class="section-card-header" style="flex-direction:column;align-items:stretch;gap:.8rem">
+          <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center">
+            <div>
+              <h2>Bandeja PQRSF</h2>
+              <p>Peticiones, quejas, reclamos, sugerencias y felicitaciones recibidas desde la home.</p>
+            </div>
+            <div class="admin-actions">
+              <select id="pqrsf-filter" class="admin-btn" style="padding-right:2rem">
+                <option value="">Todas</option>
+                <option value="new">Recibidas</option>
+                <option value="in_progress">En estudio</option>
+                <option value="resolved">Resueltas</option>
+                <option value="closed">Cerradas</option>
+              </select>
+            </div>
+          </div>
+          <!-- Banner de estado SMTP (se rellena por JS) -->
+          <div id="pqrsf-smtp-banner" class="pqrsf-smtp-banner info" style="display:none"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Radicado / Solicitante</th>
+                <th>Tipo / Asunto</th>
+                <th>Estado</th>
+                <th>Prioridad</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="pqrsf-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
+</div>
+
+<!-- Modal de respuesta PQRSF -->
+<div class="pqrsf-modal-overlay" id="pqrsf-modal-overlay">
+  <div class="pqrsf-modal" role="dialog" aria-modal="true" aria-labelledby="pqrsf-modal-title">
+    <div class="pqrsf-modal-header">
+      <h3 id="pqrsf-modal-title">Responder PQRSF</h3>
+      <button type="button" class="icon-btn" id="pqrsf-modal-close" title="Cerrar" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="pqrsf-modal-body">
+      <div class="pqrsf-modal-meta" id="pqrsf-modal-meta"></div>
+
+      <div class="form-field">
+        <label for="pqrsf-resp-subject">Asunto del correo *</label>
+        <input id="pqrsf-resp-subject" type="text" maxlength="200" placeholder="Re: Asunto de la solicitud">
+      </div>
+
+      <div class="form-field">
+        <label for="pqrsf-resp-body">Respuesta * (mínimo 10 caracteres)</label>
+        <textarea id="pqrsf-resp-body" maxlength="5000" placeholder="Escribe aquí la respuesta que se enviará al correo del solicitante…"></textarea>
+      </div>
+
+      <div class="pqrsf-reply-hint" id="pqrsf-reply-hint">
+        💡 Cuando el solicitante responda este correo, su respuesta llegará a la bandeja configurada en <code>PQRSF_REPLY_TO</code>. Revisa ese correo para continuar la conversación.
+      </div>
+
+      <div>
+        <strong style="font-size:.78rem;color:var(--admin-white)">Historial de respuestas</strong>
+        <div class="pqrsf-history" id="pqrsf-history" style="margin-top:.6rem">
+          <div class="pqrsf-history-empty">Cargando historial…</div>
+        </div>
+      </div>
+    </div>
+    <div class="pqrsf-modal-footer">
+      <button type="button" class="admin-btn" id="pqrsf-modal-cancel">Cancelar</button>
+      <button type="button" class="admin-btn admin-btn-primary" id="pqrsf-modal-send">Enviar respuesta</button>
+    </div>
+  </div>
 </div>
 
 <div class="admin-toast" id="admin-toast"></div>
@@ -1286,6 +1522,7 @@
     news: ['Noticias', 'Crea, publica y elimina noticias.'],
     gallery: ['Galería', 'Sube y administra imágenes de eventos.'],
     contacts: ['Solicitudes de contacto', 'Revisa los formularios recibidos.'],
+    pqrsf: ['PQRSF', 'Gestiona peticiones, quejas, reclamos, sugerencias y felicitaciones.'],
   };
 
   // Convierte cualquier contenedor con clase .upload-zone en una zona drag&drop
@@ -1530,6 +1767,15 @@
     document.querySelectorAll('[data-image-upload]').forEach(setupImageFieldDrop);
 
     document.getElementById('contacts-filter').addEventListener('change', renderContacts);
+    document.getElementById('pqrsf-filter').addEventListener('change', renderPqrsf);
+
+    // Modal de respuesta PQRSF: cerrar (X / Cancelar / overlay) + enviar.
+    document.getElementById('pqrsf-modal-close').addEventListener('click', closePqrsfResponseModal);
+    document.getElementById('pqrsf-modal-cancel').addEventListener('click', closePqrsfResponseModal);
+    document.getElementById('pqrsf-modal-send').addEventListener('click', sendPqrsfResponse);
+    document.getElementById('pqrsf-modal-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'pqrsf-modal-overlay') closePqrsfResponseModal();
+    });
 
     document.getElementById('cleanup-btn').addEventListener('click', async () => {
       if (!confirm('¿Eliminar imágenes huérfanas del servidor?')) return;
@@ -1570,7 +1816,7 @@
 
   // --- Load all data ---
   async function loadAll() {
-    await Promise.all([loadHomepage(), loadServices(), loadStages(), loadNews(), loadGallery(), loadContacts()]);
+    await Promise.all([loadHomepage(), loadServices(), loadStages(), loadNews(), loadGallery(), loadContacts(), loadPqrsf()]);
   }
 
   async function loadHomepage() {
@@ -1983,6 +2229,14 @@
 
   // --- Contacts ---
   let contacts = [];
+  let pqrsfList = [];
+  const PQRSF_STATUS = { new: 'Recibida', in_progress: 'En estudio', resolved: 'Resuelta', closed: 'Cerrada' };
+  const PQRSF_TYPES = { petition: 'Petición', complaint: 'Queja', claim: 'Reclamo', suggestion: 'Sugerencia', congratulation: 'Felicitación' };
+  const PQRSF_PRIORITY = { low: 'Baja', medium: 'Media', high: 'Alta' };
+
+  // Estado del modal de respuesta y de la configuración SMTP (cargados vía API).
+  let currentPqrsfId = null;
+  let smtpStatus = null;
   async function loadContacts() {
     try { contacts = await apiGet('contacts'); } catch { contacts = []; }
     renderContacts();
@@ -2043,6 +2297,308 @@
     } catch (e) { toast('Error: ' + e.message, 'error'); }
   }
 
+  // --- PQRSF ---
+  async function loadPqrsf() {
+    // Cargar el estado de SMTP en paralelo con la lista (solo la 1ª vez).
+    if (!smtpStatus) loadSmtpStatus();
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      pqrsfList = await res.json();
+    } catch { pqrsfList = []; }
+    renderPqrsf();
+    updateStats();
+  }
+
+  function renderPqrsf() {
+    const filter = document.getElementById('pqrsf-filter');
+    const filterVal = filter ? filter.value : '';
+    const list = filterVal ? pqrsfList.filter(p => p.status === filterVal) : pqrsfList;
+    const body = document.getElementById('pqrsf-table-body');
+    if (!list.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-state">No hay solicitudes PQRSF.</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(p => `
+      <tr>
+        <td>
+          <div class="content-title">${escapeHtml(p.tracking_code)}</div>
+          <div style="color:var(--admin-muted);font-size:.68rem;margin-top:.25rem">${escapeHtml(p.full_name)}</div>
+          <div style="color:var(--admin-muted);font-size:.68rem">${escapeHtml(p.email)}${p.phone ? ' · ' + escapeHtml(p.phone) : ''}</div>
+          ${p.company ? '<div style="color:var(--admin-muted);font-size:.68rem">Empresa: ' + escapeHtml(p.company) + '</div>' : ''}
+          <div class="contact-detail" style="margin-top:.5rem"><p>${escapeHtml(p.message)}</p></div>
+          <div style="color:var(--admin-muted);font-size:.62rem;margin-top:.4rem">Recibido: ${p.created_at ? new Date(p.created_at).toLocaleDateString('es-CO') : '—'}</div>
+        </td>
+        <td>
+          <span style="color:var(--admin-gold);font-weight:700">${escapeHtml(PQRSF_TYPES[p.request_type] || p.request_type)}</span><br>
+          <span style="font-size:.78rem">${escapeHtml(p.subject)}</span>
+        </td>
+        <td>
+          <select class="status-select" data-pqrsf-status="${p.id}" title="Cambiar estado">
+            <option value="new"${p.status === 'new' ? ' selected' : ''}>Recibida</option>
+            <option value="in_progress"${p.status === 'in_progress' ? ' selected' : ''}>En estudio</option>
+            <option value="resolved"${p.status === 'resolved' ? ' selected' : ''}>Resuelta</option>
+            <option value="closed"${p.status === 'closed' ? ' selected' : ''}>Cerrada</option>
+          </select>
+        </td>
+        <td>
+          <select class="status-select" data-pqrsf-priority="${p.id}" title="Cambiar prioridad">
+            <option value="low"${p.priority === 'low' ? ' selected' : ''}>Baja</option>
+            <option value="medium"${p.priority === 'medium' ? ' selected' : ''}>Media</option>
+            <option value="high"${p.priority === 'high' ? ' selected' : ''}>Alta</option>
+          </select>
+        </td>
+        <td>
+          <div class="row-actions">
+            <button class="action-btn" type="button" data-pqrsf-respond="${p.id}">Responder</button>
+            <button class="action-btn danger" type="button" data-pqrsf-del="${p.id}">Eliminar</button>
+          </div>
+        </td>
+      </tr>`).join('');
+    body.querySelectorAll('[data-pqrsf-status]').forEach(s => s.addEventListener('change', () => changePqrsfStatus(s.dataset.pqrsfStatus, s.value)));
+    body.querySelectorAll('[data-pqrsf-priority]').forEach(s => s.addEventListener('change', () => changePqrsfPriority(s.dataset.pqrsfPriority, s.value)));
+    body.querySelectorAll('[data-pqrsf-del]').forEach(b => b.addEventListener('click', () => deletePqrsf(b.dataset.pqrsfDel)));
+    body.querySelectorAll('[data-pqrsf-respond]').forEach(b => b.addEventListener('click', () => openPqrsfResponseModal(b.dataset.pqrsfRespond)));
+  }
+
+  async function changePqrsfStatus(id, newStatus) {
+    // Edición directa del estado vía <select>. No se cicla.
+    const p = pqrsfList.find(x => x.id === id);
+    if (!p) return;
+    if (p.status === newStatus) return; // sin cambios
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf/' + id + '/status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      p.status = newStatus;
+      toast('Estado actualizado a "' + (PQRSF_STATUS[newStatus] || newStatus) + '".', 'success');
+      updateStats();
+    } catch (e) {
+      // Revertir el <select> al valor anterior de la BD.
+      const sel = document.querySelector('[data-pqrsf-status="' + id + '"]');
+      if (sel) sel.value = p.status;
+      toast('Error: ' + e.message, 'error');
+    }
+  }
+
+  async function changePqrsfPriority(id, newPriority) {
+    // Edición directa de la prioridad vía <select>. No se cicla.
+    const p = pqrsfList.find(x => x.id === id);
+    if (!p) return;
+    if (p.priority === newPriority) return; // sin cambios
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf/' + id + '/priority', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ priority: newPriority }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      p.priority = newPriority;
+      toast('Prioridad actualizada a "' + (PQRSF_PRIORITY[newPriority] || newPriority) + '".', 'success');
+    } catch (e) {
+      // Revertir el <select> al valor anterior de la BD.
+      const sel = document.querySelector('[data-pqrsf-priority="' + id + '"]');
+      if (sel) sel.value = p.priority;
+      toast('Error: ' + e.message, 'error');
+    }
+  }
+
+  // --- Banner de estado SMTP ---
+  // Carga el estado de configuración de SMTP desde /api/pqrsf/meta/smtp y lo
+  // muestra en un banner dentro de la bandeja PQRSF. Así el admin sabe si los
+  // correos se están enviando realmente o si están en modo simulación (dev).
+  async function loadSmtpStatus() {
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf/meta/smtp', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      smtpStatus = await res.json();
+    } catch (e) {
+      smtpStatus = null;
+    }
+    renderSmtpBanner();
+  }
+
+  function renderSmtpBanner() {
+    const banner = document.getElementById('pqrsf-smtp-banner');
+    if (!banner) return;
+    if (!smtpStatus) {
+      banner.style.display = 'none';
+      return;
+    }
+    // Si SMTP está bien configurado, ocultar el banner (UI limpia).
+    // Solo se muestra cuando hay algo que arreglar (ej: deshabilitado o falta config).
+    if (smtpStatus.enabled && smtpStatus.configured) {
+      banner.style.display = 'none';
+      return;
+    }
+    let cls = 'info';
+    let icon = 'ℹ';
+    if (smtpStatus.simulated) { cls = 'warn'; icon = '⚠'; }
+    banner.className = 'pqrsf-smtp-banner ' + cls;
+    banner.style.display = 'flex';
+    banner.innerHTML = '<span style="font-weight:800">' + icon + '</span>' +
+      '<span>' + escapeHtml(smtpStatus.message || '') +
+      (smtpStatus.host ? ' <strong style="color:inherit">Host:</strong> ' + escapeHtml(smtpStatus.host) : '') +
+      '</span>';
+  }
+
+  // --- Modal de respuesta PQRSF (reemplaza al window.prompt) ---
+  // Flujo:
+  //   1. openPqrsfResponseModal(id): abre el modal, rellena metadata del
+  //      solicitante, precarga el asunto y carga el historial de respuestas.
+  //   2. El admin escribe la respuesta en el <textarea>.
+  //   3. Al enviar, se llama a POST /api/pqrsf/{id}/respond y, según el campo
+  //      `sent` del resultado, se muestra si el correo se envió o quedó en
+  //      modo simulación / con error de SMTP.
+  async function openPqrsfResponseModal(id) {
+    const p = pqrsfList.find(x => x.id === id);
+    if (!p) return;
+    currentPqrsfId = id;
+
+    // Metadata del solicitante
+    const meta = document.getElementById('pqrsf-modal-meta');
+    meta.innerHTML =
+      '<div><strong>' + escapeHtml(p.tracking_code) + '</strong> · ' +
+      escapeHtml(PQRSF_TYPES[p.request_type] || p.request_type) + '</div>' +
+      '<div>Para: <strong>' + escapeHtml(p.full_name) + '</strong> <' + escapeHtml(p.email) + '></div>' +
+      '<div>Asunto original: ' + escapeHtml(p.subject) + '</div>' +
+      (p.message ? '<div style="margin-top:.4rem;padding-top:.4rem;border-top:1px solid var(--admin-border)">Mensaje: ' + escapeHtml(p.message) + '</div>' : '');
+
+    // Precargar asunto y limpiar body
+    document.getElementById('pqrsf-resp-subject').value = 'Re: ' + p.subject;
+    document.getElementById('pqrsf-resp-body').value = '';
+
+    // Mostrar en el modal a qué bandeja llegarán las respuestas del solicitante
+    const hint = document.getElementById('pqrsf-reply-hint');
+    if (hint) {
+      const replyTo = (smtpStatus && smtpStatus.reply_to) || 'tu correo configurado en PQRSF_REPLY_TO';
+      hint.innerHTML = '💡 Cuando el solicitante responda este correo, su respuesta llegará a <strong>' + escapeHtml(replyTo) + '</strong>. Revisa esa bandeja para continuar la conversación.';
+    }
+
+    // Si SMTP está en modo simulación, advertir dentro del botón.
+    const sendBtn = document.getElementById('pqrsf-modal-send');
+    sendBtn.textContent = (smtpStatus && smtpStatus.simulated) ? 'Guardar respuesta (sin envío real)' : 'Enviar respuesta';
+
+    // Cargar historial de respuestas previas
+    await loadPqrsfResponses(id);
+
+    // Mostrar el modal
+    document.getElementById('pqrsf-modal-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('pqrsf-resp-body').focus(), 50);
+  }
+
+  function closePqrsfResponseModal() {
+    document.getElementById('pqrsf-modal-overlay').classList.remove('open');
+    currentPqrsfId = null;
+  }
+
+  async function loadPqrsfResponses(id) {
+    const wrap = document.getElementById('pqrsf-history');
+    wrap.innerHTML = '<div class="pqrsf-history-empty">Cargando historial…</div>';
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf/' + id + '/responses', {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const items = await res.json();
+      renderPqrsfResponses(items);
+    } catch (e) {
+      wrap.innerHTML = '<div class="pqrsf-history-empty">No se pudo cargar el historial.</div>';
+    }
+  }
+
+  function renderPqrsfResponses(items) {
+    const wrap = document.getElementById('pqrsf-history');
+    if (!items || !items.length) {
+      wrap.innerHTML = '<div class="pqrsf-history-empty">Aún no hay respuestas registradas.</div>';
+      return;
+    }
+    wrap.innerHTML = items.map(r => {
+      const cls = r.sent ? 'sent-ok' : 'sent-fail';
+      const statusLabel = r.sent
+        ? '<span style="color:var(--admin-success)">✓ Enviado</span>'
+        : '<span style="color:var(--admin-danger)">✗ No enviado</span>';
+      const when = r.created_at ? new Date(r.created_at).toLocaleString('es-CO') : '';
+      return '<div class="pqrsf-history-item ' + cls + '">' +
+        '<div class="meta"><strong>' + escapeHtml(r.subject) + '</strong>' + statusLabel + '</div>' +
+        '<div style="color:var(--admin-muted);font-size:.68rem;margin-bottom:.3rem">' + when + '</div>' +
+        '<div class="body">' + escapeHtml(r.body) + '</div>' +
+        (r.error_message ? '<div class="err">⚠ ' + escapeHtml(r.error_message) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  async function sendPqrsfResponse() {
+    if (!currentPqrsfId) return;
+    const subject = document.getElementById('pqrsf-resp-subject').value.trim();
+    const body = document.getElementById('pqrsf-resp-body').value.trim();
+    if (subject.length < 5) { toast('El asunto debe tener al menos 5 caracteres.', 'error'); return; }
+    if (body.length < 10) { toast('La respuesta debe tener al menos 10 caracteres.', 'error'); return; }
+
+    const sendBtn = document.getElementById('pqrsf-modal-send');
+    const origText = sendBtn.textContent;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Enviando…';
+
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf/' + currentPqrsfId + '/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ subject, body }),
+      });
+      if (!res.ok) {
+        let msg = 'HTTP ' + res.status;
+        try { const e = await res.json(); msg = e.detail || msg; } catch {}
+        throw new Error(msg);
+      }
+      const result = await res.json();
+
+      // Diferenciar éxito real de simulación/error usando `sent` del backend.
+      if (result.sent) {
+        toast('✓ Respuesta enviada al correo del solicitante.', 'success');
+        closePqrsfResponseModal();
+        await loadPqrsf();
+      } else {
+        // Modo simulación o error de SMTP: la respuesta SÍ se guardó en el
+        // historial, pero no llegó al correo del solicitante.
+        const why = result.error_message || (smtpStatus && smtpStatus.message) || 'No se pudo enviar el correo.';
+        toast('Respuesta guardada pero NO enviada: ' + why, 'error');
+        await loadPqrsfResponses(currentPqrsfId);
+        document.getElementById('pqrsf-resp-body').value = '';
+      }
+    } catch (e) {
+      toast('Error: ' + e.message, 'error');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = origText;
+    }
+  }
+
+  async function deletePqrsf(id) {
+    if (!confirm('¿Eliminar esta solicitud PQRSF? Esta acción no se puede deshacer.')) return;
+    try {
+      const token = getToken();
+      const res = await fetch('/api/pqrsf/' + id, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      toast('PQRSF eliminada.', 'success');
+      await loadPqrsf();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
   // --- Dashboard stats ---
   function updateStats() {
     document.getElementById('stat-services').textContent = services.length;
@@ -2050,6 +2606,7 @@
     document.getElementById('stat-news').textContent = news.filter(n => n.status === 'published').length;
     document.getElementById('stat-images').textContent = gallery.length;
     document.getElementById('stat-contacts').textContent = contacts.filter(c => c.status === 'new').length;
+    document.getElementById('stat-pqrsf').textContent = pqrsfList.filter(p => p.status === 'new').length;
     const sum = document.getElementById('dashboard-summary');
     sum.classList.remove('empty-state');
     sum.innerHTML = `
@@ -2059,7 +2616,8 @@
         • Escenarios activos: <strong style="color:var(--admin-gold)">${stages.length}</strong><br>
         • Noticias publicadas: <strong style="color:var(--admin-gold)">${news.filter(n => n.status === 'published').length}</strong><br>
         • Imágenes en galería: <strong style="color:var(--admin-gold)">${gallery.length}</strong><br>
-        • Solicitudes nuevas sin leer: <strong style="color:var(--admin-gold)">${contacts.filter(c => c.status === 'new').length}</strong>
+        • Solicitudes nuevas sin leer: <strong style="color:var(--admin-gold)">${contacts.filter(c => c.status === 'new').length}</strong><br>
+        • PQRSF recibidas: <strong style="color:var(--admin-gold)">${pqrsfList.filter(p => p.status === 'new').length}</strong>
       </div>`;
   }
 
