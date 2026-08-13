@@ -26,6 +26,7 @@ from app.routers import reports as reports_router
 from app.routers import coordinator as coordinator_router
 from app.routers import incidents as incidents_router
 from app.routers import content as content_router
+from app.routers import pqrsf as pqrsf_router
 from app.websockets import router as ws_router
 
 
@@ -66,6 +67,7 @@ app.include_router(reports_router.router)
 app.include_router(coordinator_router.router)
 app.include_router(incidents_router.router)
 app.include_router(content_router.router)
+app.include_router(pqrsf_router.router)
 app.include_router(ws_router.router)
 
 # Templates Jinja2

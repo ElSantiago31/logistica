@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     PGADMIN_PASSWORD: str = ""
     PGADMIN_PORT: int = 5050
 
+    # SMTP (email sender — para responder PQRSF)
+    # SMTP_ENABLED=False por defecto (fail-safe): en dev solo loggea sin enviar.
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "no-reply@ayceventos.com.co"
+    SMTP_USE_TLS: bool = True
+    PQRSF_REPLY_TO: str = "info@ayceventos.com.co"
+
     @model_validator(mode="after")
     def _derive_js_suffix(self):
         """Deriva JS_SUFFIX automáticamente de DEBUG si no se seteó explícitamente.
