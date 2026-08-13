@@ -36,14 +36,11 @@
     const REFRESH_ENDPOINT = '/api/auth/refresh';
 
     // --- Cierre de sesión por inactividad (idle timeout) ---
-    // 🔴 PRUEBA: 3 minutos. Para producción, descomentar los valores de PRODUCCIÓN
-    // y borrar/comentar los de PRUEBA.
-    // const IDLE_LIMIT_MS = 15 * 60 * 1000;       // PRODUCCIÓN: 15 min
-    // const IDLE_WARNING_MS = 13 * 60 * 1000;     // PRODUCCIÓN: 13 min
-    // const IDLE_CHECK_INTERVAL_MS = 15 * 1000;   // PRODUCCIÓN: 15s
-    const IDLE_LIMIT_MS = 3 * 60 * 1000;           // PRUEBA: 3 min
-    const IDLE_WARNING_MS = 150 * 1000;            // PRUEBA: 2.5 min (aviso 30s antes)
-    const IDLE_CHECK_INTERVAL_MS = 5 * 1000;       // PRUEBA: 5s (chequeo más fino)
+    // PRODUCCIÓN: 15 min de inactividad → cierre de sesión.
+    // Aviso a los 13 min (2 min antes) con countdown.
+    const IDLE_LIMIT_MS = 15 * 60 * 1000;          // PRODUCCIÓN: 15 min
+    const IDLE_WARNING_MS = 13 * 60 * 1000;        // PRODUCCIÓN: 13 min (aviso 2 min antes)
+    const IDLE_CHECK_INTERVAL_MS = 15 * 1000;      // PRODUCCIÓN: 15s
     const IDLE_ACTIVITY_KEY = 'auth_last_activity';
     const IDLE_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'pointerdown'];
 
@@ -85,6 +82,10 @@
         localStorage.removeItem(ACCESS_KEY);
         localStorage.removeItem(REFRESH_KEY);
         localStorage.removeItem(USER_KEY);
+        // 🐛 FIX: limpiar la marca de actividad para que la próxima sesión
+        // arranque con un contador fresco y no herede inactividad vieja.
+        localStorage.removeItem(IDLE_ACTIVITY_KEY);
+        lastTouchWriteAt = 0;
         if (proactiveTimer) {
             clearTimeout(proactiveTimer);
             proactiveTimer = null;
@@ -256,10 +257,13 @@
         if (idleTrackingStarted) return;
         idleTrackingStarted = true;
 
-        // Si no hay marca de actividad previa (primera vez tras login),
-        // inicializarla ahora. No la reseteamos si ya existe, para respetar
-        // la inactividad real acumulada (ej. refresh no "falsea" actividad).
-        if (!localStorage.getItem(IDLE_ACTIVITY_KEY)) {
+        // 🐛 FIX: Si no hay marca de actividad previa (primera vez tras login)
+        // O si la marca existente es stale (más vieja que el límite de idle,
+        // producto de una sesión anterior que no limpió localStorage),
+        // inicializarla AHORA para arrancar con contador fresco.
+        const storedActivity = parseInt(localStorage.getItem(IDLE_ACTIVITY_KEY), 10);
+        const isStale = isNaN(storedActivity) || (Date.now() - storedActivity) > IDLE_WARNING_MS;
+        if (isStale) {
             const now = Date.now();
             localStorage.setItem(IDLE_ACTIVITY_KEY, String(now));
             lastTouchWriteAt = now;
@@ -506,6 +510,13 @@
         if (lower.indexOf('/api/auth/register') !== -1) return false;
         if (lower.indexOf('/api/auth/forgot-password') !== -1) return false;
         if (lower.indexOf('/api/auth/reset-password') !== -1) return false;
+        // PQRSF — endpoints públicos (formulario ciudadano sin auth):
+        //   POST /api/pqrsf              → crear PQRSF
+        //   GET  /api/pqrsf/track/{code} → seguimiento por código
+        // Los demás endpoints (/api/pqrsf/{id}/...) requieren auth (panel admin)
+        if (lower === '/api/pqrsf') return false;
+        if (lower.indexOf('/api/pqrsf?') === 0) return false;
+        if (lower.indexOf('/api/pqrsf/track/') !== -1) return false;
         return true;
     }
 

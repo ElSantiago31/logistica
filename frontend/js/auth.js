@@ -510,6 +510,13 @@
         if (lower.indexOf('/api/auth/register') !== -1) return false;
         if (lower.indexOf('/api/auth/forgot-password') !== -1) return false;
         if (lower.indexOf('/api/auth/reset-password') !== -1) return false;
+        // PQRSF — endpoints públicos (formulario ciudadano sin auth):
+        //   POST /api/pqrsf              → crear PQRSF
+        //   GET  /api/pqrsf/track/{code} → seguimiento por código
+        // Los demás endpoints (/api/pqrsf/{id}/...) requieren auth (panel admin)
+        if (lower === '/api/pqrsf') return false;
+        if (lower.indexOf('/api/pqrsf?') === 0) return false;
+        if (lower.indexOf('/api/pqrsf/track/') !== -1) return false;
         return true;
     }
 

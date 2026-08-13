@@ -915,6 +915,134 @@
     font-size: .72rem;
   }
 
+  /* ===== PQRSF SECTION ===== */
+  .pqrsf-wrap {
+    display: grid;
+    grid-template-columns: .9fr 1.1fr;
+    gap: clamp(2rem, 7vw, 6rem);
+    align-items: start;
+  }
+
+  .pqrsf-info {
+    display: grid;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .pqrsf-info-item {
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(207, 155, 98, .14);
+  }
+
+  .pqrsf-info-item small {
+    display: block;
+    color: var(--ayc-gold);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+  }
+
+  .pqrsf-info-item span {
+    display: block;
+    margin-top: .4rem;
+    color: var(--ayc-white);
+  }
+
+  .pqrsf-card {
+    padding: clamp(1.35rem, 4vw, 2.3rem);
+    border: 1px solid var(--ayc-border);
+    background: var(--ayc-surface);
+    box-shadow: var(--ayc-shadow);
+  }
+
+  .pqrsf-success {
+    display: none;
+    padding: 1.5rem;
+    border: 1px solid var(--ayc-gold);
+    background: rgba(207, 155, 98, .08);
+    text-align: center;
+  }
+
+  .pqrsf-success.visible {
+    display: block;
+  }
+
+  .pqrsf-success .tracking-code {
+    display: inline-block;
+    margin: .5rem 0;
+    padding: .5rem 1.2rem;
+    background: var(--ayc-gold);
+    color: var(--ayc-black);
+    font-weight: 800;
+    font-size: 1.15rem;
+    letter-spacing: .08em;
+    border-radius: 4px;
+  }
+
+  .pqrsf-consent {
+    display: flex;
+    gap: .6rem;
+    align-items: start;
+    margin: .5rem 0;
+    font-size: .78rem;
+    color: #aaa49c;
+    line-height: 1.5;
+  }
+
+  .pqrsf-consent input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--ayc-gold);
+    flex-shrink: 0;
+  }
+
+  .pqrsf-consent a {
+    color: var(--ayc-gold);
+    text-decoration: underline;
+  }
+
+  /* Track (seguimiento) */
+  .pqrsf-track {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(207, 155, 98, .14);
+  }
+
+  .pqrsf-track-result {
+    display: none;
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--ayc-border);
+    background: #090909;
+  }
+
+  .pqrsf-track-result.visible {
+    display: block;
+  }
+
+  .pqrsf-status-badge {
+    display: inline-block;
+    padding: .3rem .8rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+
+  .pqrsf-status-badge.status-new { background: #3b82f620; color: #60a5fa; }
+  .pqrsf-status-badge.status-in_progress { background: #f59e0b20; color: #fbbf24; }
+  .pqrsf-status-badge.status-resolved { background: #22c55e20; color: #4ade80; }
+  .pqrsf-status-badge.status-closed { background: #6b728020; color: #9ca3af; }
+
+  @media (max-width: 1024px) {
+    .pqrsf-wrap {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .reveal {
     opacity: 0;
     transform: translateY(26px);
@@ -1142,7 +1270,7 @@
       <div class="hero-content">
         <span class="eyebrow">{{ hero.eyebrow or 'Logística y producción de eventos' }}</span>
         <h1>{{ hero.title or 'Hacemos posible' }} {% if hero.highlight %}<span>{{ hero.highlight }}</span>{% else
-          %}<span>grandes eventos.</span>{% endif %}</h1>
+          %}<span>grandes eventos</span>{% endif %}</h1>
         <p class="hero-description">
           {{ hero.description or 'Planeamos, coordinamos y ejecutamos soluciones de logística, producción, seguridad,
           brigadas, protocolo y personal operativo para eventos de cualquier escala.' }}
@@ -1526,6 +1654,120 @@
     </div>
   </section>
 
+  <!-- ===== SECCIÓN PQRSF ===== -->
+  <section class="section" id="pqrsf" style="background: var(--ayc-surface); border-top: 1px solid rgba(207,155,98,.12);">
+    <div class="container-ayc pqrsf-wrap">
+      <div class="reveal">
+        <span class="eyebrow">Atención al ciudadano</span>
+        <h2 class="section-title">PQRSF</h2>
+        <p class="section-copy">
+          ¿Tienes una petición, queja, reclamo, sugerencia o felicitación? Escríbenos.
+          Todas las solicitudes son atendidas siguiendo los lineamientos de la Ley 1755 de 2015
+          y la Ley 1581 de 2012 (datos personales).
+        </p>
+
+        <div class="pqrsf-info">
+          <div class="pqrsf-info-item">
+            <small>Tiempo de respuesta</small>
+            <span>15 días hábiles (máximo legal)</span>
+          </div>
+          <div class="pqrsf-info-item">
+            <small>Correo directo</small>
+            <a href="mailto:info@ayceventos.com.co" style="color: var(--ayc-white);">info@ayceventos.com.co</a>
+          </div>
+          <div class="pqrsf-info-item">
+            <small>¿Ya radicaste?</small>
+            <span>Consulta tu estado con el código de seguimiento aquí debajo.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pqrsf-card reveal">
+        <!-- Formulario de nueva PQRSF -->
+        <form id="pqrsf-form" novalidate>
+          <div class="contact-grid">
+            <div class="field field-full">
+              <label for="pqrsf-type">Tipo de solicitud *</label>
+              <select id="pqrsf-type" name="request_type" required>
+                <option value="">Selecciona una opción</option>
+                <option value="petition">Petición</option>
+                <option value="complaint">Queja</option>
+                <option value="claim">Reclamo</option>
+                <option value="suggestion">Sugerencia</option>
+                <option value="congratulation">Felicitación</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="pqrsf-name">Nombre completo *</label>
+              <input id="pqrsf-name" type="text" required minlength="2" maxlength="160">
+            </div>
+
+            <div class="field">
+              <label for="pqrsf-email">Correo electrónico *</label>
+              <input id="pqrsf-email" type="email" required>
+            </div>
+
+            <div class="field">
+              <label for="pqrsf-phone">Teléfono</label>
+              <input id="pqrsf-phone" type="tel" maxlength="40">
+            </div>
+
+            <div class="field">
+              <label for="pqrsf-company">Empresa (opcional)</label>
+              <input id="pqrsf-company" type="text" maxlength="160">
+            </div>
+
+            <div class="field field-full">
+              <label for="pqrsf-subject">Asunto * (mínimo 5 caracteres)</label>
+              <input id="pqrsf-subject" type="text" required minlength="5" maxlength="200">
+            </div>
+
+            <div class="field field-full">
+              <label for="pqrsf-message">Mensaje detallado * (mínimo 10 caracteres)</label>
+              <textarea id="pqrsf-message" required minlength="10" maxlength="5000" placeholder="Describe tu solicitud con el mayor detalle posible (mínimo 10 caracteres)."></textarea>
+            </div>
+
+            <div class="field field-full pqrsf-consent">
+              <input id="pqrsf-consent" type="checkbox" required>
+              <label for="pqrsf-consent">
+                Autorizo el tratamiento de mis datos personales conforme a la
+                <a href="/politica-tratamiento-datos" target="_blank">Política de Tratamiento de Datos</a>. *
+              </label>
+            </div>
+
+            <div class="field field-full">
+              <button class="btn-ayc btn-primary-ayc" type="submit">Radicar solicitud</button>
+              <p class="contact-note" id="pqrsf-status"></p>
+            </div>
+          </div>
+        </form>
+
+        <!-- Mensaje de éxito (oculto hasta enviar) -->
+        <div class="pqrsf-success" id="pqrsf-success">
+          <p style="margin:0 0 .5rem;color:var(--ayc-gold);font-weight:700;">¡Solicitud radicada correctamente!</p>
+          <p style="margin:0;color:#aaa49c;font-size:.9rem;">Guarda tu código de seguimiento para consultar el estado:</p>
+          <div class="tracking-code" id="pqrsf-tracking-code"></div>
+          <p style="margin:.5rem 0 0;color:#aaa49c;font-size:.8rem;">Te responderemos al correo electrónico registrado.</p>
+        </div>
+
+        <!-- Consulta de estado (tracking) -->
+        <div class="pqrsf-track">
+          <div class="contact-grid">
+            <div class="field">
+              <label for="pqrsf-track-input">Consultar estado por código</label>
+              <input id="pqrsf-track-input" type="text" placeholder="Ej: PQR-2026-00001">
+            </div>
+            <div class="field" style="align-self:end;">
+              <button class="btn-ayc btn-secondary-ayc" type="button" id="pqrsf-track-btn">Consultar</button>
+            </div>
+          </div>
+          <div class="pqrsf-track-result" id="pqrsf-track-result"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </div>
 {% endblock %}
 
@@ -1546,6 +1788,7 @@
         <a href="#experiencia">Experiencia</a>
         <a href="#noticias">Noticias</a>
         <a href="#contacto">Contacto</a>
+        <a href="#pqrsf">PQRSF</a>
       </div>
 
       <div class="footer-column">
@@ -1636,6 +1879,142 @@
         } finally {
           submitBtn.disabled = false;
           submitBtn.textContent = originalText;
+        }
+      });
+    }
+  })();
+
+  // ===== PQRSF: formulario + tracking =====
+  (function () {
+    var pqrsfForm = document.getElementById('pqrsf-form');
+    var pqrsfStatus = document.getElementById('pqrsf-status');
+    var pqrsfSuccess = document.getElementById('pqrsf-success');
+    var pqrsfTrackingCode = document.getElementById('pqrsf-tracking-code');
+
+    if (pqrsfForm) {
+      pqrsfForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!pqrsfForm.checkValidity()) {
+          pqrsfForm.reportValidity();
+          return;
+        }
+
+        var btn = pqrsfForm.querySelector('button[type="submit"]');
+        var originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Radicando...';
+        pqrsfStatus.style.color = '#aaa49c';
+        pqrsfStatus.textContent = '';
+
+        var payload = {
+          request_type: document.getElementById('pqrsf-type').value,
+          subject: document.getElementById('pqrsf-subject').value.trim(),
+          full_name: document.getElementById('pqrsf-name').value.trim(),
+          email: document.getElementById('pqrsf-email').value.trim(),
+          phone: document.getElementById('pqrsf-phone').value.trim() || null,
+          company: document.getElementById('pqrsf-company').value.trim() || null,
+          message: document.getElementById('pqrsf-message').value.trim(),
+          consent: document.getElementById('pqrsf-consent').checked,
+        };
+
+        try {
+          var res = await fetch('/api/pqrsf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            _skipInterceptor: true,  // PQRSF es público (sin auth)
+          });
+          if (!res.ok) {
+            // 422: extraer campos con error de validación
+            if (res.status === 422) {
+              var errData = await res.json().catch(function () { return {}; });
+              var fields = (errData.detail || []).map(function (e) {
+                return e.loc ? e.loc[e.loc.length - 1] : 'campo';
+              });
+              var msg = fields.length
+                ? 'Revisa: ' + fields.join(', ')
+                : 'Algunos campos son inválidos.';
+              throw new Error(msg);
+            }
+            if (res.status === 429) {
+              throw new Error('Demasiadas solicitudes. Espera un minuto e intenta de nuevo.');
+            }
+            throw new Error('Error del servidor (' + res.status + '). Intenta nuevamente.');
+          }
+          var data = await res.json();
+
+          pqrsfForm.style.display = 'none';
+          pqrsfSuccess.classList.add('visible');
+          pqrsfTrackingCode.textContent = data.tracking_code;
+        } catch (err) {
+          pqrsfStatus.textContent = err.message ||
+            'No se pudo radicar. Intenta nuevamente o escríbenos a info@ayceventos.com.co';
+          pqrsfStatus.style.color = '#e57373';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+    }
+
+    // Tracking (consulta de estado)
+    var trackBtn = document.getElementById('pqrsf-track-btn');
+    var trackInput = document.getElementById('pqrsf-track-input');
+    var trackResult = document.getElementById('pqrsf-track-result');
+
+    var STATUS_LABELS = {
+      'new': 'Recibida',
+      'in_progress': 'En estudio',
+      'resolved': 'Resuelta',
+      'closed': 'Cerrada',
+    };
+
+    if (trackBtn) {
+      trackBtn.addEventListener('click', async function () {
+        var code = trackInput.value.trim().toUpperCase();
+        if (!code) {
+          trackResult.classList.remove('visible');
+          return;
+        }
+
+        trackResult.classList.remove('visible');
+        trackBtn.disabled = true;
+        trackBtn.textContent = 'Buscando...';
+
+        try {
+          var res = await fetch('/api/pqrsf/track/' + encodeURIComponent(code));
+          if (res.status === 404) {
+            trackResult.innerHTML = '<p style="color:#e57373;margin:0;">Código no encontrado. Verifica e intenta de nuevo.</p>';
+            trackResult.classList.add('visible');
+            return;
+          }
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var data = await res.json();
+
+          var label = STATUS_LABELS[data.status] || data.status;
+          trackResult.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">' +
+              '<div>' +
+                '<small style="color:var(--ayc-gold);font-size:.68rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;">' + data.request_type + '</small>' +
+                '<p style="margin:.3rem 0 0;color:var(--ayc-white);">' + data.subject + '</p>' +
+              '</div>' +
+              '<span class="pqrsf-status-badge status-' + data.status + '">' + label + '</span>' +
+            '</div>';
+          trackResult.classList.add('visible');
+        } catch (err) {
+          trackResult.innerHTML = '<p style="color:#e57373;margin:0;">Error al consultar. Intenta más tarde.</p>';
+          trackResult.classList.add('visible');
+        } finally {
+          trackBtn.disabled = false;
+          trackBtn.textContent = 'Consultar';
+        }
+      });
+
+      // Enter key en el input de tracking
+      trackInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          trackBtn.click();
         }
       });
     }
