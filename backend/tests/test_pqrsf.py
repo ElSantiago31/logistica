@@ -82,7 +82,7 @@ def override_auth_and_db(admin_user):
 def make_submission(**overrides) -> PqrsfSubmission:
     defaults = dict(
         id=uuid.uuid4(),
-        tracking_code="PQRSF-2026-0001",
+        tracking_code="PQR-2026-00001-A7K2",
         request_type="petition",
         subject="Asunto de prueba",
         message="Mensaje de prueba",
@@ -103,8 +103,8 @@ def make_submission(**overrides) -> PqrsfSubmission:
 # Tests del modelo
 # ---------------------------------------------------------------------------
 def test_pqrsf_submission_creation():
-    s = make_submission(tracking_code="PQRSF-2026-0002")
-    assert s.tracking_code == "PQRSF-2026-0002"
+    s = make_submission(tracking_code="PQR-2026-00002-Q9M3")
+    assert s.tracking_code == "PQR-2026-00002-Q9M3"
     assert s.status == "new"
     assert s.priority == "medium"
 
@@ -128,13 +128,13 @@ def test_schema_submission_create_valid(sample_payload):
 def test_schema_submission_public_has_tracking_code():
     obj = PqrsfSubmissionPublic(
         id=uuid.uuid4(),
-        tracking_code="PQRSF-2026-0003",
+        tracking_code="PQR-2026-00003-BX4R",
         request_type="complaint",
         subject="Test",
         status="new",
         created_at=datetime.utcnow(),
     )
-    assert obj.tracking_code == "PQRSF-2026-0003"
+    assert obj.tracking_code == "PQR-2026-00003-BX4R"
 
 
 # ---------------------------------------------------------------------------
@@ -169,13 +169,13 @@ async def test_create_pqrsf_requires_consent(mock_publish, mock_create, client, 
 @patch("app.services.pqrsf.get_pqrsf_by_tracking", new_callable=AsyncMock)
 async def test_track_pqrsf_success(mock_get, client):
     """GET /api/pqrsf/track/{code} debe retornar el estado de la PQRSF."""
-    submission = make_submission(tracking_code="PQRSF-2026-0001")
+    submission = make_submission(tracking_code="PQR-2026-00001-A7K2")
     mock_get.return_value = submission
 
-    resp = await client.get("/api/pqrsf/track/PQRSF-2026-0001")
+    resp = await client.get("/api/pqrsf/track/PQR-2026-00001-A7K2")
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert data["tracking_code"] == "PQRSF-2026-0001"
+    assert data["tracking_code"] == "PQR-2026-00001-A7K2"
     assert data["status"] == "new"
 
 
@@ -193,8 +193,8 @@ async def test_track_pqrsf_not_found(mock_get, client):
 @patch("app.services.pqrsf.list_pqrsf", new_callable=AsyncMock)
 async def test_list_pqrsf_admin(mock_list, client):
     """GET /api/pqrsf debe retornar la lista de PQRSF."""
-    s1 = make_submission(tracking_code="PQRSF-2026-0001")
-    s2 = make_submission(tracking_code="PQRSF-2026-0002", status="in_progress")
+    s1 = make_submission(tracking_code="PQR-2026-00001-A7K2")
+    s2 = make_submission(tracking_code="PQR-2026-00002-Q9M3", status="in_progress")
     mock_list.return_value = [s1, s2]
 
     resp = await client.get("/api/pqrsf")

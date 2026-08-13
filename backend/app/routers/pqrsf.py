@@ -101,7 +101,9 @@ async def submit_pqrsf(
 
 
 @router.get("/track/{tracking_code}", response_model=PqrsfTrackResponse)
+@limiter.limit("30/minute")
 async def track_pqrsf(
+    request: Request,
     tracking_code: str,
     db: AsyncSession = Depends(get_db),
 ):
@@ -109,6 +111,8 @@ async def track_pqrsf(
 
     Devuelve solo información mínima (sin datos personales del solicitante),
     suficiente para que el ciudadano sepa en qué estado está su solicitud.
+
+    Rate limited (30/min por IP) para prevenir enumeración de códigos.
     """
     item = await pqrsf_service.get_pqrsf_by_tracking(db, tracking_code)
     if not item:
@@ -196,7 +200,9 @@ async def update_pqrsf_priority(
 
 
 @router.post("/{item_id}/respond", response_model=PqrsfResponseItem, status_code=201)
+@limiter.limit("20/minute")
 async def respond_to_pqrsf(
+    request: Request,
     item_id: uuid.UUID,
     payload: PqrsfRespondRequest,
     db: AsyncSession = Depends(get_db),

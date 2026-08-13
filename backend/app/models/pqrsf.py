@@ -21,8 +21,8 @@ class PqrsfSubmission(BaseModel):
     __tablename__ = "site_pqrsf"
 
     tracking_code: Mapped[str] = mapped_column(
-        String(20), unique=True, nullable=False, index=True,
-        comment="Código público de seguimiento (ej. PQR-2026-00042)",
+        String(30), unique=True, nullable=False, index=True,
+        comment="Código público de seguimiento (ej. PQR-2026-00001-A7K2)",
     )
     request_type: Mapped[str] = mapped_column(
         String(20), nullable=False, index=True,

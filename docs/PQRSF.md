@@ -25,7 +25,7 @@ backend/app/
 ### Flujo
 
 1. El ciudadano completa el formulario en la home.
-2. Se valida el `consent` (Habeas Data) y se genera un `tracking_code` único (`PQR-YYYY-NNNNN`).
+2. Se valida el `consent` (Habeas Data) y se genera un `tracking_code` único (`PQR-YYYY-NNNNN-XXXX`, con sufijo aleatorio anti-enumeración).
 3. Se guarda en `site_pqrsf` con estado `new` y prioridad `low` (por defecto).
 4. Se notifica en tiempo real al panel admin vía WebSocket (`manager.publish`).
 5. El admin puede: cambiar estado, cambiar prioridad, responder por email, eliminar.
@@ -36,8 +36,8 @@ backend/app/
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `POST` | `/api/pqrsf` | Crear PQRSF (rate limited 5/min) |
-| `GET`  | `/api/pqrsf/track/{tracking_code}` | Consultar estado por código |
+| `POST` | `/api/pqrsf` | Crear PQRSF (rate limited 5/min por IP) |
+| `GET`  | `/api/pqrsf/track/{tracking_code}` | Consultar estado por código (rate limited 30/min por IP) |
 
 ### Endpoints de Gestión (require_content_manager)
 
@@ -47,7 +47,7 @@ backend/app/
 | `GET`    | `/api/pqrsf/{item_id}` | Detalle de una PQRSF |
 | `PUT`    | `/api/pqrsf/{item_id}/status` | Cambiar estado |
 | `PUT`    | `/api/pqrsf/{item_id}/priority` | Cambiar prioridad |
-| `POST`   | `/api/pqrsf/{item_id}/respond` | Responder por email |
+| `POST`   | `/api/pqrsf/{item_id}/respond` | Responder por email (rate limited 20/min) |
 | `GET`    | `/api/pqrsf/{item_id}/responses` | Historial de respuestas |
 | `DELETE` | `/api/pqrsf/{item_id}` | Eliminar |
 
@@ -58,7 +58,7 @@ backend/app/
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `id` | UUID | PK |
-| `tracking_code` | String(20) | Único, `PQR-YYYY-NNNNN` |
+| `tracking_code` | String(30) | Único, `PQR-YYYY-NNNNN-XXXX` |
 | `request_type` | String(20) | `petition\|complaint\|claim\|suggestion\|congratulation` |
 | `subject` | String(200) | Asunto |
 | `full_name` | String(160) | Nombre del solicitante |
@@ -114,9 +114,23 @@ Cuando se crea una PQRSF, se publica en el canal `content` con tipo `new_pqrsf`.
 
 El endpoint `/api/pqrsf/{id}/respond` envía un correo al solicitante usando `email_sender.py` (SMTP configurado). Si falla, se guarda el error en `error_message` para diagnóstico.
 
+## Seguridad y Rate Limiting
+
+| Endpoint | Límite | Razón |
+|----------|--------|-------|
+| `POST /api/pqrsf` | 5/min por IP | Prevenir spam del formulario público |
+| `GET /api/pqrsf/track/{code}` | 30/min por IP | Prevenir enumeración de códigos |
+| `POST /api/pqrsf/{id}/respond` | 20/min | Contener abuso si se compromete un admin |
+
+**Anti-spoofing de IP**: el rate limiter usa `X-Real-IP` (inyectado por Nginx tras validación), no headers cliente-forgeables.
+
+**Sufijo aleatorio en tracking_code**: el consecutivo anual incluye un sufijo de 4 caracteres aleatorios (ej. `PQR-2026-00001-A7K2`) para que un atacante no pueda adivinar códigos válidos secuencialmente.
+
+**XSS en panel admin**: todos los datos del ciudadano se renderizan con `escapeHtml()` antes de insertarse en el DOM.
+
 ## Notas de Implementación
 
-- El `tracking_code` usa formato `PQR-YYYY-NNNNN` con secuencia anual.
-- Rate limiting: 5 PQRSF por minuto por IP en el endpoint público.
-- La migración `add_pqrsf_tables` crea ambas tablas con índices apropiados.
-- El frontend en `content_manager.html` incluye una pestaña PQRSF con filtros, acciones rápidas (cambiar estado/prioridad con click), y botones de WhatsApp/email.
+- El `tracking_code` usa formato `PQR-YYYY-NNNNN-XXXX` con secuencia anual + sufijo aleatorio.
+- Rate limiting (ver tabla anterior) en todos los endpoints sensibles.
+- Migraciones: `add_pqrsf_tables` (crea tablas) y `widen_pqrsf_track` (amplía tracking_code a String(30)).
+- El frontend en `content_manager.html` incluye una pestaña PQRSF con filtros, modal de respuesta con textarea (reemplaza el alert de JS), cambio de estado/prioridad con selects, banner de estado SMTP y botones de WhatsApp/email.

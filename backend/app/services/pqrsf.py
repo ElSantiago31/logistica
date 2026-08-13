@@ -4,6 +4,8 @@ Patrón: cada función recibe la sesión de BD y opera sobre los modelos.
 Las funciones son async y devuelven instancias del modelo o listas.
 """
 import logging
+import random
+import string
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -24,16 +26,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Tracking code generation
 # ---------------------------------------------------------------------------
+def _random_suffix(length: int = 4) -> str:
+    """Sufijo aleatorio anti-enumeración (mayúsculas + dígitos, sin ambiguos)."""
+    alphabet = string.ascii_uppercase + string.digits
+    # Excluir caracteres visualmente ambiguos para evitar errores al digitar
+    ambiguous = "IO01"
+    safe = [c for c in alphabet if c not in ambiguous]
+    return "".join(random.choices(safe, k=length))
+
+
 async def generate_tracking_code(db: AsyncSession) -> str:
-    """Genera un código único secuencial por año: PQR-YYYY-NNNNN.
+    """Genera un código único por año: PQR-YYYY-NNNNN-XXXX.
 
     El consecutivo se reinicia cada año natural (estándar colombiano para
-    radicados). Se cuentan las PQRSF cuyo tracking_code empieza con el año
-    actual y se suma 1.
+    radicados) y se le agrega un sufijo aleatorio de 4 caracteres para
+    prevenir la enumeración de códigos en el endpoint público de tracking.
 
     Ejemplos:
-        PQR-2026-00001, PQR-2026-00002, ..., PQR-2026-00350
-        PQR-2027-00001, PQR-2027-00002, ...
+        PQR-2026-00001-A7K2, PQR-2026-00002-Q9M3, ..., PQR-2026-00350-BX4R
     """
     year = datetime.utcnow().year
     prefix = f"PQR-{year}-"
@@ -46,7 +56,8 @@ async def generate_tracking_code(db: AsyncSession) -> str:
     count = result.scalar() or 0
     seq = count + 1
 
-    return f"{prefix}{seq:05d}"  # 5 dígitos con ceros a la izquierda
+    suffix = _random_suffix(4)
+    return f"{prefix}{seq:05d}-{suffix}"  # 5 dígitos + sufijo anti-enumeración
 
 
 # ---------------------------------------------------------------------------
