@@ -39,7 +39,7 @@ _PQRSF_EMAIL_TEMPLATE = Template("""\
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background-color:#b8860b;padding:24px 32px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">AyC Eventos</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">AyC Logistica y Producción de Eventos LTDA</h1>
               <p style="margin:4px 0 0 0;color:#fef3c7;font-size:13px;">Respuesta a su solicitud PQRSF</p>
             </td>
           </tr>
