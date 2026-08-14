@@ -310,7 +310,7 @@
 
   .status-new { background: rgba(105,193,139,.12); color: var(--admin-success); }
   .status-read { background: rgba(207,155,98,.11); color: var(--admin-gold); }
-  .status-archived { background: rgba(157,152,145,.12); color: var(--admin-muted); }
+  .status-archived { background: rgba(105,193,139,.12); color: var(--admin-success); }
   .status-published { background: rgba(105,193,139,.12); color: var(--admin-success); }
   .status-draft { background: rgba(207,155,98,.11); color: var(--admin-gold); }
 
@@ -1317,8 +1317,8 @@
             <select id="contacts-filter" class="admin-btn" style="padding-right:2rem">
               <option value="">Todas</option>
               <option value="new">Nuevas</option>
-              <option value="read">Leídas</option>
-              <option value="archived">Archivadas</option>
+              <option value="read">En curso</option>
+              <option value="archived">Atendidas</option>
             </select>
           </div>
         </div>
@@ -2262,28 +2262,28 @@
         <td>${escapeHtml(c.event_type || '—')}</td>
         <td>${c.created_at ? new Date(c.created_at).toLocaleDateString('es-CO') : '—'}</td>
         <td>
-          <span class="status-badge status-${c.status}" data-contact-cycle="${c.id}" title="Click para cambiar estado">
-            ${c.status === 'new' ? 'Nueva' : c.status === 'read' ? 'Leída' : 'Archivada'}
+          <span class="status-badge status-${c.status}">
+            ${c.status === 'new' ? 'Nueva' : c.status === 'read' ? 'En curso' : 'Atendida'}
           </span>
         </td>
         <td>
           <div class="row-actions">
-            <a class="action-btn" href="mailto:${escapeHtml(c.email)}">Email</a>
+            ${c.status !== 'read' ? `<button class="action-btn" type="button" data-contact-status="${c.id}" data-status="read">En curso</button>` : ''}
+            ${c.status !== 'archived' ? `<button class="action-btn" type="button" data-contact-status="${c.id}" data-status="archived">Atendida</button>` : ''}
             <button class="action-btn danger" type="button" data-contact-del="${c.id}">Eliminar</button>
           </div>
         </td>
       </tr>`).join('');
-    body.querySelectorAll('[data-contact-cycle]').forEach(b => b.addEventListener('click', () => cycleContact(b.dataset.contactCycle)));
+    body.querySelectorAll('[data-contact-status]').forEach(b => b.addEventListener('click', () => setContactStatus(b.dataset.contactStatus, b.dataset.status)));
     body.querySelectorAll('[data-contact-del]').forEach(b => b.addEventListener('click', () => deleteContact(b.dataset.contactDel)));
   }
 
-  async function cycleContact(id) {
-    const c = contacts.find(x => x.id === id);
-    if (!c) return;
-    const next = c.status === 'new' ? 'read' : c.status === 'read' ? 'archived' : 'new';
+  async function setContactStatus(id, newStatus) {
     try {
-      await apiSend('PUT', 'contacts/' + id, { status: next });
+      await apiSend('PUT', 'contacts/' + id, { status: newStatus });
       await loadContacts();
+      const label = newStatus === 'read' ? 'En curso' : newStatus === 'archived' ? 'Atendida' : 'Nueva';
+      toast('Estado actualizado a "' + label + '".', 'success');
     } catch (e) { toast('Error: ' + e.message, 'error'); }
   }
 
