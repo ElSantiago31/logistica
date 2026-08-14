@@ -2268,9 +2268,8 @@
         </td>
         <td>
           <div class="row-actions">
-            ${c.phone ? `<a class="icon-btn" href="https://wa.me/${escapeHtml(String(c.phone).replace(/[^0-9]/g, ''))}" target="_blank" rel="noopener" title="WhatsApp">✆</a>` : ''}
-            <a class="icon-btn" href="mailto:${escapeHtml(c.email)}" title="Email">@</a>
-            <button class="icon-btn delete" type="button" data-contact-del="${c.id}" title="Eliminar">-</button>
+            <a class="action-btn" href="mailto:${escapeHtml(c.email)}">Email</a>
+            <button class="action-btn danger" type="button" data-contact-del="${c.id}">Eliminar</button>
           </div>
         </td>
       </tr>`).join('');
