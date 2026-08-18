@@ -714,11 +714,18 @@
     background: #101010;
   }
 
+  /* Noticia con imagen propia (subida desde /admin/contenido) */
+  .news-card[style*="--news-image"] {
+    background:
+      linear-gradient(to top, rgba(5, 5, 5, .95), rgba(5, 5, 5, .45)),
+      var(--news-image) center / cover;
+  }
+
   .news-card.featured {
     min-height: 440px;
     background:
       linear-gradient(to top, rgba(5, 5, 5, .95), rgba(5, 5, 5, .2)),
-      url('/static/frontend/landing/gallery/gallery_3.jpg') center / cover;
+      var(--news-image, url('/static/frontend/landing/gallery/gallery_3.jpg')) center / cover;
   }
 
   .news-tag {
@@ -1539,7 +1546,7 @@
       <div class="news-grid">
         {% if news %}
         {% for n in news[:3] %}
-        <article class="news-card {{ 'featured' if loop.first else '' }} reveal">
+        <article class="news-card {{ 'featured' if loop.first else '' }} reveal" {% if n.image_url %}style="--news-image:url('{{ n.image_url }}')" {% endif %}>
           <span class="news-tag">{{ n.category or 'Actualidad' }}</span>
           <div>
             <h3>{{ n.title }}</h3>
