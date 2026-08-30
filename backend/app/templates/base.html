@@ -10,7 +10,7 @@
     <link rel="manifest" href="/static/frontend/manifest.json">
     <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
     <link rel="apple-touch-icon" href="/static/frontend/logo.jpeg">
-    <title>{% block title %}AyC Eventos{% endblock %}</title>
+    <title>{% block title %}A&C Logística y Producción de Eventos | Bogotá{% endblock %}</title>
 
     <!-- Tailwind CSS (compilado en build time, purge automático, ~15-30 KB) -->
     <link rel="stylesheet" href="/static/frontend/tailwind.css?v=20260718">
@@ -19,8 +19,20 @@
          Debe cargarse PRIMERO, antes que cualquier script que use fetch. -->
     <script src="/static/js/auth{{ js_suffix }}.js?v=20260811"></script>
 
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <!-- HTMX (defer: no bloquea el render inicial; SEO/performance) -->
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+
+    {% if ga_id %}
+    <!-- Google Analytics 4 (se activa solo si GA_MEASUREMENT_ID está configurado en .env) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_id }}"></script>
+    <script>
+        window.GA_ID = "{{ ga_id }}";
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', '{{ ga_id }}');
+    </script>
+    {% endif %}
 
     <style>
         .toast {

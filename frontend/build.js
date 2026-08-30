@@ -17,6 +17,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const Terser = require("terser");
+const { generateWebp } = require("./webp");
 
 const ROOT = __dirname;
 const JS_DIR = path.join(ROOT, "js");
@@ -197,6 +198,7 @@ async function buildJs() {
 // ----------------------------------------------------------------
 (async function main() {
   console.log("🔨 Build de assets frontend (Tailwind CSS + Terser JS)\n");
+  await generateWebp(); // Fase WebP: generar .webp ANTES de sincronizar al backend
   syncPublicAssets();
   buildTailwind();
   await buildJs();

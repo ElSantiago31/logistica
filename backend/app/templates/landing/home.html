@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}A&C Logística, producción y personal para eventos LTDA{% endblock %}
+{% block title %}Producción de Eventos en Bogotá | A&C Logística para Eventos{% endblock %}
 
 {% block navbar %}
 <header class="home-nav" id="main-nav">
@@ -21,7 +21,79 @@
   rel="stylesheet">
 
 <meta name="description"
-  content="A&C Logística y Producción de Eventos: personal logístico, brigadas, seguridad, montaje, protocolo y operación integral para eventos en Bogotá.">
+  content="Empresa de producción y logística de eventos en Bogotá: personal logístico, brigadistas, seguridad, montaje y protocolo. Solicita tu cotización.">
+<link rel="canonical" href="{{ site_url }}/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="A&C Logística y Producción de Eventos">
+<meta property="og:locale" content="es_CO">
+<meta property="og:title" content="Producción de Eventos en Bogotá | A&C Logística para Eventos">
+<meta property="og:description"
+  content="Empresa de producción y logística de eventos en Bogotá: personal logístico, brigadistas, seguridad, montaje y protocolo. Solicita tu cotización.">
+<meta property="og:url" content="{{ site_url }}/">
+<meta property="og:image" content="{{ site_url }}/static/frontend/landing/gallery/gallery_2.jpg">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Producción de Eventos en Bogotá | A&C Logística para Eventos">
+<meta name="twitter:description"
+  content="Empresa de producción y logística de eventos en Bogotá: personal logístico, brigadistas, seguridad, montaje y protocolo. Solicita tu cotización.">
+<meta name="twitter:image" content="{{ site_url }}/static/frontend/landing/gallery/gallery_2.jpg">
+
+<!-- Datos estructurados Schema.org (LocalBusiness + WebSite + servicios) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "LocalBusiness",
+      "@id": "{{ site_url }}/#negocio",
+      "name": "A&C Logística y Producción de Eventos Ltda.",
+      "url": "{{ site_url }}/",
+      "telephone": "+576016438375",
+      "email": "info@ayceventos.com.co",
+      "logo": "{{ site_url }}/static/frontend/logo.jpeg",
+      "image": "{{ site_url }}/static/frontend/landing/gallery/gallery_2.jpg",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Cra. 59d #131a-1 131a-99 a",
+        "addressLocality": "Bogotá",
+        "addressRegion": "Bogotá D.C.",
+        "addressCountry": "CO"
+      },
+      "areaServed": "Bogotá y área metropolitana",
+      "description": "Empresa de producción y logística de eventos en Bogotá: personal logístico, brigadistas, seguridad, montaje, protocolo y personal operativo para eventos."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "{{ site_url }}/#sitio",
+      "url": "{{ site_url }}/",
+      "name": "A&C Logística y Producción de Eventos",
+      "inLanguage": "es-CO",
+      "publisher": { "@id": "{{ site_url }}/#negocio" }
+    },
+    {
+      "@type": "ItemList",
+      "name": "Servicios de A&C Logística para eventos",
+      "itemListElement": [
+        {%- for svc in ((content.services if content else none) or []) %}
+        {
+          "@type": "ListItem",
+          "position": {{ loop.index }},
+          "item": {
+            "@type": "Service",
+            "name": {{ svc.title | tojson }},
+            "description": {{ svc.description | tojson }},
+            "provider": { "@id": "{{ site_url }}/#negocio" }
+          }
+        }{{ "," if not loop.last }}
+        {%- endfor %}
+      ]
+    }
+  ]
+}
+</script>
 
 <style>
   :root {
@@ -1256,6 +1328,46 @@
       transform: none;
     }
   }
+  /* --- FAQ (SEO) --- */
+  .faq-list {
+    max-width: 820px;
+    margin-top: 2.2rem;
+  }
+
+  .faq-item {
+    border: 1px solid var(--ayc-border);
+    background: var(--ayc-black);
+    margin-bottom: .8rem;
+  }
+
+  .faq-item summary {
+    cursor: pointer;
+    padding: 1rem 1.2rem;
+    font-weight: 700;
+    color: var(--ayc-white);
+    list-style: none;
+  }
+
+  .faq-item summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-item summary::before {
+    content: '+ ';
+    color: var(--ayc-gold);
+    font-weight: 800;
+  }
+
+  .faq-item[open] summary::before {
+    content: '− ';
+  }
+
+  .faq-item p {
+    margin: 0;
+    padding: 0 1.2rem 1.1rem;
+    color: var(--ayc-muted);
+    line-height: 1.6;
+  }
 </style>
 {% endblock %}
 
@@ -1354,9 +1466,9 @@
     <div class="container-ayc intro-grid">
       <div class="intro-media reveal">
         <img class="intro-main" src="{{ about.main_image or '/static/frontend/landing/gallery/gallery_7.jpg' }}"
-          alt="Brigadista de A&C durante un evento">
+          alt="Brigadista de A&C durante un evento" loading="lazy" decoding="async" width="1600" height="1200">
         <img class="intro-detail" src="{{ about.detail_image or '/static/frontend/landing/gallery/gallery_3.jpg' }}"
-          alt="Equipo de producción y montaje de A&C">
+          alt="Equipo de producción y montaje de A&C" loading="lazy" decoding="async" width="800" height="600">
         <div class="intro-badge">{{ about.badge or 'Operación humana, técnica y confiable' }}</div>
       </div>
 
@@ -1503,25 +1615,30 @@
         {% if gallery %}
         {% for g in gallery[:4] %}
         <figure class="gallery-card reveal">
-          <img src="{{ g.image_url }}" alt="{{ g.title or 'Galería A&C' }}">
+          <img src="{{ g.image_url }}" alt="{{ g.title or 'Galería A&C' }}" loading="lazy" decoding="async"
+            width="1600" height="1200">
           <figcaption>{{ g.title or g.caption or '' }}</figcaption>
         </figure>
         {% endfor %}
         {% else %}
         <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Brigadista de A&C en operación">
+          <img src="/static/frontend/landing/gallery/gallery_7.jpg" alt="Brigadista de A&C en operación"
+            loading="lazy" decoding="async" width="1600" height="1200">
           <figcaption>Prevención y respuesta</figcaption>
         </figure>
         <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_2.jpg" alt="Equipo A&C frente a escenario">
+          <img src="/static/frontend/landing/gallery/gallery_2.jpg" alt="Equipo A&C frente a escenario"
+            loading="lazy" decoding="async" width="1600" height="1200">
           <figcaption>Grandes formatos</figcaption>
         </figure>
         <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_5.jpg" alt="Personal logístico de A&C">
+          <img src="/static/frontend/landing/gallery/gallery_5.jpg" alt="Personal logístico de A&C"
+            loading="lazy" decoding="async" width="1600" height="1200">
           <figcaption>Equipo operativo</figcaption>
         </figure>
         <figure class="gallery-card reveal">
-          <img src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Equipo A&C en montaje de escenario">
+          <img src="/static/frontend/landing/gallery/gallery_3.jpg" alt="Equipo A&C en montaje de escenario"
+            loading="lazy" decoding="async" width="1600" height="1200">
           <figcaption>Producción y montaje</figcaption>
         </figure>
         {% endif %}
@@ -1579,6 +1696,80 @@
     </div>
   </section>
 
+  <!-- ===== FAQ (SEO: contenido visible espejo del FAQPage JSON-LD) ===== -->
+  <section class="section" id="faq" style="background: var(--ayc-black); border-top: 1px solid rgba(207,155,98,.12);">
+    <div class="container-ayc">
+      <span class="eyebrow reveal">Preguntas frecuentes</span>
+      <h2 class="section-title reveal">Resolvemos tus dudas antes de tu evento.</h2>
+
+      <div class="faq-list reveal">
+        <details class="faq-item">
+          <summary>&iquest;Qu&eacute; servicios ofrece A&C Log&iacute;stica y Producci&oacute;n de Eventos?</summary>
+          <p>Ofrecemos personal log&iacute;stico, brigadas y prevenci&oacute;n, seguridad y control, montaje y producci&oacute;n,
+            protocolo y atenci&oacute;n, y personal especializado para eventos de cualquier escala en Bogot&aacute; y su &aacute;rea
+            metropolitana.</p>
+        </details>
+        <details class="faq-item">
+          <summary>&iquest;C&oacute;mo solicito una cotizaci&oacute;n para mi evento?</summary>
+          <p>Completa el formulario de contacto de esta p&aacute;gina indicando fecha, ciudad, tipo de evento y
+            necesidades principales, o escr&iacute;benos a info@ayceventos.com.co. Nuestro equipo te contactar&aacute; con una
+            propuesta inicial.</p>
+        </details>
+        <details class="faq-item">
+          <summary>&iquest;C&oacute;mo puedo trabajar o vincularme como operador de A&C?</summary>
+          <p>Ingresa a la secci&oacute;n Trabaja con nosotros y completa tu registro. All&iacute; podr&aacute;s crear tu perfil para
+            ser tenido en cuenta en las convocatorias de personal para eventos.</p>
+        </details>
+        <details class="faq-item">
+          <summary>&iquest;C&oacute;mo presento una PQRSF y en cu&aacute;nto tiempo responden?</summary>
+          <p>Puedes radicar tu petici&oacute;n, queja, reclamo, sugerencia o felicitaci&oacute;n en el formulario PQRSF de esta
+            p&aacute;gina. Recibir&aacute;s un c&oacute;digo de seguimiento y la respuesta se enviar&aacute; a tu correo en m&aacute;ximo 15 d&iacute;as
+            h&aacute;biles, conforme a la Ley 1755 de 2015.</p>
+        </details>
+      </div>
+    </div>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Qué servicios ofrece A&C Logística y Producción de Eventos?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Ofrecemos personal logístico, brigadas y prevención, seguridad y control, montaje y producción, protocolo y atención, y personal especializado para eventos de cualquier escala en Bogotá y su área metropolitana."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Cómo solicito una cotización para mi evento?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Completa el formulario de contacto de esta página indicando fecha, ciudad, tipo de evento y necesidades principales, o escríbenos a info@ayceventos.com.co. Nuestro equipo te contactará con una propuesta inicial."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Cómo puedo trabajar o vincularme como operador de A&C?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Ingresa a la sección Trabaja con nosotros y completa tu registro. Allí podrás crear tu perfil para ser tenido en cuenta en las convocatorias de personal para eventos."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Cómo presento una PQRSF y en cuánto tiempo responden?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Puedes radicar tu petición, queja, reclamo, sugerencia o felicitación en el formulario PQRSF de esta página. Recibirás un código de seguimiento y la respuesta se enviará a tu correo en máximo 15 días hábiles, conforme a la Ley 1755 de 2015."
+          }
+        }
+      ]
+    }
+    </script>
+  </section>
+
   <section class="section" id="contacto">
     <div class="container-ayc contact-wrap">
       <div class="reveal">
@@ -1591,8 +1782,12 @@
 
         <div class="contact-data">
           <div class="contact-item">
-            <small>Ubicación</small>
-            <span>Cra 59D # 131-72, Bogotá - Suba</span>
+            <small>Dirección</small>
+            <span>Cra. 59d #131a-1 131a-99 a, Bogotá, Colombia</span>
+          </div>
+          <div class="contact-item">
+            <small>Teléfono</small>
+            <a href="tel:+576016438375" onclick="aycTrackEvent('tel_click')">+57 601 6438375</a>
           </div>
           <div class="contact-item">
             <small>Correo</small>
@@ -1657,8 +1852,8 @@
   <section class="section" id="pqrsf" style="background: var(--ayc-surface); border-top: 1px solid rgba(207,155,98,.12);">
     <div class="container-ayc pqrsf-wrap">
       <div class="reveal">
-        <span class="eyebrow">Atención al ciudadano</span>
-        <h2 class="section-title">PQRSF</h2>
+        <span class="eyebrow">Peticiones, quejas, reclamos, sugerencias y felicitaciones</span>
+        <h2 class="section-title">PQRSF — Atención al ciudadano</h2>
         <p class="section-copy">
           ¿Tienes una petición, queja, reclamo, sugerencia o felicitación? Escríbenos.
           Todas las solicitudes son atendidas siguiendo los lineamientos de la Ley 1755 de 2015
@@ -1775,7 +1970,7 @@
   <div class="container-ayc">
     <div class="footer-grid">
       <div class="footer-brand">
-        <img src="/static/frontend/logo.jpeg" alt="Logo A&C Eventos">
+        <img src="/static/frontend/logo.jpeg" alt="Logo A&C Eventos" loading="lazy" decoding="async">
         <h2>A&C Logística & Producción de Eventos Ltda.</h2>
       </div>
 
@@ -1786,13 +1981,17 @@
         <a href="#grandes-escenarios">Grandes escenarios</a>
         <a href="#experiencia">Experiencia</a>
         <a href="#noticias">Noticias</a>
+        <a href="#faq">Preguntas frecuentes</a>
         <a href="#contacto">Contacto</a>
         <a href="#pqrsf">PQRSF</a>
+        <a href="/enrolamiento">Trabaja con nosotros</a>
+        <a href="/politica-tratamiento-datos">Política de datos</a>
       </div>
 
       <div class="footer-column">
         <h3>Contacto</h3>
-        <p>Bogotá, Colombia</p>
+        <p>Cra. 59d #131a-1 131a-99 a, Bogotá, Colombia</p>
+        <a href="tel:+576016438375" onclick="aycTrackEvent('tel_click')">+57 601 6438375</a>
         <a href="mailto:info@ayceventos.com.co">info@ayceventos.com.co</a>
       </div>
     </div>
@@ -1807,6 +2006,13 @@
 
 {% block scripts %}
 <script>
+  // Analytics opcional (GA4): emite eventos solo si GA_MEASUREMENT_ID está configurado.
+  function aycTrackEvent(name, params) {
+    if (window.GA_ID && typeof gtag === 'function') {
+      gtag('event', name, params || {});
+    }
+  }
+
   (function () {
     const nav = document.getElementById('main-nav');
     const revealElements = document.querySelectorAll('.reveal');
@@ -1869,6 +2075,7 @@
           if (!res.ok) {
             throw new Error('Respuesta no OK: ' + res.status);
           }
+          aycTrackEvent('contact_submit', { service: payload.event_type || null });
           contactStatus.textContent = '¡Solicitud enviada! Te contactaremos pronto.';
           contactStatus.style.color = '#cf9b62';
           contactForm.reset();
@@ -1942,6 +2149,7 @@
           }
           var data = await res.json();
 
+          aycTrackEvent('pqrsf_submit', { request_type: payload.request_type });
           pqrsfForm.style.display = 'none';
           pqrsfSuccess.classList.add('visible');
           pqrsfTrackingCode.textContent = data.tracking_code;

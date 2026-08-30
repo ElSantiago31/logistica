@@ -244,3 +244,71 @@ class TestContentService:
         )
         assert all(c.status == "new" for c in new_items)
         assert len(new_items) >= 2
+
+# ---------------------------------------------------------------------------
+# WebP: optimizacion en subida + negociacion en estaticos
+# ---------------------------------------------------------------------------
+class TestWebPOptimization:
+    """Conversion automatica a WebP del contenido subido y estaticos."""
+
+    async def test_upload_image_converts_to_webp(self, db, tmp_path, monkeypatch):
+        """upload_content_image re-codifica JPEG a WebP y reduce el peso."""
+        import io as _io
+        import os as _os
+        from PIL import Image
+        from fastapi import UploadFile
+        from starlette.datastructures import Headers
+
+        # Redirigir el directorio de subidas a un tmp_path aislado
+        monkeypatch.setattr(
+            content_service.settings, "CONTENT_IMAGES_DIR", str(tmp_path)
+        )
+
+        # Generar un JPEG sintetico de 800x600 (ruido para evitar sobre-compresion)
+        buf = _io.BytesIO()
+        img = Image.new("RGB", (800, 600))
+        for x in range(0, 800, 8):
+            for y in range(0, 600, 8):
+                img.putpixel((x, y), (x % 256, y % 256, (x + y) % 256))
+        img.save(buf, format="JPEG", quality=95)
+        jpeg_bytes = buf.getvalue()
+
+        upload = UploadFile(
+            file=_io.BytesIO(jpeg_bytes),
+            filename="test.jpg",
+            headers=Headers({"content-type": "image/jpeg"}),
+        )
+        url = await content_service.upload_content_image(db, upload)
+        assert url.startswith("/static/content/")
+        assert url.endswith(".webp"), "La imagen debe guardarse como WebP"
+
+        # Verificar archivo en disco y peso reducido
+        saved = _os.path.join(str(tmp_path), url.rsplit("/", 1)[-1])
+        assert _os.path.exists(saved)
+        assert _os.path.getsize(saved) < len(jpeg_bytes)
+
+    async def test_webp_static_files_negotiation(self, tmp_path):
+        """WebPStaticFiles sirve .webp solo si Accept lo soporta y existe."""
+        from app.core.webp_static import WebPStaticFiles
+
+        (tmp_path / "pic.jpg").write_bytes(b"fake-jpg")
+        (tmp_path / "pic.webp").write_bytes(b"fake-webp")
+
+        app_static = WebPStaticFiles(directory=str(tmp_path))
+
+        # Navegador moderno (acepta WebP) -> recibe el .webp
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/static/frontend/pic.jpg",
+            "headers": [(b"accept", b"text/html,image/webp,*/*")],
+            "query_string": b"",
+        }
+        resp = await app_static.get_response("pic.jpg", scope)
+        # FileResponse resuelve la ruta: verificar que entrego el hermano .webp
+        assert str(resp.path).endswith("pic.webp")
+
+        # Navegador viejo / crawler social (sin WebP) -> recibe el .jpg original
+        scope["headers"] = [(b"accept", b"text/html,*/*")]
+        resp = await app_static.get_response("pic.jpg", scope)
+        assert str(resp.path).endswith("pic.jpg")

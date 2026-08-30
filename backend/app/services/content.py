@@ -12,13 +12,16 @@ Este módulo es consumido por:
 """
 from __future__ import annotations
 
+import io
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import HTTPException, UploadFile, status
+from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +34,8 @@ from app.models.content import (
     SiteSection,
     StageItem,
 )
+
+logger = logging.getLogger(__name__)
 
 # Tipos MIME permitidos para imágenes de contenido (noticias/galería).
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -458,14 +463,56 @@ async def upload_content_image(db: AsyncSession, file: UploadFile) -> str:
             "Elimina alguna antes de subir una nueva.",
         )
 
-    # Guardar archivo
+    # Optimizacion automatica: re-codificar a WebP (redimensionando si excede
+    # el ancho maximo). Si el WebP no reduce el peso se guarda el original
+    # (nunca empeorar). Ante cualquier fallo de procesamiento tambien se guarda
+    # el archivo original tal cual (comportamiento anterior).
+    target_dir = _content_upload_dir()
+    try:
+        img = Image.open(io.BytesIO(data))
+        img.load()  # fuerza decodificacion completa (valida que sea imagen real)
+
+        # Redimensionar si excede la dimension maxima configurada
+        max_dim = settings.CONTENT_IMAGE_MAX_DIM
+        if img.width > max_dim:
+            new_height = round(img.height * (max_dim / img.width))
+            img = img.resize((max_dim, new_height), Image.LANCZOS)
+
+        # WebP conserva alpha nativamente (RGBA/PNG con transparencia incluido)
+        webp_buf = io.BytesIO()
+        img.save(
+            webp_buf,
+            format="WEBP",
+            quality=settings.CONTENT_IMAGE_WEBP_QUALITY,
+            method=6,
+        )
+        webp_bytes = webp_buf.getvalue()
+
+        if len(webp_bytes) < len(data):
+            filename = f"{uuid.uuid4().hex}.webp"
+            with open(os.path.join(target_dir, filename), "wb") as f:
+                f.write(webp_bytes)
+            logger.info(
+                "Imagen de contenido optimizada a WebP: %d -> %d bytes",
+                len(data), len(webp_bytes),
+            )
+            return _public_image_url(filename)
+
+        logger.info(
+            "WebP no redujo el peso (%d vs %d bytes); se guarda el original",
+            len(webp_bytes), len(data),
+        )
+    except Exception as exc:
+        # Imagen corrupta o formato no soportado por Pillow: guardar original
+        logger.warning(
+            "No se pudo optimizar la imagen a WebP (%s); se guarda el original", exc
+        )
+
     ext = (file.filename or "image.jpg").split(".")[-1].lower()
     if ext not in {"jpg", "jpeg", "png", "webp"}:
         ext = "jpg"
     filename = f"{uuid.uuid4().hex}.{ext}"
-    target_dir = _content_upload_dir()
-    target_path = os.path.join(target_dir, filename)
-    with open(target_path, "wb") as f:
+    with open(os.path.join(target_dir, filename), "wb") as f:
         f.write(data)
 
     return _public_image_url(filename)

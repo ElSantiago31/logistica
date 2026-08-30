@@ -154,6 +154,31 @@
             </div>
 
             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Código de referido (opcional)</label>
+                <select id="referral_code" name="referral_code"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white">
+                    <option value="">Nadie me refirió</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">¿Te invitó alguien? Selecciona su código de la lista.</p>
+            </div>
+            <script>
+            // Carga los códigos de referido activos en el desplegable (endpoint público)
+            (function loadReferralCodes(){
+                fetch('/api/referrals/public/codes').then(function(r){ return r.ok ? r.json() : null; })
+                .then(function(d){
+                    if (!d || !d.items) return;
+                    var sel = document.getElementById('referral_code');
+                    d.items.forEach(function(it){
+                        var o = document.createElement('option');
+                        o.value = it.code;
+                        o.textContent = it.code;
+                        sel.appendChild(o);
+                    });
+                }).catch(function(){ /* desplegable queda solo con la opción vacía */ });
+            })();
+            </script>
+
+            <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña *</label>
                 <div class="relative">
                     <input type="password" id="password" name="password" required minlength="6" placeholder="Mínimo 6 caracteres"
@@ -501,6 +526,42 @@
                 <p id="rut-error" class="text-red-500 text-xs mt-2 hidden">⚠️ El RUT en PDF es obligatorio para registrarte</p>
             </div>
 
+            <!-- Cédula obligatoria (frente y dorso) -->
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">🪪 Tu Cédula (Obligatorio) *</label>
+                <p class="text-xs text-gray-500 mb-3">Sube la foto de tu documento de identidad por ambos lados (frente y dorso). El administrador la verificará antes de aprobar tu cuenta.</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <button type="button" onclick="document.getElementById('iddoc-front-input').click()"
+                            class="w-full py-4 rounded-lg font-semibold transition text-center cursor-pointer"
+                            style="background:rgba(207,155,98,0.1);border:2px dashed rgba(207,155,98,0.3);color:#cf9b62">
+                            🪪 Frente<br>
+                            <span class="text-xs" style="color:rgba(207,155,98,0.5)">Toca aquí · JPG, PNG</span>
+                        </button>
+                        <input type="file" id="iddoc-front-input" accept="image/*" capture="user" class="hidden">
+                        <div id="iddoc-front-preview" class="hidden mt-2 text-center">
+                            <img id="iddoc-front-img" class="w-full h-24 object-cover rounded-lg mx-auto" style="border:2px solid rgba(207,155,98,0.3)">
+                            <button type="button" onclick="document.getElementById('iddoc-front-input').click()" class="block mx-auto mt-1 text-xs" style="color:#cf9b62">↻ Cambiar frente</button>
+                        </div>
+                        <p id="iddoc-front-error" class="text-red-500 text-xs mt-1 hidden">⚠️ La foto del frente es obligatoria</p>
+                    </div>
+                    <div>
+                        <button type="button" onclick="document.getElementById('iddoc-back-input').click()"
+                            class="w-full py-4 rounded-lg font-semibold transition text-center cursor-pointer"
+                            style="background:rgba(207,155,98,0.1);border:2px dashed rgba(207,155,98,0.3);color:#cf9b62">
+                            🪪 Dorso<br>
+                            <span class="text-xs" style="color:rgba(207,155,98,0.5)">Toca aquí · JPG, PNG</span>
+                        </button>
+                        <input type="file" id="iddoc-back-input" accept="image/*" capture="user" class="hidden">
+                        <div id="iddoc-back-preview" class="hidden mt-2 text-center">
+                            <img id="iddoc-back-img" class="w-full h-24 object-cover rounded-lg mx-auto" style="border:2px solid rgba(207,155,98,0.3)">
+                            <button type="button" onclick="document.getElementById('iddoc-back-input').click()" class="block mx-auto mt-1 text-xs" style="color:#cf9b62">↻ Cambiar dorso</button>
+                        </div>
+                        <p id="iddoc-back-error" class="text-red-500 text-xs mt-1 hidden">⚠️ La foto del dorso es obligatoria</p>
+                    </div>
+                </div>
+            </div>
+
             <div id="summary" class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm"></div>
 
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -733,6 +794,13 @@ async function submitForm() {
         return;
     }
 
+    // Validate ID document photos (before disabling button)
+    if (!window._operatorIdFrontData || !window._operatorIdBackData) {
+        showToast('Debes subir tu cédula por ambos lados (frente y dorso)', 'error');
+        goToStep(3);
+        return;
+    }
+
     const btn = document.getElementById('submit-btn');
     const text = document.getElementById('submit-text');
     const spinner = document.getElementById('submit-spinner');
@@ -762,24 +830,20 @@ async function submitForm() {
         education_level: document.getElementById('education_level').value || undefined,
         shirt_size: document.getElementById('shirt_size').value || undefined,
         jacket_size: document.getElementById('jacket_size').value || undefined,
+        referral_code: (document.getElementById('referral_code').value || '').trim() || undefined,
         photo_data: window._operatorPhotoData || undefined,
         rut_data: window._operatorRutData || undefined,
+        id_document_front_data: window._operatorIdFrontData || undefined,
+        id_document_back_data: window._operatorIdBackData || undefined,
     };
 
     // Collect selected experience roles
     const selectedRoles = Array.from(document.querySelectorAll('input[name="experience_roles"]:checked')).map(cb => cb.value);
     if (selectedRoles.length > 0) data.experience_roles = selectedRoles;
 
-    // Validate photo is present
-    if (!data.photo_data) {
-        showToast('Debes subir tu foto para registrarte', 'error');
-        goToStep(3);
-        return;
-    }
-
-    // Validate RUT is present
-    if (!data.rut_data) {
-        showToast('Debes subir tu RUT en PDF para registrarte', 'error');
+    // Validate ID document (both sides) is present
+    if (!data.id_document_front_data || !data.id_document_back_data) {
+        showToast('Debes subir tu cédula por ambos lados (frente y dorso)', 'error');
         goToStep(3);
         return;
     }
@@ -869,7 +933,7 @@ const autosaveFields = [
     'document_type','document_number','email','first_name','last_name','phone','birth_date','gender',
     'eps_id','pension_fund_id','department','city','locality','whatsapp','education_level',
     'blood_type','has_protocol_experience','event_size_experience',
-    'shirt_size','jacket_size',
+    'shirt_size','jacket_size','referral_code',
     'emergency_contact_name','emergency_contact_phone',
     'addr_tipo_via','addr_num_via','addr_sep','addr_num_sec','addr_comp_tipo','addr_comp_num','addr_comp_extra'
 ];
@@ -991,5 +1055,48 @@ function handleRutFile(file) {
     };
     reader.readAsDataURL(file);
 }
+
+// ===== ID DOCUMENT UPLOAD (Step 3 - mandatory front/back) =====
+window._operatorIdFrontData = null;
+window._operatorIdBackData = null;
+
+function handleIdDocFile(file, side) {
+    const errEl = document.getElementById('iddoc-' + side + '-error');
+    if (!file.type.startsWith('image/')) { showToast('Solo se permiten imágenes', 'error'); errEl.classList.remove('hidden'); return; }
+    if (file.size > 5 * 1024 * 1024) { showToast('La imagen supera 5MB', 'error'); errEl.classList.remove('hidden'); return; }
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const img = new Image();
+        img.onload = function() {
+            // Compresión client-side: 1600px JPEG (el servidor la re-comprime a WebP)
+            const maxDim = 1600;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                else { w = Math.round(w * maxDim / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            if (side === 'front') window._operatorIdFrontData = dataUrl;
+            else window._operatorIdBackData = dataUrl;
+            document.getElementById('iddoc-' + side + '-img').src = dataUrl;
+            document.getElementById('iddoc-' + side + '-preview').classList.remove('hidden');
+            errEl.classList.add('hidden');
+        };
+        img.src = ev.target.result;
+    };
+    reader.onerror = function() { showToast('Error leyendo la imagen. Intenta con otra.', 'error'); };
+    reader.readAsDataURL(file);
+}
+
+document.getElementById('iddoc-front-input').addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0]) handleIdDocFile(e.target.files[0], 'front');
+});
+document.getElementById('iddoc-back-input').addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0]) handleIdDocFile(e.target.files[0], 'back');
+});
 </script>
 {% endblock %}
