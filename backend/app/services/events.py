@@ -7,6 +7,29 @@ from typing import Optional, List
 # Colombia timezone (UTC-5)
 COLOMBIA_TZ = timezone(timedelta(hours=-5))
 
+
+def _fmt_audit_dt(val) -> str:
+    """Normaliza un datetime para el audit log en hora local de Colombia."""
+    try:
+        dt = datetime.fromisoformat(str(val).replace('Z', '+00:00'))
+    except (ValueError, TypeError):
+        return str(val)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=COLOMBIA_TZ)
+    return dt.astimezone(COLOMBIA_TZ).strftime('%d/%m/%Y %I:%M %p')
+
+
+def _same_instant(a, b) -> bool:
+    """Compara dos datetimes como instantes UTC (naive = hora Colombia)."""
+    da = datetime.fromisoformat(str(a).replace('Z', '+00:00'))
+    db = datetime.fromisoformat(str(b).replace('Z', '+00:00'))
+    if da.tzinfo is None:
+        da = da.replace(tzinfo=COLOMBIA_TZ)
+    if db.tzinfo is None:
+        db = db.replace(tzinfo=COLOMBIA_TZ)
+    return da.astimezone(timezone.utc) == db.astimezone(timezone.utc)
+
+
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +38,7 @@ from app.models.events import Event, EventStaffNeed, EventAssignment, EventAudit
 from app.models.operators import Operator
 from app.models.roles import Role
 from app.models.users import User
+from app.services.referrals import get_referrer_operator_of
 from app.schemas.events import EventCreate, EventUpdate
 
 
@@ -240,7 +264,7 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
     old_status = event.status
     old_values = {
         "name": event.name, "location": event.location, "address": event.address,
-        "city": event.city, "start_date": str(event.start_date),
+        "city": event.city, "start_date": str(event.start_date), "setup_date": str(event.setup_date) if event.setup_date else None,
         "end_date": str(event.end_date), "client_name": event.client_name,
         "client_phone": event.client_phone, "description": event.description,
         "notes": event.notes, "status": event.status,
@@ -256,21 +280,20 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
     changed_fields = {}
     for key, value in update_data.items():
         old_val = old_values.get(key)
-        # Normalize datetime comparison
+        # Normalize datetime comparison (comparar instantes UTC; naive = hora Colombia)
         if key in ('start_date', 'end_date', 'setup_date'):
             try:
-                old_dt = datetime.fromisoformat(str(old_val).replace('Z', '+00:00'))
-                new_dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-                # Strip tzinfo from both to compare naive datetimes
-                old_naive = old_dt.replace(tzinfo=None)
-                new_naive = new_dt.replace(tzinfo=None)
-                if old_naive != new_naive:
-                    changed_fields[key] = {"antes": str(old_val), "despues": str(value)}
-                    setattr(event, key, value)
+                if not _same_instant(old_val, value):
+                    changed_fields[key] = {"antes": _fmt_audit_dt(old_val), "despues": _fmt_audit_dt(value)}
+                    new_dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+                    if new_dt.tzinfo is None:
+                        new_dt = new_dt.replace(tzinfo=COLOMBIA_TZ)
+                    setattr(event, key, new_dt.astimezone(timezone.utc))
+                # Mismo instante (solo difiere zona horaria): no registrar ni reescribir
                 continue
             except (ValueError, TypeError):
                 pass
-        if str(old_val) != str(value):
+        if str(old_val if old_val is not None else '') != str(value if value is not None else ''):
             changed_fields[key] = {"antes": old_val, "despues": value}
         setattr(event, key, value)
 
@@ -326,7 +349,10 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
                 "education_level": need.get('education_level'),
             })
 
-        changed_fields["staff_needs"] = {"antes": old_staff, "despues": new_staff}
+        old_sig = sorted((str(s.get('role_id')), int(s.get('qty') or 0), round(float(s.get('rate') or 0), 2), str(s.get('education_level') or '')) for s in old_staff)
+        new_sig = sorted((str(s.get('role_id')), int(s.get('qty') or 0), round(float(s.get('rate') or 0), 2), str(s.get('education_level') or '')) for s in new_staff)
+        if old_sig != new_sig:
+            changed_fields["staff_needs"] = {"antes": old_staff, "despues": new_staff}
 
     # Update coordinator quotas if provided (nuevo flujo)
     if coordinator_quotas_data is not None:
@@ -338,9 +364,12 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
             name = await _resolve_coordinator_name(db, q.coordinator_operator_id) if q.coordinator_operator_id else q.coordinator
             old_quotas.append({"coordinator": name or q.coordinator, "quota": q.quota})
         new_quotas = await _save_coordinator_quotas(db, event_id, coordinator_quotas_data)
-        changed_fields["coordinator_quotas"] = {"antes": old_quotas, "despues": new_quotas}
-        if action == "updated" and not changed_fields.get("staff_needs"):
-            action = "staff_updated"
+        old_qsig = sorted((str(q.get('coordinator')), int(q.get('quota') or 0)) for q in old_quotas)
+        new_qsig = sorted((str(q.get('coordinator')), int(q.get('quota') or 0)) for q in new_quotas)
+        if old_qsig != new_qsig:
+            changed_fields["coordinator_quotas"] = {"antes": old_quotas, "despues": new_quotas}
+            if action == "updated" and not changed_fields.get("staff_needs"):
+                action = "staff_updated"
 
     # Audit log
     if user_id and changed_fields:
@@ -624,6 +653,18 @@ async def assign_operators(
                 "conflict_event_id": str(overlap.event_id),
             })
             continue
+        # F11 — Atribución por referido: si NO hay coordinador explícito
+        # (R1) y el operador tiene referente, el referente se estampa para
+        # ESTA asignación. Variables locales por iteración para no filtrar
+        # al siguiente operador del lote.
+        op_coord_operator = coord_operator
+        op_coord_name = coord_name
+        if not op_coord_operator and not op_coord_name:
+            referrer = await get_referrer_operator_of(db, operator.id)
+            if referrer:
+                op_coord_operator = referrer
+                op_coord_name = await _resolve_coordinator_name(db, referrer.id)
+
         assignment_kwargs = dict(
             event_id=event_id,
             operator_id=operator.id,
@@ -632,14 +673,14 @@ async def assign_operators(
             invited_at=datetime.now(timezone.utc),
             rate_applied=rate,
         )
-        # Estampar coordinador (nuevo flujo) si se proveyó y resolvió.
-        if coord_operator:
-            assignment_kwargs["programmed_by_operator_id"] = coord_operator.id
-            assignment_kwargs["admitted_by_operator_id"] = coord_operator.id
+        # Estampar coordinador (explícito o referente F11) si se resolvió.
+        if op_coord_operator:
+            assignment_kwargs["programmed_by_operator_id"] = op_coord_operator.id
+            assignment_kwargs["admitted_by_operator_id"] = op_coord_operator.id
         # Siempre estampar los strings (FK resuelta o nombre legacy/fallback).
-        if coord_name:
-            assignment_kwargs["programmed_by"] = coord_name
-            assignment_kwargs["admitted_by"] = coord_name
+        if op_coord_name:
+            assignment_kwargs["programmed_by"] = op_coord_name
+            assignment_kwargs["admitted_by"] = op_coord_name
         assignment = EventAssignment(**assignment_kwargs)
         db.add(assignment)
         assignments.append(assignment)

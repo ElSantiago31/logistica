@@ -13,6 +13,9 @@ Decisiones del producto:
   - Email auto-generado: {documento}@operador.temp.
   - Coordinador: se resuelve por nombre contra cupos del evento; fallback texto libre.
   - Manejo tolerante: una fila con error NO detiene el resto.
+  - Re-importación: un operador ya asignado al evento se ACTUALIZA (cargo
+    del evento, datos de perfil y coordinador). Un campo vacío del Excel
+    NUNCA borra un valor existente (semántica COALESCE).
   - Pre-carga batch de catálogos (evita N+1).
   - Commit único al final.
 """
@@ -31,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.events import ImportRowResult, ImportSummary
 from app.services.auth import hash_password
+from app.services.referrals import get_referrer_operator_of
 
 
 # ──────────────────────────────────────────────
@@ -399,6 +403,12 @@ def _validate_row(row: dict, row_num: int) -> tuple[dict, list[str]]:
     )
     clean["first_name"] = first_name or ""
     clean["last_name"] = last_name or "SIN APELLIDO"  # DB requiere non-null
+    # Presencia real de nombres: en UPDATE los placeholders ("SIN APELLIDO",
+    # nombre vacío) no deben pisar valores existentes.
+    clean["first_name_present"] = bool(first_name)
+    clean["last_name_present"] = bool(
+        row.get("primer_apellido") or row.get("segundo_apellido")
+    )
 
     # Tipo de documento
     doc_type = _normalize_doc_type(row.get("document_type"))
@@ -647,13 +657,26 @@ async def _load_existing_users_by_doc(db: AsyncSession, doc_numbers: list[str]) 
     return result
 
 
-async def _load_assigned_operators(db: AsyncSession, event_id: uuid.UUID) -> set:
-    """Carga operator_ids ya asignados al evento."""
+async def _load_assigned_operators(db: AsyncSession, event_id: uuid.UUID) -> dict:
+    """Carga {operator_id: role_id} de las asignaciones existentes al evento.
+
+    Mantiene la membresía del set original (sin filtro is_active) para no
+    cambiar la semántica de detección, pero prefiere el role_id de la fila
+    activa cuando hay históricos inactivos.
+    """
     result = await db.execute(
-        text("SELECT operator_id FROM event_assignments WHERE event_id = :eid"),
+        text(
+            "SELECT operator_id, role_id, is_active "
+            "FROM event_assignments WHERE event_id = :eid "
+            "ORDER BY is_active DESC"
+        ),
         {"eid": str(event_id)},
     )
-    return {r.operator_id for r in result}
+    out: dict = {}
+    for r in result:
+        if r.operator_id not in out:
+            out[r.operator_id] = r.role_id
+    return out
 
 
 # ──────────────────────────────────────────────
@@ -676,6 +699,7 @@ async def import_operators_from_excel(
     created = 0
     existing = 0
     already_assigned = 0
+    updated = 0
     errors = 0
 
     # --- 1. Leer Excel ---
@@ -791,20 +815,54 @@ async def import_operators_from_excel(
         if doc in existing_users:
             user_id, operator_id = existing_users[doc]
             if operator_id and operator_id in assigned_ops:
-                # Ya asignado a este evento.
-                # Corregir la FK de coordinador si el Excel trae un coordinador
-                # distinto al estampado en una importación anterior (drift).
-                await _update_assignment_coordinator(
+                # Ya asignado a este evento → actualizar cargo del evento,
+                # datos de perfil y coordinador con lo que traiga el Excel.
+                # Regla: un campo vacío del Excel NUNCA borra el valor
+                # existente (semántica COALESCE).
+                current_role_id = assigned_ops[operator_id]
+                new_role_id, role_changed = _resolve_role_update(
+                    current_role_id, clean["role_name"], role_id,
+                )
+
+                profile_changed = await _update_user_fields(db, user_id, clean)
+                profile_changed = (await _update_operator_profile_fields(
+                    db, operator_id, eps_id, pf_id, clean,
+                )) or profile_changed
+                coord_changed = await _update_assignment_coordinator(
                     db, event_id, operator_id, coord_op_id, coord_display,
                 )
-                already_assigned += 1
-                rows_result.append(ImportRowResult(
-                    row=idx, document_number=doc, full_name=full_name,
-                    status="already_assigned",
-                    message="Ya estaba asignado a este evento",
-                    operator_id=str(operator_id) if operator_id else None,
-                    warnings=warnings,
-                ))
+                if role_changed:
+                    await _update_assignment_role(
+                        db, event_id, operator_id, new_role_id,
+                    )
+                    assigned_ops[operator_id] = new_role_id
+
+                if role_changed or profile_changed or coord_changed:
+                    updated += 1
+                    changes = []
+                    if role_changed:
+                        changes.append("cargo")
+                    if profile_changed:
+                        changes.append("datos personales")
+                    if coord_changed:
+                        changes.append("coordinador")
+                    rows_result.append(ImportRowResult(
+                        row=idx, document_number=doc, full_name=full_name,
+                        status="updated",
+                        message="Ya estaba asignado — actualizado: "
+                                + ", ".join(changes),
+                        operator_id=str(operator_id),
+                        warnings=warnings,
+                    ))
+                else:
+                    already_assigned += 1
+                    rows_result.append(ImportRowResult(
+                        row=idx, document_number=doc, full_name=full_name,
+                        status="already_assigned",
+                        message="Ya estaba asignado a este evento — sin cambios",
+                        operator_id=str(operator_id),
+                        warnings=warnings,
+                    ))
                 continue
 
             # Asignar existente al evento
@@ -813,7 +871,7 @@ async def import_operators_from_excel(
                     db, event_id, operator_id, role_id,
                     coord_op_id, coord_display,
                 )
-                assigned_ops.add(operator_id)
+                assigned_ops[operator_id] = role_id
                 existing += 1
                 rows_result.append(ImportRowResult(
                     row=idx, document_number=doc, full_name=full_name,
@@ -866,7 +924,7 @@ async def import_operators_from_excel(
                 db, event_id, operator_id, role_id,
                 coord_op_id, coord_display,
             )
-            assigned_ops.add(operator_id)
+            assigned_ops[operator_id] = role_id
             created += 1
             rows_result.append(ImportRowResult(
                 row=idx, document_number=doc, full_name=full_name,
@@ -893,6 +951,7 @@ async def import_operators_from_excel(
         created=created,
         existing=existing,
         already_assigned=already_assigned,
+        updated=updated,
         assigned=created + existing,
         errors=errors,
         duration_seconds=elapsed,
@@ -940,12 +999,14 @@ async def _create_operator_profile(db, user_id, eps_id, pf_id, clean, role_id) -
             id, user_id, eps_id, pension_fund_id, birth_date, gender, address,
             emergency_contact_name, emergency_contact_phone,
             whatsapp, background_check_status, total_events, is_active,
-            experience_roles, has_protocol_experience, event_size_experience
+            experience_roles, has_protocol_experience, event_size_experience,
+            is_banned
         ) VALUES (
             gen_random_uuid(), :user_id, :eps_id, :pf_id, :birth_date, :gender, :address,
             :emergency_name, :emergency_phone,
             :whatsapp, 'pending', 0, true,
-            :experience_roles, true, '100'
+            :experience_roles, true, '100',
+            false
         )
         RETURNING id
     """), {
@@ -964,7 +1025,25 @@ async def _create_operator_profile(db, user_id, eps_id, pf_id, clean, role_id) -
 
 
 async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, coord_display):
-    """Crea un EventAssignment con status='confirmed' y datos del coordinador."""
+    """Crea un EventAssignment con status='confirmed' y datos del coordinador.
+
+    F11 (atribución por referido): si la fila del Excel NO trae coordinador
+    (coord_op_id y coord_display vacíos) y el operador tiene referente, el
+    REFERENTE se estampa como programmed_by/admitted_by de la asignación.
+    R1: el coordinador explícito del Excel siempre gana. R3: solo aplica a
+    asignaciones nuevas creadas por el import (UPDATE no cambia).
+    """
+    # F11 — Fallback por referido cuando no hay coordinador explícito.
+    if not coord_op_id and not coord_display:
+        referrer = await get_referrer_operator_of(db, operator_id)
+        if referrer:
+            res = await db.execute(text(
+                "SELECT first_name, last_name FROM users WHERE id = :uid"
+            ), {"uid": str(referrer.user_id)})
+            row = res.first()
+            if row:
+                coord_display = f"{row.first_name} {row.last_name}".upper()
+                coord_op_id = referrer.id
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.execute(text("""
         INSERT INTO event_assignments (
@@ -990,7 +1069,7 @@ async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, co
 
 async def _update_assignment_coordinator(
     db, event_id, operator_id, coord_op_id, coord_display,
-):
+) -> bool:
     """Actualiza las FKs/strings de coordinador de una asignación existente.
 
     Se usa al reimportar un Excel sobre operadores ya asignados: si una
@@ -999,9 +1078,27 @@ async def _update_assignment_coordinator(
     Solo actualiza si el nuevo coordinador está definido (coord_op_id o
     coord_display); nunca deja la FK en NULL si antes tenía valor y el Excel
     no trae coordinador.
+
+    Retorna True si aplicó cambios (permite distinguir 'updated' de
+    'already_assigned' en el resumen de la importación).
     """
     if not coord_op_id and not coord_display:
-        return
+        return False
+    res = await db.execute(text("""
+        SELECT programmed_by, programmed_by_operator_id
+        FROM event_assignments
+        WHERE event_id = :eid AND operator_id = :oid AND is_active = true
+        LIMIT 1
+    """), {
+        "eid": str(event_id),
+        "oid": str(operator_id),
+    })
+    row = res.first()
+    if row is None:
+        return False
+    if (row.programmed_by or None) == (coord_display or None) and \
+            row.programmed_by_operator_id == coord_op_id:
+        return False
     await db.execute(text("""
         UPDATE event_assignments
         SET programmed_by = :coord_display,
@@ -1017,6 +1114,144 @@ async def _update_assignment_coordinator(
         "coord_display": coord_display,
         "coord_op_id": str(coord_op_id) if coord_op_id else None,
     })
+    return True
+
+
+def _resolve_role_update(current_role_id, role_name, matched_role_id):
+    """Decide el nuevo role_id de la asignación al re-importar la fila.
+
+    Reglas (acordadas con producto):
+      - Celda de rol vacía → conserva el cargo actual.
+      - Rol matchea en catálogo → usarlo; changed si difiere del actual.
+      - Rol NO matchea → la asignación queda sin cargo (NULL); el warning
+        "Rol ... no encontrado" ya lo emitió el loop principal.
+
+    Retorna (new_role_id, changed).
+    """
+    if role_name is None:
+        return current_role_id, False
+    if matched_role_id is None:
+        return None, current_role_id is not None
+    return matched_role_id, matched_role_id != current_role_id
+
+
+async def _update_assignment_role(db, event_id, operator_id, new_role_id):
+    """Cambia el cargo (role_id) de la asignación activa en este evento."""
+    await db.execute(text("""
+        UPDATE event_assignments
+        SET role_id = :rid
+        WHERE event_id = :eid
+          AND operator_id = :oid
+          AND is_active = true
+    """), {
+        "eid": str(event_id),
+        "oid": str(operator_id),
+        "rid": str(new_role_id) if new_role_id else None,
+    })
+
+
+async def _update_user_fields(db, user_id, clean) -> bool:
+    """Actualiza datos del User al re-importar (semántica COALESCE).
+
+    Un campo vacío del Excel NO borra el valor existente. Los placeholders
+    ("SIN APELLIDO", nombre vacío) se pasan como NULL para no pisar valores.
+    Retorna True si aplicó cambios.
+    """
+    res = await db.execute(text("""
+        SELECT first_name, last_name, phone, document_type
+        FROM users WHERE id = :uid
+    """), {"uid": str(user_id)})
+    row = res.first()
+    if row is None:
+        return False
+
+    new_first = clean["first_name"][:100] if clean.get("first_name_present") else None
+    new_last = clean["last_name"][:100] if clean.get("last_name_present") else None
+    new_phone = clean.get("phone")
+    new_doc_type = clean.get("document_type")
+
+    changed = (
+        (new_first is not None and new_first != row.first_name)
+        or (new_last is not None and new_last != row.last_name)
+        or (new_phone is not None and new_phone != (row.phone or ""))
+        or (new_doc_type is not None and new_doc_type != row.document_type)
+    )
+    if not changed:
+        return False
+
+    await db.execute(text("""
+        UPDATE users SET
+            first_name = COALESCE(NULLIF(:first_name, ''), first_name),
+            last_name = COALESCE(NULLIF(:last_name, ''), last_name),
+            phone = COALESCE(:phone, phone),
+            document_type = COALESCE(:doc_type, document_type)
+        WHERE id = :uid
+    """), {
+        "uid": str(user_id),
+        "first_name": new_first,
+        "last_name": new_last,
+        "phone": new_phone,
+        "doc_type": new_doc_type,
+    })
+    return True
+
+
+async def _update_operator_profile_fields(db, operator_id, eps_id, pf_id, clean) -> bool:
+    """Actualiza el perfil Operator al re-importar (semántica COALESCE).
+
+    EPS/pensión no encontradas en el catálogo llegan como NULL y conservan la
+    actual (coherente con la regla "vacío no borra").
+    Retorna True si aplicó cambios.
+    """
+    res = await db.execute(text("""
+        SELECT eps_id, pension_fund_id, birth_date, gender, address,
+               emergency_contact_name, emergency_contact_phone, whatsapp
+        FROM operators WHERE id = :oid
+    """), {"oid": str(operator_id)})
+    row = res.first()
+    if row is None:
+        return False
+
+    params = {
+        "eps_id": str(eps_id) if eps_id else None,
+        "pf_id": str(pf_id) if pf_id else None,
+        "birth_date": clean.get("birth_date"),
+        "gender": clean.get("gender"),
+        "address": clean.get("address"),
+        "emergency_name": clean.get("emergency_name"),
+        "emergency_phone": clean.get("emergency_phone"),
+        "whatsapp": clean.get("phone"),
+    }
+
+    def _differs(new, old):
+        return new is not None and new != old
+
+    changed = (
+        _differs(params["eps_id"], str(row.eps_id) if row.eps_id else None)
+        or _differs(params["pf_id"], str(row.pension_fund_id) if row.pension_fund_id else None)
+        or _differs(params["birth_date"], row.birth_date)
+        or _differs(params["gender"], row.gender)
+        or _differs(params["address"], row.address)
+        or _differs(params["emergency_name"], row.emergency_contact_name)
+        or _differs(params["emergency_phone"], row.emergency_contact_phone)
+        or _differs(params["whatsapp"], row.whatsapp)
+    )
+    if not changed:
+        return False
+
+    await db.execute(text("""
+        UPDATE operators SET
+            eps_id = COALESCE(:eps_id, eps_id),
+            pension_fund_id = COALESCE(:pf_id, pension_fund_id),
+            birth_date = COALESCE(:birth_date, birth_date),
+            gender = COALESCE(NULLIF(:gender, ''), gender),
+            address = COALESCE(:address, address),
+            emergency_contact_name = COALESCE(:emergency_name, emergency_contact_name),
+            emergency_contact_phone = COALESCE(:emergency_phone, emergency_contact_phone),
+            whatsapp = COALESCE(:whatsapp, whatsapp)
+        WHERE id = :oid
+    """), {"oid": str(operator_id), **params})
+    return True
 
 
 async def _recalculate_confirmed_counts(db: AsyncSession, event_id: uuid.UUID) -> None:

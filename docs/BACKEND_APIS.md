@@ -150,6 +150,16 @@ Algunos endpoints usan `@limiter.limit("N/minute")` via slowapi:
 | `DELETE` | `/api/operators/{id}` | Desactivar operador (soft delete) |
 | `POST` | `/api/operators/{id}/photo` | Subir foto de operador |
 
+### Aprobación de operadores (SuperAdmin/Admin)
+
+| Método | Ruta | Permiso | Descripción |
+|---|---|---|---|
+| `GET` | `/api/operators/pending` | SuperAdmin/Admin | Listar operadores pendientes de aprobación |
+| `POST` | `/api/operators/{id}/approve` | SuperAdmin/Admin | Aprobar operador pendiente (`is_approved=True`) |
+| `POST` | `/api/operators/{id}/reject` | SuperAdmin/Admin | Rechazar operador pendiente (desactiva cuenta + limpia archivos; body opcional `{"reason": "..."}`) |
+
+> UI: pestaña "⏳ Pendientes" en `/admin/operators` (visible para `admin` y `superadmin`).
+
 ### Funciones Auxiliares
 - `_save_operator_photo()` — Guarda foto con Pillow, genera thumbnail, retorna ruta
 
@@ -230,6 +240,9 @@ El webhook recibe mensajes de WhatsApp y procesa palabras clave:
 2. Durante el evento: Check-in local, se marca `is_offline=true`
 3. Al recuperar conexión: `POST /sync/events/{id}/attendance` con registros pendientes
 
+### Atribucion de cupos por referido (F11)
+Operadores registrados con codigo de referido asignados a un evento SIN coordinador explicito quedan atribuidos a su referente (programmed_by/admitted_by + FKs), tanto en asignacion manual (assign_operators) como en import Excel. Por eso suman en las tarjetas de cupos del check-in del referente al hacer POST .../checkin y en GET .../coordinator-quotas. El coordinador explicito siempre gana (R1) y las asignaciones existentes no se modifican (R3). Ver docs/REFERIDOS.md seccion Atribucion de cupos (F11).
+
 ---
 
 ## 8. Payroll Router (`/api/payroll`)
@@ -267,7 +280,33 @@ Todos generan archivos CSV con `StreamingResponse`.
 
 ---
 
-## 10. Schemas Pydantic
+## 10. Referrals Router (`/api/referrals`)
+
+**Archivo:** `app/routers/referrals.py` — gestión de códigos de referido (SuperAdmin).
+Documentación completa: [REFERIDOS.md](REFERIDOS.md)
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/referrals/stats` | SuperAdmin | Métricas globales del módulo |
+| `GET` | `/api/referrals/codes` | SuperAdmin | Lista de códigos con métricas del referente |
+| `POST` | `/api/referrals/codes` | SuperAdmin | Generar código para un operador (`{"operator_id": "..."}`) |
+| `PATCH` | `/api/referrals/codes/{code_id}` | SuperAdmin | Habilitar/deshabilitar código (`{"is_active": bool}`) |
+| `GET` | `/api/referrals/export` | SuperAdmin | Exportar referidos a Excel (.xlsx) |
+| `GET` | `/api/referrals/{operator_id}` | SuperAdmin | Detalle del referente (métricas + referidos) |
+
+**Servicio:** `services/referrals.py` — códigos `AC-NOMBRE-XXXX`, validación,
+registro de referidos (relación inmutable), métricas derivadas
+(`derived_quota` = referidos con `checked_in`), auditoría en
+`referral_audit_logs`.
+
+**Registro público:** `POST /api/auth/register` acepta `referral_code`
+opcional; se valida fail-fast antes de crear el usuario (400 si inválido).
+
+**Tests:** `tests/test_referrals.py` (25 casos).
+
+---
+
+## 11. Schemas Pydantic
 
 **Archivos:** `app/schemas/`
 
@@ -292,7 +331,7 @@ Todos generan archivos CSV con `StreamingResponse`.
 
 ---
 
-## 11. Services (Lógica de Negocio)
+## 12. Services (Lógica de Negocio)
 
 ### `services/auth.py`
 - `hash_password(password)` → Hash con bcrypt
@@ -317,7 +356,7 @@ Todos generan archivos CSV con `StreamingResponse`.
 
 ---
 
-## 12. Dependencies
+## 13. Dependencies
 
 ### `dependencies/auth.py`
 - `get_current_user` — Decodifica Bearer token, carga usuario de BD
