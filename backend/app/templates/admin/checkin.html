@@ -277,42 +277,32 @@ function _canManageUniform() {
     } catch(_) { return false; }
 }
 
-// --- Estado de conexión (doble verificación: internet real + servidor) ---
+// --- Estado de conexión: ¿el servidor de la app responde? ---
+// El badge Online/Offline refleja si EL SERVIDOR PROPIO es alcanzable, que es
+// lo único que importa para hacer check-in y sincronizar. Antes se sondaba el
+// favicon de google.com como "probe de internet real": eso falla con
+// adblockers (uBlock/Brave), DNS filtrado o redes de eventos con internet
+// restringido, y marcaba Offline aunque el servidor estuviera perfectamente.
 let _isOnline = navigator.onLine;
 
-// Probe de internet real: carga una imagen diminuta para detectar si hay
-// conectividad a internet (no solo red local). navigator.onLine en PC con
-// Docker/VM se queda en true aunque el WiFi esté apagado.
-async function checkInternetAvailable() {
-    return new Promise((resolve) => {
-        const img = new Image();
-        let resolved = false;
-        const timeout = setTimeout(() => {
-            if (!resolved) { resolved = true; resolve(false); }
-        }, 3000);
-        img.onload = () => {
-            if (!resolved) { resolved = true; clearTimeout(timeout); resolve(true); }
-        };
-        img.onerror = () => {
-            if (!resolved) { resolved = true; clearTimeout(timeout); resolve(false); }
-        };
-        // Favicon de Google (muy confiable, ~300 bytes, cache-bust)
-        img.src = 'https://www.google.com/favicon.ico?_=' + Date.now();
-    });
-}
-
 async function checkServerReachable() {
+    // Si el navegador ya sabe que no hay red, no gastar el probe.
+    if (!navigator.onLine) return false;
     try {
         const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 3000);
-        const resp = await Auth.apiFetch('/api/sync/status', {
-            method: 'GET',
-            headers: authHeaders(),
+        const t = setTimeout(() => controller.abort(), 4000);
+        // Probe ligero MISMO-ORIGEN: robots.txt (existe desde la fase SEO).
+        // - Sin auth: no dispara refresh de token ni redirect a login.
+        // - HEAD: el service worker solo intercepta GET, no interfiere.
+        // - CUALQUIER respuesta HTTP (incluso 404) prueba que el servidor
+        //   y la ruta de red responden → Online.
+        await fetch('/robots.txt?_=' + Date.now(), {
+            method: 'HEAD',
             cache: 'no-store',
             signal: controller.signal
         });
         clearTimeout(t);
-        return resp.status < 500;
+        return true;
     } catch(e) {
         return false;
     }
@@ -320,10 +310,7 @@ async function checkServerReachable() {
 
 async function refreshConnectionStatus() {
     const wasOnline = _isOnline;
-    // Doble check: 1) hay internet real (WiFi/router activo), 2) servidor responde
-    const hasInternet = await checkInternetAvailable();
-    const serverUp = hasInternet && await checkServerReachable();
-    _isOnline = serverUp;
+    _isOnline = await checkServerReachable();
 
     document.getElementById('online-badge').classList.toggle('hidden', !_isOnline);
     document.getElementById('offline-badge').classList.toggle('hidden', _isOnline);
