@@ -17,7 +17,7 @@ import os
 import re
 
 import fitz  # PyMuPDF
-from PIL import Image
+from PIL import Image, ImageOps
 from fastapi import HTTPException, status
 
 from app.config import settings
@@ -185,3 +185,104 @@ def delete_rut_pdf(rut_url: str | None) -> None:
             os.remove(full_path)
         except OSError:
             pass
+
+# ---------------------------------------------------------------------------
+# Cédula (documento de identidad) — fotos frente/dorso obligatorias
+# ---------------------------------------------------------------------------
+
+_ID_DOC_ALLOWED_MIME = ("image/jpeg", "image/png", "image/webp", "image/jpg")
+
+
+def _decode_image_data_url(data_url: str, field_label: str) -> bytes:
+    """Extrae bytes de un data URL de imagen, validando tipo y tamaño."""
+    if not data_url or not isinstance(data_url, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La foto de la cédula ({field_label}) es obligatoria",
+        )
+
+    mime = ""
+    raw_b64 = data_url.strip()
+    m = re.match(r"^data:([^;]+);base64,(.+)$", raw_b64, re.DOTALL)
+    if m:
+        mime = m.group(1).lower()
+        raw_b64 = m.group(2)
+
+    try:
+        raw = base64.b64decode(raw_b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El archivo de cédula enviado no es válido (base64 corrupto)",
+        )
+
+    if len(raw) > settings.ID_DOC_MAX_SIZE_MB * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La foto de la cédula supera el máximo de {settings.ID_DOC_MAX_SIZE_MB}MB",
+        )
+
+    if mime and mime not in _ID_DOC_ALLOWED_MIME:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato no permitido. La cédula debe ser una imagen JPG, PNG o WEBP.",
+        )
+    return raw
+
+
+def save_id_document_photo(data_url: str, operator_user_id, side: str) -> str:
+    """Guarda una foto (frente|dorso) del documento de identidad del operador.
+
+    Valida la imagen y la re-codifica a WebP color con dimensión máxima
+    ID_DOC_MAX_DIM y calidad ID_DOC_WEBP_QUALITY: mínimo espacio en disco
+    (~100-250KB por lado) manteniendo la cédula legible para revisión admin
+    (incluye tintas de color).
+
+    Returns URL path '/static/id_docs/idoc_<uid>_<side>.webp'.
+    """
+    if side not in ("front", "back"):
+        raise ValueError("side must be 'front' or 'back'")
+    label = "frente" if side == "front" else "dorso"
+    raw = _decode_image_data_url(data_url, label)
+
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se pudo leer la imagen de la cédula ({label}). Asegúrate de que sea válida.",
+        )
+
+    img = ImageOps.exif_transpose(img) or img
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+
+    max_dim = settings.ID_DOC_MAX_DIM
+    if img.width > max_dim or img.height > max_dim:
+        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    img.save(buf, format="WEBP", quality=settings.ID_DOC_WEBP_QUALITY, method=6)
+
+    base_name = f"idoc_{str(operator_user_id).replace('-', '')[:16]}_{side}"
+    file_name = f"{base_name}.webp"
+    os.makedirs(settings.ID_DOC_DIR, exist_ok=True)
+    with open(os.path.join(settings.ID_DOC_DIR, file_name), "wb") as f:
+        f.write(buf.getvalue())
+
+    return f"/static/id_docs/{file_name}"
+
+
+def delete_id_document_photos(front_url: str | None, back_url: str | None) -> None:
+    """Elimina archivos de cédula por URL. Seguro llamar con None."""
+    for url in (front_url, back_url):
+        if not url:
+            continue
+        filename = url.split("/")[-1]
+        full_path = os.path.join(settings.ID_DOC_DIR, filename)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except OSError:
+                pass

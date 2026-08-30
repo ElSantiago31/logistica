@@ -288,8 +288,11 @@ async def update_operator(
                 user.operator_profile.experience_roles = None
 
     await db.commit()
-    await db.refresh(user)
-    return user
+    # Re-fetch con relaciones eager (selectinload). db.refresh(user) expiraria
+    # operator_profile y la serializacion de la respuesta haria lazy-load fuera
+    # del contexto async -> sqlalchemy MissingGreenlet.
+    fresh = await get_operator(db, user_id, include_inactive=is_admin)
+    return fresh if fresh else user
 
 async def delete_operator(db: AsyncSession, user_id: uuid.UUID, hard_delete: bool = True) -> bool:
     """Delete an operator.
@@ -529,10 +532,11 @@ async def upload_operator_photo(db: AsyncSession, user_id: uuid.UUID, file: Uplo
             
         user.operator_profile.photo_path = f"/static/photos/{filename}"
         user.operator_profile.photo_thumbnail_path = f"/static/photos/thumbnails/{filename}"
-        
+
         await db.commit()
-        await db.refresh(user)
-        return user
+        # Re-fetch eager para evitar lazy-load en serializacion (ver update_operator)
+        fresh = await get_operator(db, user_id)
+        return fresh if fresh else user
         
     except Exception as e:
         if os.path.exists(photo_path):

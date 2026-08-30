@@ -171,7 +171,8 @@ async def test_upload_photo(client: AsyncClient, operator_token: str, sample_ope
     assert data["photo_path"].startswith("/static/photos/")
     assert data["photo_thumbnail_path"].startswith("/static/photos/thumbnails/")
     
-    # Ensure physical files exist
+    # Ensure physical files exist (thumbnail usa sufijo _thumb, ver photos.py)
     filename = data["photo_path"].split("/")[-1]
+    thumbname = data["photo_thumbnail_path"].split("/")[-1]
     assert os.path.exists(os.path.join(settings.PHOTOS_DIR, filename))
-    assert os.path.exists(os.path.join(settings.PHOTOS_THUMBNAIL_DIR, filename))
+    assert os.path.exists(os.path.join(settings.PHOTOS_THUMBNAIL_DIR, thumbname))

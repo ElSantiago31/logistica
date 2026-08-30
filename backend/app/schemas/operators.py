@@ -70,6 +70,9 @@ class OperatorResponse(BaseModel):
     pension_fund_name: Optional[str] = None
     photo_path: Optional[str]
     photo_thumbnail_path: Optional[str]
+    rut_path: Optional[str] = None
+    id_document_front_path: Optional[str] = None
+    id_document_back_path: Optional[str] = None
     birth_date: Optional[date]
     gender: Optional[str]
     address: Optional[str]
@@ -124,6 +127,9 @@ class OperatorResponse(BaseModel):
                     'pension_fund_name': pension_fund_name,
                     'photo_path': profile.photo_path,
                     'photo_thumbnail_path': profile.photo_thumbnail_path,
+                    'rut_path': profile.rut_path,
+                    'id_document_front_path': profile.id_document_front_path,
+                    'id_document_back_path': profile.id_document_back_path,
                     'birth_date': profile.birth_date,
                     'gender': profile.gender,
                     'address': profile.address,
@@ -147,7 +153,7 @@ class OperatorResponse(BaseModel):
             else:
                 values.update({
                     'eps_id': None, 'pension_fund_id': None, 'eps_name': None, 'pension_fund_name': None, 'photo_path': None,
-                    'photo_thumbnail_path': None, 'birth_date': None, 'gender': None,
+                    'photo_thumbnail_path': None, 'rut_path': None, 'id_document_front_path': None, 'id_document_back_path': None, 'birth_date': None, 'gender': None,
                     'address': None, 'city': None, 'blood_type': None,
                     'emergency_contact_name': None, 'emergency_contact_phone': None,
                     'locality': None, 'whatsapp': None,

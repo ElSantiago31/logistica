@@ -36,6 +36,7 @@
                 <div class="flex gap-1 bg-gray-100 rounded-lg p-1">
                     <button onclick="switchTab('active')" id="tabActive" class="px-4 py-1.5 rounded-md text-sm font-medium bg-primary-600 text-white transition">Activos</button>
                     <button onclick="switchTab('inactive')" id="tabInactive" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 transition">Inactivos / Bloqueados</button>
+                    <button onclick="switchTab('pending')" id="tabPending" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 transition">⏳ Pendientes (<span id="pendingTabCount">0</span>)</button>
                 </div>
                 <span id="totalCount" class="text-sm text-gray-500"></span>
             </div>
@@ -70,8 +71,21 @@
             currentTab = tab;
             document.getElementById('tabActive').className = tab==='active' ? 'px-4 py-1.5 rounded-md text-sm font-medium bg-primary-600 text-white transition' : 'px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 transition';
             document.getElementById('tabInactive').className = tab==='inactive' ? 'px-4 py-1.5 rounded-md text-sm font-medium bg-red-500 text-white transition' : 'px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 transition';
-            currentPage = 0;
-            loadOperators();
+            document.getElementById('tabPending').className = tab==='pending' ? 'px-4 py-1.5 rounded-md text-sm font-medium bg-amber-500 text-white transition' : 'px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 transition';
+            const searchInput = document.getElementById('searchInput');
+            if (tab === 'pending') {
+                searchInput.disabled = true;
+                searchInput.value = '';
+                searchInput.classList.add('opacity-50', 'cursor-not-allowed');
+                searchInput.placeholder = 'Búsqueda no disponible en Pendientes';
+                loadPendingOperators();
+            } else {
+                searchInput.disabled = false;
+                searchInput.classList.remove('opacity-50', 'cursor-not-allowed');
+                searchInput.placeholder = 'Buscar por nombre, email o documento...';
+                currentPage = 0;
+                loadOperators();
+            }
         }
 
         function getAuthHeaders() { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }; }
@@ -190,7 +204,124 @@
 
         async function adminLogout() { localStorage.clear(); window.location.href = '/admin/login'; }
 
+        // ===== Pestaña Pendientes (aprobación de operadores) =====
+        const PENDING_PER_PAGE = 5;
+        let pendingAllItems = [];
+        let pendingCurrentPage = 1;
+
+        async function loadPendingCount() {
+            try {
+                const r = await fetch('/api/operators/pending', { headers: getAuthHeaders() });
+                if (!r.ok) return;
+                const data = await r.json();
+                const badge = document.getElementById('pendingTabCount');
+                if (badge) badge.textContent = data.total || 0;
+            } catch(e) { /* silencioso */ }
+        }
+
+        async function loadPendingOperators() {
+            const container = document.getElementById('operatorsTable');
+            container.innerHTML = '<div class="p-8 text-center text-gray-400 loading">Cargando pendientes...</div>';
+            document.getElementById('pagination').innerHTML = '';
+            document.getElementById('totalCount').textContent = '';
+            try {
+                const r = await fetch('/api/operators/pending', { headers: getAuthHeaders() });
+                if (r.status===401||r.status===403) { localStorage.clear(); window.location.href='/admin/login'; return; }
+                const data = await r.json();
+                pendingAllItems = data.items || [];
+                const badge = document.getElementById('pendingTabCount');
+                if (badge) badge.textContent = data.total || 0;
+                pendingCurrentPage = 1;
+                renderPendingPage();
+            } catch(e) {
+                container.innerHTML = '<div class="p-8 text-center text-red-400">Error cargando pendientes</div>';
+            }
+        }
+
+        function renderPendingPage() {
+            const container = document.getElementById('operatorsTable');
+            if (!pendingAllItems.length) {
+                container.innerHTML = '<div class="p-8 text-center text-gray-400">No hay solicitudes pendientes 🎉</div>';
+                return;
+            }
+            const totalPages = Math.ceil(pendingAllItems.length / PENDING_PER_PAGE);
+            const start = (pendingCurrentPage - 1) * PENDING_PER_PAGE;
+            const pageItems = pendingAllItems.slice(start, start + PENDING_PER_PAGE);
+
+            let html = '<div class="divide-y divide-gray-100">';
+            pageItems.forEach(p => {
+                const avatar = p.photo_thumbnail_path
+                    ? '<img src="'+p.photo_thumbnail_path+'" class="w-12 h-12 rounded-full object-cover border-2 border-gray-200">'
+                    : '<div class="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center text-primary-700 font-bold">'+(p.full_name||'?').charAt(0)+'</div>';
+                const docLinks = [];
+                if (p.rut_path) docLinks.push('<a href="'+p.rut_path+'" target="_blank" class="text-xs text-blue-600 hover:underline font-medium">📄 RUT</a>');
+                if (p.id_document_front_path) docLinks.push('<a href="'+p.id_document_front_path+'" target="_blank" class="text-xs text-blue-600 hover:underline font-medium">🪪 Cédula (frente)</a>');
+                if (p.id_document_back_path) docLinks.push('<a href="'+p.id_document_back_path+'" target="_blank" class="text-xs text-blue-600 hover:underline font-medium">🪪 Cédula (dorso)</a>');
+                if (p.photo_thumbnail_path) docLinks.push('<a href="'+p.photo_thumbnail_path+'" target="_blank" class="text-xs text-blue-600 hover:underline font-medium">📷 Foto</a>');
+                const docsHtml = docLinks.length ? '<div class="flex gap-3 mt-1 flex-wrap">'+docLinks.join('')+'</div>' : '<div class="text-xs text-gray-400 mt-1">Sin documentos adjuntos</div>';
+                const created = p.created_at ? new Date(p.created_at.replace(' ', 'T')).toLocaleDateString('es-CO') : '-';
+
+                html += '<div class="flex items-start gap-4 px-4 sm:px-6 py-4">';
+                html += avatar;
+                html += '<div class="flex-1 min-w-0">';
+                html += '<div class="text-sm font-semibold text-gray-900">'+(p.full_name||'-')+'</div>';
+                html += '<div class="text-xs text-gray-500">'+(p.document_type||'')+' '+(p.document_number||'-')+' · '+(p.email||'-')+' · '+(p.phone||'-')+'</div>';
+                html += docsHtml;
+                html += '<div class="text-xs text-gray-400 mt-1">Solicitado: '+created+'</div>';
+                html += '</div>';
+                html += '<div class="flex flex-col sm:flex-row gap-2 flex-shrink-0">';
+                html += '<button onclick="approveOperator(\''+p.user_id+'\')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded text-xs font-medium transition">✅ Aprobar</button>';
+                html += '<button onclick="rejectOperator(\''+p.user_id+'\')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium transition">❌ Rechazar</button>';
+                html += '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            // Paginación client-side
+            if (totalPages > 1) {
+                html += '<div class="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">';
+                html += '<button onclick="changePendingPage(-1)" '+(pendingCurrentPage<=1?'disabled':'')+' class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-gray-600">← Anterior</button>';
+                html += '<span class="text-xs text-gray-500 font-medium">Página '+pendingCurrentPage+' de '+totalPages+' ('+pendingAllItems.length+' solicitudes)</span>';
+                html += '<button onclick="changePendingPage(1)" '+(pendingCurrentPage>=totalPages?'disabled':'')+' class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-gray-600">Siguiente →</button>';
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        function changePendingPage(delta) {
+            const totalPages = Math.ceil(pendingAllItems.length / PENDING_PER_PAGE) || 1;
+            pendingCurrentPage = Math.min(Math.max(1, pendingCurrentPage + delta), totalPages);
+            renderPendingPage();
+        }
+
+        async function approveOperator(userId) {
+            if (!confirm('¿Aprobar este operador? Podrá iniciar sesión inmediatamente.')) return;
+            try {
+                const r = await fetch('/api/operators/'+userId+'/approve', { method: 'POST', headers: getAuthHeaders() });
+                if (r.status===401||r.status===403) { localStorage.clear(); window.location.href='/admin/login'; return; }
+                if (r.ok) { showToast('Operador aprobado', 'success'); loadPendingOperators(); }
+                else { const e = await r.json(); showToast(e.detail||'Error', 'error'); }
+            } catch(e) { showToast('Error de conexión', 'error'); }
+        }
+
+        async function rejectOperator(userId) {
+            const reason = prompt('Motivo del rechazo (opcional):', 'No cumple requisitos');
+            if (reason === null) return;
+            try {
+                const r = await fetch('/api/operators/'+userId+'/reject', {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+                if (r.status===401||r.status===403) { localStorage.clear(); window.location.href='/admin/login'; return; }
+                if (r.ok) { showToast('Operador rechazado', 'success'); loadPendingOperators(); }
+                else { const e = await r.json(); showToast(e.detail||'Error', 'error'); }
+            } catch(e) { showToast('Error de conexión', 'error'); }
+        }
+
         loadOperators();
+        loadPendingCount();
     </script>
 </body>
 </html>

@@ -361,6 +361,12 @@
                 ${o.rut_path?`
                     <a href="${o.rut_path}" target="_blank" download class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center">📄 Descargar RUT</a>
                 `:`<span class="text-xs text-gray-400 self-center">Sin RUT</span>`}
+                ${o.id_document_front_path?`
+                    <button onclick="openPhotoViewer('${o.id_document_front_path}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium">🪪 Ver Cédula (Frente)</button>
+                `:`<span class="text-xs text-gray-400 self-center">Sin cédula (frente)</span>`}
+                ${o.id_document_back_path?`
+                    <button onclick="openPhotoViewer('${o.id_document_back_path}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium">🪪 Ver Cédula (Dorso)</button>
+                `:`<span class="text-xs text-gray-400 self-center">Sin cédula (dorso)</span>`}
                 ${isPending?`
                     <button onclick="approveOp()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">✅ Aprobar Operador</button>
                     <button onclick="rejectOp()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">❌ Rechazar Operador</button>

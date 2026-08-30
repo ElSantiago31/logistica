@@ -25,6 +25,15 @@ class Operator(BaseModel):
         String(500), nullable=True,
         comment="Ruta del PDF del RUT comprimido (/static/rut/...)",
     )
+    # Fotos de la cédula (frente y dorso) — obligatorias en registro, WebP comprimido
+    id_document_front_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True,
+        comment="Ruta de la foto del documento de identidad, frente (/static/id_docs/...)",
+    )
+    id_document_back_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True,
+        comment="Ruta de la foto del documento de identidad, dorso (/static/id_docs/...)",
+    )
     birth_date: Mapped[str | None] = mapped_column(Date, nullable=True)
     gender: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="Género: Femenino, Masculino")
     address: Mapped[str | None] = mapped_column(String(300), nullable=True)

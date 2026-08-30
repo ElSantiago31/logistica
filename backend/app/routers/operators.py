@@ -16,7 +16,7 @@ from app.services.operators import (
     upload_operator_photo, block_operator, unblock_operator, search_blocked_documents
 )
 from app.services.photos import save_operator_photo_bytes, delete_operator_photos
-from app.services.documents import delete_rut_pdf
+from app.services.documents import delete_rut_pdf, delete_id_document_photos
 from app.models.audit import AuditLog
 from app.dependencies.auth import get_current_active_user, require_superadmin_or_admin, require_superadmin
 
@@ -206,17 +206,17 @@ async def update_my_profile(
     return {"message": "Perfil actualizado correctamente"}
 
 
-# --- Pending approvals (superadmin only) ---
+# --- Pending approvals (superadmin/admin) ---
 
 @router.get("/pending")
 async def list_pending_approvals(
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Lista operadores pendientes de aprobación (is_approved=False).
 
     Devuelve datos básicos + rutas de foto (thumbnail) y RUT para que el
-    superadmin pueda revisar la solicitud antes de aprobar/rechazar.
+    superadmin o admin pueda revisar la solicitud antes de aprobar/rechazar.
     """
     result = await db.execute(
         select(Operator, User)
@@ -241,6 +241,8 @@ async def list_pending_approvals(
                 "phone": u.phone,
                 "photo_thumbnail_path": op.photo_thumbnail_path,
                 "rut_path": op.rut_path,
+                "id_document_front_path": op.id_document_front_path,
+                "id_document_back_path": op.id_document_back_path,
                 "created_at": str(u.created_at) if u.created_at else None,
             }
             for op, u in rows
@@ -252,7 +254,7 @@ async def list_pending_approvals(
 @router.post("/{user_id}/approve")
 async def approve_operator(
     user_id: uuid.UUID,
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Aprueba un operador pendiente (is_approved=False → True)."""
@@ -284,7 +286,7 @@ async def approve_operator(
 async def reject_operator(
     user_id: uuid.UUID,
     request: dict = None,
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Rechaza un operador pendiente — desactiva la cuenta + limpia archivos + auditoría.
@@ -300,7 +302,7 @@ async def reject_operator(
     if user.is_approved:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El operador ya está aprobado")
 
-    reason = (request or {}).get("reason", "Rechazado por superadmin")
+    reason = (request or {}).get("reason", "Rechazado por administrador")
 
     # Obtener perfil para limpiar archivos
     op_result = await db.execute(select(Operator).where(Operator.user_id == user_id))
@@ -308,9 +310,12 @@ async def reject_operator(
     if operator:
         delete_operator_photos(operator.photo_path, operator.photo_thumbnail_path)
         delete_rut_pdf(operator.rut_path)
+        delete_id_document_photos(operator.id_document_front_path, operator.id_document_back_path)
         operator.photo_path = None
         operator.photo_thumbnail_path = None
         operator.rut_path = None
+        operator.id_document_front_path = None
+        operator.id_document_back_path = None
 
     # Soft delete
     user.is_active = False
