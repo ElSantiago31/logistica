@@ -28,7 +28,8 @@ from app.services.auth import (
     decode_token, revoke_token,
 )
 from app.services.photos import save_operator_photo
-from app.services.documents import save_rut_pdf
+from app.services.documents import save_rut_pdf, save_id_document_photo
+from app.services.referrals import register_referral, ReferralError
 from app.dependencies.auth import (
     get_current_user,
     get_current_active_user,
@@ -135,6 +136,18 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
             detail="El número de documento ya está registrado",
         )
 
+    # Referral code (opcional): validar ANTES de crear nada (fail-fast).
+    referral_code_obj = None
+    if body.referral_code:
+        from app.services.referrals import validate_code
+        try:
+            referral_code_obj = await validate_code(db, body.referral_code)
+        except ReferralError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.message,
+            )
+
     # Check if document number is blocked
     blocked = await db.execute(
         select(BlockedDocument).where(
@@ -165,14 +178,9 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
     db.add(user)
     await db.flush()
 
-    # Process and save the mandatory photo (validates + normalizes)
-    photo_name, thumb_name = save_operator_photo(body.photo_data, user.id)
-
-    # Process and save the mandatory RUT PDF (validates + compresses)
-    rut_path = save_rut_pdf(body.rut_data, user.id)
-
     # Security: filtrar roles event-only de experience_roles (aunque el frontend
     # no los muestre, un usuario malicioso podría enviarlos por API).
+    # Se valida ANTES de guardar archivos para no dejar huérfanos en disco.
     filtered_role_ids = []
     if body.experience_roles:
         role_ids = [str(r) for r in body.experience_roles]
@@ -189,6 +197,16 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Uno o más roles seleccionados no son válidos para registro",
             )
+
+    # Process and save the mandatory photo (validates + normalizes)
+    photo_name, thumb_name = save_operator_photo(body.photo_data, user.id)
+
+    # Process and save the mandatory RUT PDF (validates + compresses)
+    rut_path = save_rut_pdf(body.rut_data, user.id)
+
+    # Cédula: fotos obligatorias frente y dorso (valida + comprime a WebP)
+    id_doc_front_path = save_id_document_photo(body.id_document_front_data, user.id, "front")
+    id_doc_back_path = save_id_document_photo(body.id_document_back_data, user.id, "back")
 
     # Create operator profile
     operator = Operator(
@@ -213,17 +231,40 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         photo_path=photo_name,
         photo_thumbnail_path=thumb_name,
         rut_path=rut_path,
+        id_document_front_path=id_doc_front_path,
+        id_document_back_path=id_doc_back_path,
     )
     db.add(operator)
+    # Materializa operator.id (default Python) ANTES de usarlo en el referido;
+    # sin este flush, referred_operator_id llegaría None y el INSERT fallaría.
+    await db.flush()
 
     # Audit log
     audit = AuditLog(
         action="register",
-        resource_type="user",
+          resource_type="user",
         resource_id=user.id,
         details=f"Operador registrado: {body.email}",
     )
     db.add(audit)
+
+    # Referido (opcional): crear relación referido→referente en la MISMA
+    # transacción (commit=False). Si falla, no queda nada a medias.
+    if referral_code_obj is not None:
+        try:
+            await register_referral(
+                db,
+                code=body.referral_code,
+                referred_operator_id=operator.id,
+                user_id=user.id,
+                commit=False,
+            )
+        except ReferralError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.message,
+            )
+
     await db.commit()
 
     return RegisterResponse(

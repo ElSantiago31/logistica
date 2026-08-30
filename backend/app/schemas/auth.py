@@ -41,6 +41,10 @@ class RegisterRequest(BaseModel):
     phone: str = Field(..., min_length=7, max_length=20)
     document_type: str = Field(default="CC", max_length=10)
     document_number: str = Field(..., min_length=5, max_length=20)
+    referral_code: Optional[str] = Field(
+        default=None, max_length=30,
+        description="Código de referido opcional, ej: AC-SANTIAGO-8F3K",
+    )
 
 
 class RegisterResponse(BaseModel):
@@ -84,6 +88,9 @@ class OperatorRegisterRequest(BaseModel):
     photo_data: str = Field(..., min_length=100, description="Foto del operador en base64 (data URL)")
     # RUT obligatorio — Data URL (data:application/pdf;base64,...) o base64 puro
     rut_data: str = Field(..., min_length=100, description="PDF del RUT en base64 (data URL)")
+    # Cédula obligatoria — fotos frente y dorso (data URL de imagen)
+    id_document_front_data: str = Field(..., min_length=100, description="Foto de la cédula (frente) en base64 (data URL)")
+    id_document_back_data: str = Field(..., min_length=100, description="Foto de la cédula (dorso) en base64 (data URL)")
     eps_id: Optional[uuid.UUID] = None
     pension_fund_id: Optional[uuid.UUID] = None
     birth_date: Optional[date] = None
@@ -101,3 +108,7 @@ class OperatorRegisterRequest(BaseModel):
     shirt_size: Optional[str] = None
     jacket_size: Optional[str] = None
     experience_roles: Optional[list[str]] = None  # list of role IDs
+    referral_code: Optional[str] = Field(
+        default=None, max_length=30,
+        description="Codigo de referido opcional, ej: AC-SANTIAGO-8F3K",
+    )

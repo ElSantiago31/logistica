@@ -77,6 +77,7 @@
                     <a href="/admin" data-nav="dashboard" data-role="admin" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Dashboard</a>
                     <a href="/admin/operators" data-nav="operators" data-role="admin" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Operadores</a>
                     <a href="/admin/events" data-nav="events" data-role="admin" class="desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Eventos</a>
+                    <a id="referralsLink" href="/admin/referrals" data-nav="referrals" class="hidden desktop-nav px-2 py-1 rounded text-xs sm:text-sm font-medium hover:opacity-80" style="color:#f8d9b6;">Referidos</a>
                 </div>
             </div>
             <div class="flex items-center space-x-2 sm:space-x-4">
@@ -100,6 +101,7 @@
             <a href="/admin" data-nav="dashboard" data-role="admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📊 Dashboard</a>
             <a href="/admin/operators" data-nav="operators" data-role="admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">👥 Operadores</a>
             <a href="/admin/events" data-nav="events" data-role="admin" class="block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">📅 Eventos</a>
+            <a id="referralsLinkM" href="/admin/referrals" data-nav="referrals" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">🤝 Referidos</a>
             <a id="superadminLinkM" href="/admin/superadmin" data-nav="superadmin" class="hidden block px-3 py-2 rounded-lg text-sm hover:bg-white/10" style="color:#f8d9b6;">⚙️ Superadmin</a>
         </div>
     </div>
@@ -111,10 +113,12 @@
     if(u.user_type==='superadmin'){
         var s=document.getElementById('superadminLink');if(s)s.classList.remove('hidden');
         var sm=document.getElementById('superadminLinkM');if(sm)sm.classList.remove('hidden');
+        var rl=document.getElementById('referralsLink');if(rl)rl.classList.remove('hidden');
+        var rlm=document.getElementById('referralsLinkM');if(rlm)rlm.classList.remove('hidden');
     }
     // Highlight active mobile menu item based on current URL
     var path=window.location.pathname;
-    var map={'/admin':'dashboard','/admin/':'dashboard','/admin/operators':'operators','/admin/events':'events','/admin/superadmin':'superadmin'};
+    var map={'/admin':'dashboard','/admin/':'dashboard','/admin/operators':'operators','/admin/events':'events','/admin/superadmin':'superadmin','/admin/referrals':'referrals'};
     var active=map[path];
     if(!active){
         if(path.indexOf('/admin/operator')===0)active='operators';

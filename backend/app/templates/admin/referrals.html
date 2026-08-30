@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Referidos - Logística Admin</title>
+    <link rel="stylesheet" href="/static/frontend/tailwind.css?v=20260718">
+    <style>
+        .toast { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Navbar -->
+    {% set active_page = 'referrals' %}
+    {% include 'admin/_admin_nav.html' %}
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Referidos</h1>
+                <p class="text-sm text-gray-500">Genera códigos de referido y monitorea las métricas por referente.</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="openCreateModal()" class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90" style="background:#cf9b62;color:#1a1a1a;">
+                    ➕ Generar código
+                </button>
+                <button onclick="exportExcel()" id="export-btn" class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90" style="background:#785631;color:#fff2e4;">
+                    📥 Exportar Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats globales -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4 border-l-4" style="border-color:#cf9b62;">
+                <p class="text-xs text-gray-500 uppercase">Códigos</p>
+                <p id="stat-codes" class="text-2xl font-bold text-gray-800">—</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 border-l-4" style="border-color:#4ade80;">
+                <p class="text-xs text-gray-500 uppercase">Activos</p>
+                <p id="stat-active" class="text-2xl font-bold text-gray-800">—</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 border-l-4" style="border-color:#60a5fa;">
+                <p class="text-xs text-gray-500 uppercase">Referidos totales</p>
+                <p id="stat-referrals" class="text-2xl font-bold text-gray-800">—</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 border-l-4" style="border-color:#f472b6;">
+                <p class="text-xs text-gray-500 uppercase">Trabajaron</p>
+                <p id="stat-worked" class="text-2xl font-bold text-gray-800">—</p>
+            </div>
+        </div>
+
+        <!-- Tabla de códigos -->
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="font-semibold text-gray-700">Códigos de referido</h2>
+                <input type="text" id="search" placeholder="Buscar por código o nombre..." oninput="renderTable()"
+                    class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-48 sm:w-64">
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-600">
+                        <tr>
+                            <th class="px-4 py-3 text-left">Código</th>
+                            <th class="px-4 py-3 text-left">Referente</th>
+                            <th class="px-4 py-3 text-center">Estado</th>
+                            <th class="px-4 py-3 text-center">Referidos</th>
+                            <th class="px-4 py-3 text-center">Activos</th>
+                            <th class="px-4 py-3 text-center">Trabajaron</th>
+                            <th class="px-4 py-3 text-center">Cupos derivados</th>
+                            <th class="px-4 py-3 text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="codes-tbody" class="divide-y divide-gray-100">
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400 loading">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: generar código -->
+    <div id="create-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">Generar código de referido</h3>
+            <p class="text-sm text-gray-500 mb-4">Busca un operador activo para generar su código único (AC-NOMBRE-XXXX).</p>
+            <input type="text" id="operator-search" placeholder="Buscar operador por nombre o documento..."
+                oninput="searchOperators()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2"
+                style="text-transform:none">
+            <div id="operator-results" class="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 mb-4 hidden"></div>
+            <div id="selected-operator" class="hidden mb-4 p-3 rounded-lg text-sm" style="background:rgba(207,155,98,0.1);color:#785631;"></div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeCreateModal()" class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancelar</button>
+                <button id="create-btn" onclick="createCode()" disabled class="px-4 py-2 rounded-lg text-sm font-semibold opacity-50" style="background:#cf9b62;color:#1a1a1a;">Generar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: detalle referente -->
+    <div id="detail-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 id="detail-title" class="text-lg font-bold text-gray-800">Referente</h3>
+                    <p id="detail-code" class="text-sm font-mono" style="color:#cf9b62;"></p>
+                </div>
+                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div id="detail-metrics" class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4"></div>
+            <h4 class="font-semibold text-gray-700 mb-2 text-sm">Referidos</h4>
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-600">
+                        <tr><th class="px-3 py-2 text-left">Nombre</th><th class="px-3 py-2 text-left">Documento</th><th class="px-3 py-2 text-center">Activo</th><th class="px-3 py-2 text-left">Registrado</th></tr>
+                    </thead>
+                    <tbody id="detail-tbody" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+const API = '/api/referrals';
+let codes = [];
+let selectedOperatorId = null;
+let searchTimer = null;
+
+// --- Auth guard (solo superadmin) ---
+(function guard(){
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!localStorage.getItem('access_token') || u.user_type !== 'superadmin') {
+        location.href = '/admin/login';
+    }
+})();
+
+function toast(msg, type='error'){
+    const c = document.getElementById('toast-container');
+    const colors = { error:'#ef4444', success:'#10b981', info:'#3b82f6' };
+    const d = document.createElement('div');
+    d.className = 'toast px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-xs';
+    d.style.background = colors[type] || colors.error;
+    d.textContent = msg;
+    c.appendChild(d);
+    setTimeout(() => d.remove(), 4000);
+}
+
+async function loadStats(){
+    try {
+        const r = await fetch(API + '/stats', { headers: authHeaders() });
+        if (r.status === 401 || r.status === 403) { location.href = '/admin/login'; return; }
+        const s = await r.json();
+        document.getElementById('stat-codes').textContent = s.total_codes;
+        document.getElementById('stat-active').textContent = s.active_codes;
+        document.getElementById('stat-referrals').textContent = s.total_referrals;
+        document.getElementById('stat-worked').textContent = s.total_worked;
+    } catch(e) { console.error(e); }
+}
+
+async function loadCodes(){
+    try {
+        const r = await fetch(API + '/codes', { headers: authHeaders() });
+        if (r.status === 401 || r.status === 403) { location.href = '/admin/login'; return; }
+        codes = await r.json();
+        renderTable();
+    } catch(e) {
+        document.getElementById('codes-tbody').innerHTML =
+            '<tr><td colspan="8" class="px-4 py-8 text-center text-red-400">Error cargando códigos</td></tr>';
+    }
+}
+
+function renderTable(){
+    const q = (document.getElementById('search').value || '').toLowerCase();
+    const filtered = codes.filter(c =>
+        c.code.toLowerCase().includes(q) ||
+        (c.operator_name || '').toLowerCase().includes(q)
+    );
+    const tb = document.getElementById('codes-tbody');
+    if (!filtered.length) {
+        tb.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Sin códigos aún. Genera el primero con «Generar código».</td></tr>';
+        return;
+    }
+    tb.innerHTML = filtered.map(c => `
+        <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 font-mono font-semibold" style="color:#cf9b62;">${c.code}</td>
+            <td class="px-4 py-3">
+                <a href="/admin/operator/${c.operator_user_id || c.operator_id}" class="hover:underline text-gray-800">${c.operator_name}</a>
+                <div class="text-xs text-gray-400">${c.operator_document || ''}</div>
+            </td>
+            <td class="px-4 py-3 text-center">
+                <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${c.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                    ${c.is_active ? 'Activo' : 'Inactivo'}
+                </span>
+            </td>
+            <td class="px-4 py-3 text-center">${c.total_referrals}</td>
+            <td class="px-4 py-3 text-center">${c.active_referrals}</td>
+            <td class="px-4 py-3 text-center">${c.worked_referrals}</td>
+            <td class="px-4 py-3 text-center font-semibold" style="color:#cf9b62;">${c.derived_quota}</td>
+            <td class="px-4 py-3 text-center whitespace-nowrap">
+                <button onclick="showDetail('${c.operator_id}')" class="px-2 py-1 rounded text-xs font-semibold hover:opacity-80" style="background:rgba(207,155,98,0.15);color:#785631;">Ver</button>
+                <button onclick="copyCode('${c.code}')" class="px-2 py-1 rounded text-xs font-semibold hover:opacity-80" style="background:rgba(59,130,246,0.12);color:#2563eb;">Copiar</button>
+                <button onclick="toggleCode('${c.id}', ${!c.is_active})" class="px-2 py-1 rounded text-xs font-semibold hover:opacity-80" style="background:${c.is_active ? 'rgba(239,68,68,0.12);color:#dc2626' : 'rgba(16,185,129,0.12);color:#059669'};">
+                    ${c.is_active ? 'Deshabilitar' : 'Habilitar'}
+                </button>
+            </td>
+        </tr>`).join('');
+}
+
+function authHeaders(){
+    const t = localStorage.getItem('access_token');
+    return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+function copyCode(code){
+    navigator.clipboard.writeText(code)
+        .then(() => toast('Código copiado: ' + code, 'success'))
+        .catch(() => toast('No se pudo copiar', 'error'));
+}
+
+async function toggleCode(codeId, active){
+    try {
+        const r = await fetch(API + '/codes/' + codeId, {
+            method: 'PATCH',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: active }),
+        });
+        const d = await r.json();
+        if (!r.ok) { toast(d.detail || 'Error', 'error'); return; }
+        toast(active ? 'Código habilitado' : 'Código deshabilitado', 'success');
+        await loadCodes();
+        await loadStats();
+    } catch(e) { toast('Error de conexión', 'error'); }
+}
+
+// --- Crear código ---
+function openCreateModal(){
+    selectedOperatorId = null;
+    document.getElementById('selected-operator').classList.add('hidden');
+    document.getElementById('create-btn').disabled = true;
+    document.getElementById('create-btn').classList.add('opacity-50');
+    document.getElementById('operator-results').classList.add('hidden');
+    document.getElementById('operator-search').value = '';
+    const m = document.getElementById('create-modal');
+    m.classList.remove('hidden'); m.classList.add('flex');
+}
+function closeCreateModal(){
+    const m = document.getElementById('create-modal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+}
+
+async function searchOperators(){
+    clearTimeout(searchTimer);
+    const q = document.getElementById('operator-search').value.trim();
+    if (q.length < 2) { document.getElementById('operator-results').classList.add('hidden'); return; }
+    searchTimer = setTimeout(async () => {
+        try {
+            const r = await fetch('/api/operators?search=' + encodeURIComponent(q) + '&limit=8&is_approved=true', { headers: authHeaders() });
+            if (!r.ok) return;
+            const d = await r.json();
+            const list = d.items || d || [];
+            const box = document.getElementById('operator-results');
+            if (!list.length) { box.innerHTML = '<div class="p-3 text-sm text-gray-400">Sin resultados</div>'; box.classList.remove('hidden'); return; }
+            box.innerHTML = list.map(o => {
+                const label = ((o.first_name || '') + ' ' + (o.last_name || '')).trim() || o.email || '\u2014';
+                const safe = (label + ' (' + (o.document_number || '') + ')').replace(/'/g, "\\'");
+                return `
+                <div onclick="selectOperator('${o.id}', '${safe}')"
+                    class="p-3 hover:bg-gray-50 cursor-pointer text-sm">
+                    ${label} <span class="text-gray-400">\u00b7 ${o.document_number || ''}</span>
+                </div>`;
+            }).join('');
+            box.classList.remove('hidden');
+        } catch(e) { console.error(e); }
+    }, 300);
+}
+
+function selectOperator(id, label){
+    selectedOperatorId = id;
+    const el = document.getElementById('selected-operator');
+    el.textContent = '✅ ' + label;
+    el.classList.remove('hidden');
+    document.getElementById('operator-results').classList.add('hidden');
+    document.getElementById('create-btn').disabled = false;
+    document.getElementById('create-btn').classList.remove('opacity-50');
+}
+
+async function createCode(){
+    if (!selectedOperatorId) return;
+    const btn = document.getElementById('create-btn');
+    btn.disabled = true; btn.textContent = 'Generando...';
+    try {
+        const r = await fetch(API + '/codes', {
+            method: 'POST',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operator_id: selectedOperatorId }),
+        });
+        const d = await r.json();
+        if (!r.ok) { toast(d.detail || 'Error', 'error'); return; }
+        toast('Código generado: ' + d.code, 'success');
+        closeCreateModal();
+        await loadCodes();
+        await loadStats();
+    } catch(e) { toast('Error de conexión', 'error'); }
+    finally { btn.disabled = false; btn.textContent = 'Generar'; }
+}
+
+// --- Detalle referente ---
+async function showDetail(operatorId){
+    try {
+        const r = await fetch(API + '/' + operatorId, { headers: authHeaders() });
+        if (!r.ok) { toast('Error cargando detalle', 'error'); return; }
+        const d = await r.json();
+        document.getElementById('detail-title').textContent = d.operator_name;
+        document.getElementById('detail-code').textContent = d.code ? d.code.code + (d.code.is_active ? '' : ' (inactivo)') : 'Sin código';
+        const m = d.metrics;
+        document.getElementById('detail-metrics').innerHTML = [
+            ['Total', m.total_referrals], ['Activos', m.active_referrals],
+            ['Asignados', m.assigned_referrals], ['Trabajaron', m.worked_referrals],
+            ['Cupos', m.derived_quota],
+        ].map(([l, v]) => `
+            <div class="bg-gray-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500">${l}</p>
+                <p class="text-xl font-bold text-gray-800">${v}</p>
+            </div>`).join('');
+        const tb = document.getElementById('detail-tbody');
+        tb.innerHTML = d.referrals.length ? d.referrals.map(ref => `
+            <tr>
+                <td class="px-3 py-2">${ref.name}</td>
+                <td class="px-3 py-2 text-gray-500">${ref.document || ''}</td>
+                <td class="px-3 py-2 text-center">${ref.is_active ? '✅' : '❌'}</td>
+                <td class="px-3 py-2 text-gray-500 text-xs">${(ref.registered_at || '').slice(0, 10)}</td>
+            </tr>`).join('') : '<tr><td colspan="4" class="px-3 py-4 text-center text-gray-400">Sin referidos aún</td></tr>';
+        const modal = document.getElementById('detail-modal');
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+    } catch(e) { toast('Error de conexión', 'error'); }
+}
+function closeDetailModal(){
+    const m = document.getElementById('detail-modal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+}
+
+// --- Export Excel (con Authorization header) ---
+async function exportExcel(){
+    const btn = document.getElementById('export-btn');
+    btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Generando...';
+    try {
+        const r = await fetch(API + '/export', { headers: authHeaders() });
+        if (!r.ok) {
+            let msg = 'Error exportando';
+            try { const d = await r.json(); msg = d.detail || msg; } catch(e) {}
+            toast(msg, 'error'); return;
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'referidos.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast('Excel descargado', 'success');
+    } catch(e) { toast('Error de conexion', 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+// --- Init ---
+loadStats();
+loadCodes();
+</script>
+</body>
+</html>

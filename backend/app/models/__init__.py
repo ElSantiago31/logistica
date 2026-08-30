@@ -27,6 +27,9 @@ from app.models.payroll import Evaluation, PayrollRecord
 # Incidents / Bans
 from app.models.incidents import OperatorIncident, OperatorBan
 
+# Referrals
+from app.models.referrals import ReferralCode, Referral, ReferralAuditLog
+
 # Security / Audit
 from app.models.audit import AuditLog, RevokedToken
 from app.models.blocked_document import BlockedDocument
@@ -47,6 +50,7 @@ __all__ = [
     "SyncSession", "AttendanceLog",
     "Evaluation", "PayrollRecord",
     "OperatorIncident", "OperatorBan",
+    "ReferralCode", "Referral", "ReferralAuditLog",
     "AuditLog", "RevokedToken",
     "BlockedDocument",
     "PasswordResetToken",
