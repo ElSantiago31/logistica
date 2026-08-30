@@ -15,7 +15,7 @@ def test_settings_defaults():
     s = Settings(_env_file=None)  # Skip .env to test defaults
     assert "Logistica" in s.APP_NAME
     assert s.APP_VERSION == "1.0.0"
-    assert s.JWT_ACCESS_TOKEN_EXPIRE_MINUTES == 15
+    assert s.JWT_ACCESS_TOKEN_EXPIRE_MINUTES == 30
     assert s.JWT_REFRESH_TOKEN_EXPIRE_DAYS == 7
     assert s.PHOTO_MAX_SIZE_MB == 5
 

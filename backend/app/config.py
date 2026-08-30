@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     RUT_COMPRESS_DPI: int = 150
     RUT_COMPRESS_QUALITY: int = 75
 
+    # Cédula (documento de identidad) — fotos frente/dorso obligatorias en el registro
+    ID_DOC_DIR: str = "./data/id_docs"
+    ID_DOC_MAX_SIZE_MB: int = 5
+    # Compresión: WebP color (mantiene tintas de la cédula) — mínimo espacio en disco
+    ID_DOC_MAX_DIM: int = 1400
+    ID_DOC_WEBP_QUALITY: int = 70
+
     # pgAdmin — password vacío por defecto (fail-safe)
     PGADMIN_EMAIL: str = "admin@logistica.com"
     PGADMIN_PASSWORD: str = ""
@@ -84,6 +91,16 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "no-reply@ayceventos.com.co"
     SMTP_USE_TLS: bool = True
     PQRSF_REPLY_TO: str = "info@ayceventos.com.co"
+
+    # SEO — dominio canónico (sin www; nginx redirige www → no-www con 301)
+    # y GA4 opcional. GA_MEASUREMENT_ID vacío = NO se emite el script gtag.js.
+    SITE_URL: str = "https://ayceventos.com.co"
+    GA_MEASUREMENT_ID: str = ""
+
+    # Optimizacion automatica de imagenes de contenido (subidas via panel):
+    # se re-codifican a WebP con la calidad/dimension indicadas al subirlas.
+    CONTENT_IMAGE_MAX_DIM: int = 1920
+    CONTENT_IMAGE_WEBP_QUALITY: int = 82
 
     @model_validator(mode="after")
     def _derive_js_suffix(self):

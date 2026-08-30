@@ -4,7 +4,7 @@
 # ============================================================
 # Genera:
 #   1. Dump de PostgreSQL (base de datos completa)
-#   2. Tarball de los volumes de Docker (fotos, contenido, RUTs)
+#   2. Tarball de los volumes de Docker (fotos, contenido, RUTs, cédulas)
 #
 # Retención: KEEP_DAYS (por defecto 7 días)
 # Uso manual:  bash scripts/backup.sh
@@ -26,6 +26,7 @@ VOLUMES=(
   "logistica_photo_data"
   "logistica_content_data"
   "logistica_rut_data"
+  "logistica_id_doc_data"
 )
 
 # Credenciales DB (se leen del entorno del contenedor)

@@ -19,8 +19,12 @@ COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --include=dev --no-audit --no-fund
 
 # Copiar build script y código fuente JS
-COPY frontend/build.js ./
+COPY frontend/build.js frontend/webp.js ./
 COPY frontend/js ./js
+
+# Copiar assets públicos (imágenes) para la fase WebP de build.js:
+# genera public/**/*.webp hermanos que luego se copian al runtime.
+COPY frontend/public ./public
 
 # Copiar config de Tailwind y CSS de entrada
 COPY frontend/tailwind.config.js frontend/tailwind.input.css ./
@@ -79,8 +83,9 @@ COPY --from=js-builder /build/public/tailwind.css /app/frontend/public/tailwind.
 # Estos archivos viven en frontend/public/ (raíz del repo) y deben copiarse
 # al espejo que usa el backend dentro del contenedor.
 COPY frontend/public/ /app/frontend/public/
-# Sobreescribir tailwind.css con la versión compilada del Stage 1 (siempre fresca).
-COPY --from=js-builder /build/public/tailwind.css /app/frontend/public/tailwind.css
+# Sobreescribir con los artefactos del Stage 1: .webp generados + tailwind.css
+# compilado (siempre frescos del build).
+COPY --from=js-builder /build/public/ /app/frontend/public/
 
 # Entrypoint permissions
 RUN chmod +x /app/entrypoint.sh

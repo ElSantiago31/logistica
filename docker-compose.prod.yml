@@ -41,6 +41,8 @@ services:
       - content_data:/app/data/static
       # PDFs de RUT de operadores (registro de proveedores).
       - rut_data:/app/data/rut
+      # Cédulas de operadores: fotos frente/dorso (WebP, revisión admin).
+      - id_doc_data:/app/data/id_docs
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,9 +67,11 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
       - photo_data:/app/data/photos:ro
-      # Servir imágenes de contenido de la home y PDFs de RUT directamente desde nginx.
+      # Servir imágenes de contenido de la home, PDFs de RUT y cédulas (WebP)
+      # de operadores directamente desde nginx.
       - content_data:/app/data/static:ro
       - rut_data:/app/data/rut:ro
+      - id_doc_data:/app/data/id_docs:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -106,6 +110,7 @@ volumes:
   photo_data:
   content_data:
   rut_data:
+  id_doc_data:
 
 networks:
   internal:

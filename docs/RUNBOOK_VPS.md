@@ -88,7 +88,7 @@ Presionar `Ctrl+C` para salir.
 ## 💾 BACKUP AUTOMÁTICO
 
 El sistema genera backups **diarios automáticos** (3:00 AM) con retención de 7 días.
-Cada backup incluye: **BD completa (PostgreSQL) + fotos + imágenes de contenido + PDFs de RUT**.
+Cada backup incluye: **BD completa (PostgreSQL) + fotos + imágenes de contenido + PDFs de RUT + cédulas**.
 
 ### 🚀 Instalación inicial (una sola vez, en la VPS)
 
@@ -157,7 +157,7 @@ crontab -l | grep -v 'logistica-auto-backup' | crontab -
 
 ## 📁 PERSISTENCIA DE ARCHIVOS (Volumes)
 
-El sistema guarda archivos subidos por usuarios en 3 Docker volumes persistentes.
+El sistema guarda archivos subidos por usuarios en 4 Docker volumes persistentes.
 **Sin estos volumes, cada deploy pierde los archivos subidos desde el panel admin.**
 
 | Volume | Path en contenedor | Contenido |
@@ -165,6 +165,7 @@ El sistema guarda archivos subidos por usuarios en 3 Docker volumes persistentes
 | `photo_data` | `/app/data/photos` | Fotos de operadores (registro de personal) |
 | `content_data` | `/app/data/static` | Imágenes de la home: servicios, galería, noticias, hero, escenarios |
 | `rut_data` | `/app/data/rut` | PDFs de RUT de operadores (registro de proveedores) |
+| `id_doc_data` | `/app/data/id_docs` | Cédulas de operadores: fotos frente/dorso WebP (verificación admin) |
 | `postgres_data` | `/var/lib/postgresql/data` | Base de datos PostgreSQL |
 
 ### Migración de imágenes existentes (recuperación)
@@ -195,6 +196,9 @@ docker exec logistica_backend ls /app/data/photos/ | head -20
 
 # PDFs de RUT
 docker exec logistica_backend ls /app/data/rut/ | head -20
+
+# Cédulas de operadores (frente/dorso)
+docker exec logistica_backend ls /app/data/id_docs/ | head -20
 ```
 
 ---

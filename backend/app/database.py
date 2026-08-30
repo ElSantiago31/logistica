@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
@@ -23,8 +24,10 @@ def get_test_engine():
         test_engine = create_async_engine(
             settings.effective_test_database_url,
             echo=settings.DEBUG,
-            pool_size=5,
-            max_overflow=5,
+            # NullPool: cada operación abre/cierra su conexión. Evita que
+            # conexiones del pool queden atadas a un event loop distinto
+            # cuando pytest-asyncio crea un loop nuevo por test.
+            poolclass=NullPool,
         )
     return test_engine
 

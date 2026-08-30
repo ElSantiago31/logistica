@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.core.errors import register_exception_handlers
+from app.core.webp_static import WebPStaticFiles
 from app.database import get_db
 from app.dependencies.rate_limit import limiter
 from app.routers import auth as auth_router
@@ -27,6 +28,8 @@ from app.routers import coordinator as coordinator_router
 from app.routers import incidents as incidents_router
 from app.routers import content as content_router
 from app.routers import pqrsf as pqrsf_router
+from app.routers import seo as seo_router
+from app.routers import referrals as referrals_router
 from app.websockets import router as ws_router
 
 
@@ -36,6 +39,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.PHOTOS_DIR, exist_ok=True)
     os.makedirs(settings.PHOTOS_THUMBNAIL_DIR, exist_ok=True)
     os.makedirs(settings.RUT_DIR, exist_ok=True)
+    os.makedirs(settings.ID_DOC_DIR, exist_ok=True)
     yield
 
 
@@ -68,6 +72,9 @@ app.include_router(coordinator_router.router)
 app.include_router(incidents_router.router)
 app.include_router(content_router.router)
 app.include_router(pqrsf_router.router)
+app.include_router(seo_router.router)
+app.include_router(referrals_router.router)
+app.include_router(referrals_router.page_router)
 app.include_router(ws_router.router)
 
 # Templates Jinja2
@@ -80,8 +87,12 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 # Uso en templates: <script src="/static/js/auth{{ js_suffix }}.js"></script>
 templates.env.globals["js_suffix"] = settings.JS_SUFFIX
 
+# SEO: dominio canónico (canonical/OG/JSON-LD) y GA4 opcional (vacío = sin gtag)
+templates.env.globals["site_url"] = settings.SITE_URL.rstrip("/")
+templates.env.globals["ga_id"] = settings.GA_MEASUREMENT_ID
+
 # Frontend static dirs
-# Apuntan a /frontend/ en la RAÍZ del repo (fuente única de verdad).
+# Apuntan a /frontend/ en la RAÃZ del repo (fuente única de verdad).
 # En Docker, el Dockerfile copia frontend/js/ completa a /app/frontend/js/.
 FRONTEND_PUBLIC = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "public")
 FRONTEND_JS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "js")
@@ -91,7 +102,7 @@ os.makedirs(FRONTEND_JS, exist_ok=True)
 # Asegurar que los directorios de datos existan ANTES de montarlos con StaticFiles,
 # ya que StaticFiles valida la existencia al crear la instancia (en tiempo de importación),
 # no cuando arranca el servidor (lifespan).
-for _d in (settings.PHOTOS_DIR, settings.PHOTOS_THUMBNAIL_DIR, settings.RUT_DIR):
+for _d in (settings.PHOTOS_DIR, settings.PHOTOS_THUMBNAIL_DIR, settings.RUT_DIR, settings.ID_DOC_DIR):
     os.makedirs(_d, exist_ok=True)
 
 # Asegurar existencia del directorio de imágenes de contenido (static)
@@ -100,8 +111,11 @@ os.makedirs(settings.CONTENT_IMAGES_DIR, exist_ok=True)
 # Mount static files for photos and RUT PDFs
 app.mount("/static/photos", StaticFiles(directory=settings.PHOTOS_DIR), name="photos")
 app.mount("/static/rut", StaticFiles(directory=settings.RUT_DIR), name="rut")
+app.mount("/static/id_docs", StaticFiles(directory=settings.ID_DOC_DIR), name="id_docs")
 app.mount("/static/content", StaticFiles(directory=settings.CONTENT_IMAGES_DIR), name="content_images")
-app.mount("/static/frontend", StaticFiles(directory=FRONTEND_PUBLIC), name="frontend_static")
+# Negociacion WebP: sirve el .webp hermano si el navegador lo soporta y existe.
+# Las URL siguen siendo .jpg (og:image intacto para crawlers sociales).
+app.mount("/static/frontend", WebPStaticFiles(directory=FRONTEND_PUBLIC), name="frontend_static")
 app.mount("/static/js", StaticFiles(directory=FRONTEND_JS), name="frontend_js")
 
 # CORS configuration
@@ -131,6 +145,12 @@ async def add_security_headers(request, call_next):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+    # SEO: las rutas privadas/ internas NO deben indexarse en buscadores.
+    # X-Robots-Tag aplica a nivel HTTP (más fiable que meta tags en templates
+    # que cargan contenido dinámico). La home y páginas públicas quedan fuera.
+    _noindex_prefixes = ("/admin", "/api", "/coordinador", "/staff", "/test-ui", "/colaboradores", "/docs", "/redoc")
+    if request.url.path.startswith(_noindex_prefixes):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
 
