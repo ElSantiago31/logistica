@@ -453,31 +453,42 @@ function opRow(o){
 
 function loadMoreOps(){opsPage++;searchOperators(false)}
 
-function getMaxForRole(){
+// Cantidad que falta cubrir del plan del evento para el rol seleccionado.
+// NOTA: es INFORMATIVO — no bloquea la selección. Se puede sobre-invitar
+// (invitar más de lo necesario) porque no todos los operadores aceptan;
+// el cupo real se cierra con confirmaciones, no con invitaciones.
+function getRemainingForRole(){
     const roleId=document.getElementById('assignRole').value;
-    if(!roleId)return 999;
+    if(!roleId)return null;
     const need=currentStaffNeeds.find(n=>n.role_id===roleId);
-    if(!need)return 999;
+    if(!need)return null;
     return Math.max(0,need.quantity_needed-need.quantity_confirmed);
 }
 
 function toggleOp(cb){
-    const max=getMaxForRole();
-    if(cb.checked){
-        if(selectedOps.size>=max){cb.checked=false;showToast('Máximo '+max+' operador(es) para este rol','bg-yellow-500');return}
-        selectedOps.add(cb.value);
-    }else{selectedOps.delete(cb.value)}
+    if(cb.checked){selectedOps.add(cb.value)}
+    else{selectedOps.delete(cb.value)}
     updateSelectionCounter();
 }
 
 function updateSelectionCounter(){
-    const max=getMaxForRole();const count=selectedOps.size;
+    const remaining=getRemainingForRole();const count=selectedOps.size;
     const counter=document.getElementById('selectionCounter');
     const btn=document.getElementById('btnAssign');
-    if(max<999){counter.textContent=count+' de '+max+' seleccionados';counter.className=count>max?'text-sm text-red-500 font-medium':'text-sm text-gray-500'}
-    else{counter.textContent=count+' seleccionados';counter.className='text-sm text-gray-500'}
-    btn.disabled=count===0||count>max;
-    btn.className=count===0||count>max?'bg-gray-300 text-white px-4 py-2 rounded-lg text-sm cursor-not-allowed':'bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm';
+    if(remaining!==null){
+        if(count>remaining){
+            const extra=count-remaining;
+            counter.textContent=`${count} seleccionados · Faltan ${remaining} · ⚠️ ${extra} extra (por si alguno rechaza)`;
+            counter.className='text-sm text-amber-600 font-medium';
+        }else{
+            counter.textContent=`${count} de ${remaining} seleccionados`;
+            counter.className='text-sm text-gray-500';
+        }
+    }else{counter.textContent=count+' seleccionados';counter.className='text-sm text-gray-500'}
+    // El único bloqueo real: no haber seleccionado a nadie.
+    // El excedente sobre el plan del rol NO bloquea (sobre-invitación permitida).
+    btn.disabled=count===0;
+    btn.className=count===0?'bg-gray-300 text-white px-4 py-2 rounded-lg text-sm cursor-not-allowed':'bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm';
 }
 
 async function assignSelected(){
