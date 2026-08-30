@@ -10,17 +10,22 @@
     .operator-card:hover { transform: translateY(-2px); }
     .operator-card.checked-in { border-left: 4px solid #22c55e; background: #f0fdf4; }
     .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
-    /* FASE 3: Tarjetas de cupos por coordinador */
-    #quotas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
-    .quota-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; text-align:center; transition:all .2s; cursor:pointer; }
+    /* FASE 3: Tarjetas de cupos por coordinador (compactas — sin scroll) */
+    #quotas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:5px; }
+    .quota-card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:4px 5px; text-align:center; transition:all .2s; cursor:pointer; }
     .quota-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.10); transform:translateY(-1px); }
     .quota-card.full { border-color:#ef4444; background:#fef2f2; }
     .quota-card.warning { border-color:#f59e0b; background:#fffbeb; }
     .quota-card.available { border-color:#22c55e; background:#f0fdf4; }
-    .quota-card .qc-name { font-size:.8rem; font-weight:600; color:#5d4224; }
-    .quota-card .qc-count { font-size:1.4rem; font-weight:700; }
-    .quota-card .qc-bar { height:4px; border-radius:2px; background:#e5e7eb; margin-top:6px; overflow:hidden; }
+    .quota-card .qc-name { font-size:.66rem; font-weight:600; color:#5d4224; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .quota-card .qc-count { font-size:1rem; font-weight:700; line-height:1.15; }
+    .quota-card .qc-bar { height:3px; border-radius:2px; background:#e5e7eb; margin-top:3px; overflow:hidden; }
     .quota-card .qc-bar-fill { height:100%; border-radius:2px; transition:width .3s; }
+    /* Buscador: dropdown compacto de resultados */
+    #search-results { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:40; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.15); max-height:225px; overflow-y:auto; }
+    #search-results:not(:empty) { padding:4px; }
+    .sr-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 8px; border-radius:8px; cursor:pointer; }
+    .sr-row:hover { background:#faf5ef; }
     /* FASE 4: Modal de reasignación */
     .reassign-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:50; }
     /* Fix: .hidden de Tailwind pierde contra .reassign-modal por especificidad.
@@ -34,7 +39,7 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="max-w-5xl mx-auto px-4 py-6">
+<div class="max-w-6xl mx-auto px-4 py-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
@@ -51,72 +56,47 @@
         </div>
     </div>
 
-    <!-- FASE 3: Tarjetas de cupos por coordinador -->
-    <div class="mb-6">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold" style="color:#5d4224;">🎟️ Cupos por Coordinador</h3>
-            <span class="text-xs text-gray-400" id="quotas-updated"></span>
+    <!-- Stats (compactas) -->
+    <div class="grid grid-cols-4 gap-2 mb-4">
+        <div class="bg-white rounded-lg p-2 text-center border">
+            <div id="stat-total" class="text-xl font-bold" style="color:#cf9b62;">0</div>
+            <div class="text-[11px] text-gray-500">Asignados</div>
         </div>
-        <div id="quotas-grid">
-            <p class="text-xs text-gray-400 col-span-full text-center py-3">Cargando cupos...</p>
+        <div class="bg-white rounded-lg p-2 text-center border">
+            <div id="stat-checked" class="text-xl font-bold text-green-600">0</div>
+            <div class="text-[11px] text-gray-500">Check-in</div>
         </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="grid grid-cols-4 gap-3 mb-6">
-        <div class="bg-white rounded-lg p-3 text-center border">
-            <div id="stat-total" class="text-2xl font-bold" style="color:#cf9b62;">0</div>
-            <div class="text-xs text-gray-500">Asignados</div>
+        <div class="bg-white rounded-lg p-2 text-center border">
+            <div id="stat-pending" class="text-xl font-bold text-yellow-600">0</div>
+            <div class="text-[11px] text-gray-500">Pendientes</div>
         </div>
-        <div class="bg-white rounded-lg p-3 text-center border">
-            <div id="stat-checked" class="text-2xl font-bold text-green-600">0</div>
-            <div class="text-xs text-gray-500">Check-in</div>
-        </div>
-        <div class="bg-white rounded-lg p-3 text-center border">
-            <div id="stat-pending" class="text-2xl font-bold text-yellow-600">0</div>
-            <div class="text-xs text-gray-500">Pendientes</div>
-        </div>
-        <div class="bg-white rounded-lg p-3 text-center border cursor-pointer hover:bg-blue-50" onclick="syncPendingRecords()" title="Clic para sincronizar">
-            <div id="stat-sync" class="text-2xl font-bold text-blue-600">0</div>
-            <div class="text-xs text-gray-500">Pend. Sync 🔄</div>
+        <div class="bg-white rounded-lg p-2 text-center border cursor-pointer hover:bg-blue-50" onclick="syncPendingRecords()" title="Clic para sincronizar">
+            <div id="stat-sync" class="text-xl font-bold text-blue-600">0</div>
+            <div class="text-[11px] text-gray-500">Pend. Sync 🔄</div>
         </div>
     </div>
 
-    <!-- Check-in por Rol (progreso de ingresos agrupado por rol) -->
-    <div class="mb-6">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold" style="color:#5d4224;">Check-in por Rol</h3>
-            <span class="text-xs text-gray-400" id="roles-updated"></span>
-        </div>
-        <div id="roles-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;">
-            <p class="text-xs text-gray-400 col-span-full text-center py-3">Cargando roles...</p>
-        </div>
-    </div>
-
-    <div class="grid md:grid-cols-2 gap-6">
-        <!-- Left: Search -->
+    <div class="grid md:grid-cols-2 gap-6 items-start">
+        <!-- Izquierda: buscador (arriba) + panel del operador (debajo) -->
         <div>
-            <!-- Manual search -->
-            <div class="relative mb-4">
+            <!-- Buscador superior izquierdo: resultados = dropdown compacto -->
+            <div class="relative">
                 <input type="text" id="search-input" placeholder="Buscar por nombre o cédula..."
-                    class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-amber-400"
-                    oninput="searchOperator(this.value)">
+                    class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-amber-400"
+                    oninput="searchOperator(this.value)" autocomplete="off">
+                <div id="search-results"></div>
             </div>
 
             <!-- Download offline button -->
             <button id="btn-offline" onclick="downloadForOffline()"
-                class="w-full py-2 rounded-lg text-sm font-medium border-2 mb-2 transition"
+                class="w-full py-1.5 mt-2 rounded-lg text-xs font-medium border-2 transition"
                 style="border-color:#cf9b62; color:#5d4224;">
                 📥 Descargar datos offline
             </button>
-            <p class="text-xs text-gray-400 text-center mb-4" id="last-download"></p>
+            <p class="text-[11px] text-gray-400 text-center mb-2" id="last-download"></p>
 
-            <!-- Search results -->
-            <div id="search-results" class="space-y-2"></div>
-        </div>
-
-        <!-- Right: Operator detail + check-in -->
-        <div id="operator-panel" class="hidden">
+            <!-- Panel del operador: aparece DEBAJO del buscador -->
+            <div id="operator-panel" class="hidden">
             <div class="bg-white rounded-xl border p-6">
                 <div class="flex items-center gap-4 mb-4">
                     <div class="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl" id="op-avatar">
@@ -195,7 +175,30 @@
                     </button>
                 </div>
             </div>
+            </div><!-- /operator-panel -->
+        </div><!-- /columna izquierda -->
 
+        <!-- Derecha: Check-in por Rol (arriba) + Cupos por Coordinador (debajo) -->
+        <div>
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold" style="color:#5d4224;">Check-in por Rol</h3>
+                    <span class="text-xs text-gray-400" id="roles-updated"></span>
+                </div>
+                <div id="roles-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px;">
+                    <p class="text-xs text-gray-400 col-span-full text-center py-2">Cargando roles...</p>
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold" style="color:#5d4224;">🎟️ Cupos por Coordinador</h3>
+                    <span class="text-xs text-gray-400" id="quotas-updated"></span>
+                </div>
+                <div id="quotas-grid">
+                    <p class="text-xs text-gray-400 col-span-full text-center py-2">Cargando cupos...</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -631,30 +634,31 @@ async function searchOperator(query) {
 
     const container = document.getElementById('search-results');
     if (!results.length) {
-        container.innerHTML = '<p class="text-gray-500 text-sm">No se encontraron operadores</p>';
+        container.innerHTML = '<p class="text-gray-400 text-xs text-center py-2">Sin resultados</p>';
         return;
     }
-    container.innerHTML = results.slice(0, 10).map(op => {
+    // Dropdown compacto: filas pequeñas, máximo 8 resultados
+    container.innerHTML = results.slice(0, 8).map(op => {
         const photoThumb = op.photo_url
-            ? `<img src="${op.photo_url}" class="w-10 h-10 rounded-full object-cover" alt="${op.full_name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-               <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg" style="display:none;">👤</div>`
-            : `<div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg">👤</div>`;
+            ? `<img src="${op.photo_url}" class="w-8 h-8 rounded-full object-cover flex-shrink-0" alt="${op.full_name}" onerror="this.style.display='none'">`
+            : `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm flex-shrink-0">👤</div>`;
+        const badge = op.status === 'checked_in' ? 'bg-green-100 text-green-700'
+            : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700';
+        const sub = [op.document_number, op.role_name || 'Operador',
+            (op.coordinator_name && op.coordinator_name !== 'Sin asignar') ? '👔 ' + op.coordinator_name : null]
+            .filter(Boolean).join(' · ');
         return `
-        <div class="operator-card bg-white rounded-lg p-3 border cursor-pointer" onclick="showOperator('${op.id}')">
-            <div class="flex justify-between items-center gap-3">
-                <div class="flex items-center gap-3">
-                    <div class="flex-shrink-0">${photoThumb}</div>
-                    <div>
-                        <span class="font-medium">${op.full_name}</span>
-                        <div class="text-xs text-gray-400">${op.document_number}</div>
-                    </div>
+        <div class="sr-row" onclick="showOperator('${op.id}')">
+            <div class="flex items-center gap-2 min-w-0">
+                ${photoThumb}
+                <div class="min-w-0">
+                    <div class="text-sm font-medium truncate" style="color:#5d4224;">${op.full_name}</div>
+                    <div class="text-[11px] text-gray-400 truncate">${sub}</div>
                 </div>
-                <span class="status-badge ${op.status === 'checked_in' ? 'bg-green-100 text-green-700' : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}">${op.status}</span>
             </div>
-            <div class="text-xs text-gray-500 mt-1">${op.role_name || 'Operador'}</div>
-            ${op.coordinator_name && op.coordinator_name !== 'Sin asignar' ? `<div class="text-[11px] text-gray-400 mt-0.5">👔 ${op.coordinator_name}</div>` : ''}
-        </div>
-    `;}).join('');
+            <span class="status-badge ${badge} flex-shrink-0">${op.status}</span>
+        </div>`;
+    }).join('');
 }
 
 async function showOperator(assignmentId) {
@@ -673,6 +677,10 @@ async function showOperator(assignmentId) {
     }
 
     currentOperator = operator;
+
+    // Cerrar el dropdown de resultados al seleccionar un operador
+    const srBox = document.getElementById('search-results');
+    if (srBox) srBox.innerHTML = '';
 
     document.getElementById('op-name').textContent = operator.full_name;
     document.getElementById('op-doc').textContent = operator.document_number;

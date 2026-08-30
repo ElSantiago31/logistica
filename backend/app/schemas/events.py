@@ -172,7 +172,7 @@ class ImportRowResult(BaseModel):
     row: int                                      # número de fila (1-based, sin header)
     document_number: Optional[str] = None
     full_name: Optional[str] = None
-    status: str                                   # created | existing | already_assigned | error
+    status: str                                   # created | existing | already_assigned | updated | error
     message: str                                  # descripción legible
     operator_id: Optional[str] = None             # uuid si se procesó
     warnings: List[str] = []                      # ej: "EPS no encontrada, queda NULL"
@@ -183,7 +183,8 @@ class ImportSummary(BaseModel):
     total_rows: int
     created: int                                  # operadores nuevos creados
     existing: int                                 # operadores ya en BD, asignados ahora
-    already_assigned: int                         # operadores ya asignados a este evento
+    already_assigned: int                         # operadores ya asignados a este evento (sin cambios)
+    updated: int = 0                              # re-importados con cambios aplicados (cargo/perfil/coordinador)
     assigned: int                                 # = created + existing (asignaciones exitosas)
     errors: int
     duration_seconds: float

@@ -510,7 +510,7 @@ async function loadAuditLogs(){
         const logs=await res.json();
         if(!logs.length){document.getElementById('auditLogContent').innerHTML='<p class="text-gray-400 text-sm">No hay cambios registrados</p>';return}
         const ACTION_LABELS={created:'🆕 Evento creado',updated:'✏️ Evento actualizado',status_changed:'🔄 Estado cambiado',staff_updated:'👥 Personal actualizado',deleted:'🗑️ Evento eliminado'};
-        const FIELD_LABELS={name:'Nombre',location:'Ubicación',address:'Dirección',city:'Ciudad',start_date:'Fecha inicio',end_date:'Fecha fin',client_name:'Cliente',client_phone:'Teléfono cliente',description:'Descripción',notes:'Notas',status:'Estado',staff_needs:'Personal requerido'};
+        const FIELD_LABELS={name:'Nombre',location:'Ubicación',address:'Dirección',city:'Ciudad',start_date:'Fecha inicio',end_date:'Fecha fin',client_name:'Cliente',client_phone:'Teléfono cliente',description:'Descripción',notes:'Notas',status:'Estado',staff_needs:'Personal requerido',setup_date:'Fecha montaje',coordinator_quotas:'Cuotas de coordinadores'};
         document.getElementById('auditLogContent').innerHTML=logs.map(log=>{
             const date=new Date(log.created_at);
             const timeStr=date.toLocaleString('es-CO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -539,12 +539,25 @@ async function loadAuditLogs(){
                                 parts.push(`<span class="text-xs"><strong>${roleN}:</strong> ${changes.join(', ')}</span>`);
                             }
                         }
+                    } else if(key==='coordinator_quotas'){
+                        const antes=val.antes||[];
+                        const despues=val.despues||[];
+                        const antesMap={};antes.forEach(q=>{antesMap[q.coordinator]=q.quota});
+                        const despuesMap={};despues.forEach(q=>{despuesMap[q.coordinator]=q.quota});
+                        const allCoords=new Set([...Object.keys(antesMap),...Object.keys(despuesMap)]);
+                        for(const c of allCoords){
+                            const a=antesMap[c];const d=despuesMap[c];
+                            if(a===undefined&&d!==undefined){parts.push(`<span class="text-xs text-green-600">+ ${c}: ${d} cupo(s)</span>`)}
+                            else if(a!==undefined&&d===undefined){parts.push(`<span class="text-xs text-red-500">- ${c}: eliminado (tenía ${a})</span>`)}
+                            else if(String(a)!==String(d)){parts.push(`<span class="text-xs"><strong>${c}:</strong> ${a} → ${d} cupo(s)</span>`)}
+                        }
                     } else {
                         const label=FIELD_LABELS[key]||key;
+                        const fmtV=v=>{const s=String(v==null?'':v);if(/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)){try{const d=new Date(s.replace(' ','T'));if(!isNaN(d))return d.toLocaleString('es-CO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(_){}}return s||'vacío'};
                         if(val&&typeof val==='object'&&val.antes!==undefined){
-                            parts.push(`<span class="text-xs"><strong>${label}:</strong> <span class="text-red-400 line-through">${val.antes||'vacío'}</span> → <span class="text-green-600">${val.despues||'vacío'}</span></span>`);
+                            parts.push(`<span class="text-xs"><strong>${label}:</strong> <span class="text-red-400 line-through">${fmtV(val.antes)}</span> → <span class="text-green-600">${fmtV(val.despues)}</span></span>`);
                         } else {
-                            parts.push(`<span class="text-xs"><strong>${label}:</strong> ${val}</span>`);
+                            parts.push(`<span class="text-xs"><strong>${label}:</strong> ${fmtV(val)}</span>`);
                         }
                     }
                 }
@@ -620,7 +633,7 @@ async function handleImportFile(ev){
         renderImportRows();
         document.getElementById('importStep1').classList.add('hidden');
         document.getElementById('importStep2').classList.remove('hidden');
-        showToast(`Importación: ${summary.created} nuevos, ${summary.existing} existentes`,'bg-green-500');
+        showToast(`Importación: ${summary.created} nuevos, ${summary.existing} existentes, ${summary.updated||0} actualizados`,'bg-green-500');
         // Recargar asignaciones del evento
         loadEvent();
     }catch(e){
@@ -635,6 +648,7 @@ function renderImportSummary(){
         {label:'Creados',val:s.created,cls:'bg-green-100 text-green-800'},
         {label:'Existentes asignados',val:s.existing,cls:'bg-blue-100 text-blue-800'},
         {label:'Ya asignados',val:s.already_assigned,cls:'bg-gray-100 text-gray-800'},
+        {label:'Actualizados',val:s.updated||0,cls:'bg-amber-100 text-amber-800'},
         {label:'Errores',val:s.errors,cls:s.errors?'bg-red-100 text-red-800':'bg-gray-100 text-gray-800'},
     ];
     document.getElementById('importSummary').innerHTML=cards.map(c=>
@@ -651,6 +665,7 @@ function renderImportRows(){
         created:{label:'Creado',cls:'bg-green-100 text-green-800'},
         existing:{label:'Existente',cls:'bg-blue-100 text-blue-800'},
         already_assigned:{label:'Ya asignado',cls:'bg-gray-100 text-gray-800'},
+        updated:{label:'Actualizado',cls:'bg-amber-100 text-amber-800'},
         error:{label:'Error',cls:'bg-red-100 text-red-800'},
     };
     const div=document.getElementById('importRows');

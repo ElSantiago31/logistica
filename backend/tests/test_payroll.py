@@ -20,10 +20,12 @@ def test_generate_planilla_xlsx_structure():
     event_location = "Salon Elegant"
     
     # 25 operators under one coordinator to test pagination (> 20)
+    # Nombres con padding 2 dígitos: el orden por apellido (lexicográfico)
+    # coincide con el numérico, haciendo las aserciones predecibles.
     ops = []
     for i in range(25):
         ops.append({
-            "full_name": f"Operador_{i} Apellido_{i}",
+            "full_name": f"Operador_{i:02d} Apellido_{i:02d}",
             "document_number": f"Doc_{i}",
             "address": f"Calle {i}",
             "phone": f"300{i:07d}",
@@ -57,14 +59,15 @@ def test_generate_planilla_xlsx_structure():
     
     # Check headers in sheet 1
     ws1 = wb["Coordinador A (1)"]
-    assert ws1["D5"].value == "Coordinador A"
+    # D5 (Coordinador General) se deja vacío a propósito — se llena a mano (ver _render_pages)
+    assert ws1["D5"].value in (None, "")
     assert ws1["D6"].value == event_name
     assert ws1["D7"].value == "26/06/2026"
     assert ws1["K7"].value == event_location
     
     # Check that first operator name is split
-    assert ws1["C9"].value == "Operador_0"
-    assert ws1["D9"].value == "Apellido_0"
+    assert ws1["C9"].value == "Operador_00"
+    assert ws1["D9"].value == "Apellido_00"
     assert ws1["E9"].value == "Doc_0"
     assert ws1["F9"].value == "Calle 0"
     assert ws1["G9"].value == "3000000000"
@@ -74,7 +77,7 @@ def test_generate_planilla_xlsx_structure():
     
     # Check that 20th operator is in sheet 1 (row 28)
     assert ws1["C28"].value == "Operador_19"
-    
+
     # Check sheet 2 has the remaining 5 operators
     ws2 = wb["Coordinador A (2)"]
     assert ws2["C9"].value == "Operador_20"
@@ -99,6 +102,7 @@ async def setup_payroll_event(db: AsyncSession):
     role_coord = Role(
         id=uuid.uuid4(),
         name="Coordinador General",
+        slug="coordinador-general",
         area="General",
         hierarchy_level=1,
         is_event_only=True
@@ -106,6 +110,7 @@ async def setup_payroll_event(db: AsyncSession):
     role_operator = Role(
         id=uuid.uuid4(),
         name="Logistico",
+        slug="logistico",
         area="Logistica",
         hierarchy_level=3,
         is_event_only=False
@@ -134,6 +139,7 @@ async def setup_payroll_event(db: AsyncSession):
         last_name="Perez",
         user_type="operator",
         document_number="11111",
+        phone="3001111",
         is_verified=True,
         is_approved=True
     )
@@ -145,6 +151,7 @@ async def setup_payroll_event(db: AsyncSession):
         last_name="Gomez",
         user_type="operator",
         document_number="22222",
+        phone="3002222",
         is_verified=True,
         is_approved=True
     )
@@ -153,9 +160,9 @@ async def setup_payroll_event(db: AsyncSession):
     db.add(user_op2)
     await db.flush()
     
-    # Operator profiles
-    op_profile1 = Operator(user_id=user_op1.id, city="Bogota", address="Calle 12", phone="3001111")
-    op_profile2 = Operator(user_id=user_op2.id, city="Bogota", address="Calle 13", phone="3002222")
+    # Operator profiles (phone vive en User, no en Operator)
+    op_profile1 = Operator(user_id=user_op1.id, city="Bogota", address="Calle 12")
+    op_profile2 = Operator(user_id=user_op2.id, city="Bogota", address="Calle 13")
     op_coord_profile = Operator(user_id=user_coord.id, city="Bogota")
     db.add(op_profile1)
     db.add(op_profile2)
@@ -195,6 +202,27 @@ async def setup_payroll_event(db: AsyncSession):
     return event, user_coord
 
 
+@pytest.fixture
+async def admin_token(client: AsyncClient, setup_payroll_event):
+    """Login como el admin/coordinador creado en setup_payroll_event."""
+    _, user_coord = setup_payroll_event
+    response = await client.post("/api/auth/login", json={
+        "document_number": user_coord.document_number,
+        "password": "password"
+    })
+    return response.json()["access_token"]
+
+
+@pytest.fixture
+async def operator_token(client: AsyncClient, setup_payroll_event):
+    """Login como el operador (documento 11111) creado en setup_payroll_event."""
+    response = await client.post("/api/auth/login", json={
+        "document_number": "11111",
+        "password": "password"
+    })
+    return response.json()["access_token"]
+
+
 @pytest.mark.asyncio
 async def test_download_planilla_coordinador_endpoint(client: AsyncClient, admin_token: str, setup_payroll_event):
     event, _ = setup_payroll_event
@@ -212,10 +240,16 @@ async def test_download_planilla_coordinador_endpoint(client: AsyncClient, admin
     # It should have a sheet named after the Coordinator General "Carlos Coordinador"
     assert "Carlos Coordinador" in wb.sheetnames
     ws = wb["Carlos Coordinador"]
-    # Check operator 1 details are in the sheet
-    assert ws["C9"].value == "Juan"
-    assert ws["D9"].value == "Perez"
-    assert ws["E9"].value == "11111"
+    # La hoja incluye a los checked_in (el coordinador también, orden alfabético
+    # por apellido: "Coordinador" < "Perez"). Buscar la fila de Juan dinámicamente.
+    juan_row = None
+    for row in range(9, 29):
+        if ws.cell(row=row, column=5).value == "11111":
+            juan_row = row
+            break
+    assert juan_row is not None, "Operator 1 (doc 11111) should be in the spreadsheet"
+    assert ws.cell(row=juan_row, column=3).value == "Juan"
+    assert ws.cell(row=juan_row, column=4).value == "Perez"
     # Ensure operator 2 is not in the sheet since status was 'confirmed' and not 'checked_in'
     for row in range(9, 29):
         if ws.cell(row=row, column=5).value == "22222":

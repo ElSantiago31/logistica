@@ -1,4 +1,6 @@
 """Sync router — offline data download + attendance batch upload."""
+import csv
+import io
 import logging
 import time
 import uuid
@@ -6,6 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +42,40 @@ def _to_uuid(val):
         return uuid.UUID(str(val))
     except (ValueError, AttributeError):
         return None
+
+
+def _parse_log_notes(notes):
+    """Parsea las notas del AttendanceLog.
+
+    Formato: 'sobrecupo:COORD | cambio_rol:OLD->NEW' (partes unidas por '|').
+    Retorna (overquota_coord, role_change) - None en cada campo si no aplica.
+    """
+    overquota_coord = None
+    role_change = None
+    for part in (notes or "").split("|"):
+        part = part.strip()
+        if part.startswith("sobrecupo:"):
+            overquota_coord = part.split(":", 1)[1].strip() or None
+        elif part.startswith("cambio_rol:"):
+            role_change = part.split(":", 1)[1].strip() or None
+    return overquota_coord, role_change
+
+
+async def _apply_role_change(db: AsyncSession, assignment: EventAssignment, role_id):
+    """Aplica un cambio de rol al assignment (check-in).
+
+    Retorna la nota para el log ('cambio_rol:OLD->NEW') o None si no hubo cambio.
+    """
+    if not role_id or str(role_id) == str(assignment.role_id or ""):
+        return None
+    from app.models.roles import Role
+    new_role = await db.get(Role, role_id)
+    if not new_role:
+        raise HTTPException(404, "Rol no encontrado")
+    old_role = await db.get(Role, assignment.role_id) if assignment.role_id else None
+    old_name = old_role.name if old_role else "Sin rol"
+    assignment.role_id = new_role.id
+    return f"cambio_rol:{old_name}->{new_role.name}"
 
 
 async def _resolve_staff_access(
@@ -147,6 +184,7 @@ async def get_offline_data(
             "operator_id": str(operator.id),
             "full_name": f"{op_user.first_name} {op_user.last_name}",
             "document_number": op_user.document_number or "",
+            "role_id": str(assignment.role_id) if assignment.role_id else None,
             "role_name": role.name if role else "Operador",
             "status": assignment.status,
             "photo_url": operator.photo_thumbnail_path,
@@ -536,6 +574,9 @@ async def sync_attendance(
                                 assignment.programmed_by = rec_coord
                         elif not assignment.admitted_by:
                             assignment.admitted_by = assignment.programmed_by
+                        rec_role_id = _to_uuid(rec.get("role_id"))
+                        if rec_role_id and str(rec_role_id) != str(assignment.role_id or ""):
+                            assignment.role_id = rec_role_id
                         if can_set_uniform_batch:
                             shirt = rec.get("shirt_number")
                             jacket = rec.get("jacket_number")
@@ -649,22 +690,31 @@ async def get_attendance(
         .join(Operator, Operator.id == AttendanceLog.operator_id)
         .join(User, User.id == Operator.user_id)
         .where(AttendanceLog.event_id == event_id)
+        .order_by(
+            AttendanceLog.check_in_time.desc().nullslast(),
+            AttendanceLog.created_at.desc(),
+        )
     )
     rows = result.all()
 
+    records = []
+    for log, op, u in rows:
+        overquota_coord, role_change = _parse_log_notes(log.notes)
+        records.append({
+            "id": str(log.id),
+            "operator_name": f"{u.first_name} {u.last_name}",
+            "check_in_time": str(log.check_in_time) if log.check_in_time else None,
+            "check_out_time": str(log.check_out_time) if log.check_out_time else None,
+            "method": log.check_in_method,
+            "is_offline": log.is_offline,
+            "overquota": overquota_coord is not None,
+            "coordinator": overquota_coord,
+            "role_change": role_change,
+        })
+
     return {
         "event_id": str(event_id),
-        "records": [
-            {
-                "id": str(log.id),
-                "operator_name": f"{u.first_name} {u.last_name}",
-                "check_in_time": str(log.check_in_time) if log.check_in_time else None,
-                "check_out_time": str(log.check_out_time) if log.check_out_time else None,
-                "method": log.check_in_method,
-                "is_offline": log.is_offline,
-            }
-            for log, op, u in rows
-        ],
+        "records": records,
         "total": len(rows),
     }
 
@@ -684,6 +734,13 @@ async def check_in(
     method = payload.get("method", "manual")
     # Coordinator que admite al operador (opcional, desde selector UI)
     coordinator = (payload.get("coordinator") or "").strip().upper() or None
+    # Sobrecupo: si el cupo del coordinador está lleno y el front ya pidió
+    # confirmación al usuario, se permite el registro de todos modos.
+    force_overquota = bool(payload.get("force_overquota", False))
+    overquota = False
+    overquota_coord = None  # coordinador cuyo cupo se extendió (para el log)
+    role_id = _to_uuid(payload.get("role_id"))
+    role_change_note = None  # "cambio_rol:OLD->NEW" si se cambió el rol
     # Optional uniform fields — solo checkin/admin/coordinator pueden setearlos
     can_set_uniform = _can_manage_uniform(user, staff_role)
     shirt_number = payload.get("shirt_number") if can_set_uniform else None
@@ -718,6 +775,11 @@ async def check_in(
                         assignment.programmed_by = coordinator
                 elif not assignment.admitted_by:
                     assignment.admitted_by = assignment.programmed_by
+                reconcile_note = await _apply_role_change(db, assignment, role_id)
+                if reconcile_note:
+                    parts = [p for p in (existing_log.notes or "").split("|") if p]
+                    parts.append(reconcile_note)
+                    existing_log.notes = "|".join(parts)
                 try:
                     await db.commit()
                 except Exception as exc:
@@ -761,7 +823,15 @@ async def check_in(
             target_coord = assignment.admitted_by or assignment.programmed_by
             if target_coord:
                 ok, msg, info = await _check_coordinator_quota(db, event_id, target_coord)
-                if not ok:
+                if not ok and force_overquota:
+                    # Confirmado por el usuario en el front: registrar en sobrecupo.
+                    logger.info(
+                        "Check-in en sobrecupo para %s en evento %s (%s)",
+                        target_coord, event_id, msg,
+                    )
+                    overquota = True
+                    overquota_coord = target_coord
+                elif not ok:
                     # Listar coordinadores con cupo disponible para sugerir
                     suggestions = await _suggest_available_coordinators(db, event_id)
                     raise HTTPException(
@@ -774,6 +844,8 @@ async def check_in(
                         },
                     )
 
+            role_change_note = await _apply_role_change(db, assignment, role_id)
+
             assignment.status = "checked_in"
             if shirt_number is not None:
                 assignment.shirt_number = shirt_number or None
@@ -781,6 +853,17 @@ async def check_in(
                 assignment.jacket_number = jacket_number or None
             if cap_number is not None:
                 assignment.cap_number = cap_number or None
+
+    # El log se construyo antes de validar el cupo del coordinador, asi que
+    # los marcadores (sobrecupo / cambio de rol) se asignan aqui (antes del
+    # commit). Se unen con '|' para poder combinar ambos.
+    notes_parts = []
+    if overquota:
+        notes_parts.append(f"sobrecupo:{overquota_coord}")
+    if role_change_note:
+        notes_parts.append(role_change_note)
+    if notes_parts:
+        log.notes = "|".join(notes_parts)
 
     try:
         await db.commit()
@@ -814,7 +897,7 @@ async def check_in(
     except Exception as exc:
         logger.warning("[ws] no se pudo emitir evento checkin: %s", exc)
 
-    return {"status": "checked_in", "log_id": str(log.id)}
+    return {"status": "checked_in", "log_id": str(log.id), "overquota": overquota}
 
 
 async def _suggest_available_coordinators(db: AsyncSession, event_id: uuid.UUID):
@@ -846,6 +929,106 @@ async def get_coordinator_quotas_endpoint(
         "quotas": quotas,
         "updated_at": datetime.utcnow().isoformat(),
     }
+
+
+@router.get("/events/{event_id}/attendance-log.csv")
+async def export_attendance_log_csv(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Descarga el log completo de ingresos (check-ins) del evento en CSV.
+
+    Accesible para el mismo staff que ve la página de check-in
+    (admin/superadmin/checkin/intendencia/coordinador/operador-checkin).
+    """
+    from sqlalchemy.orm import aliased
+    from app.models.roles import Role
+
+    await _resolve_staff_access(db, user, event_id)
+
+    Verifier = aliased(User)
+    result = await db.execute(
+        select(AttendanceLog, EventAssignment, Operator, User, Role, Verifier)
+        .outerjoin(EventAssignment, EventAssignment.id == AttendanceLog.assignment_id)
+        .outerjoin(Operator, Operator.id == AttendanceLog.operator_id)
+        .outerjoin(User, User.id == Operator.user_id)
+        .outerjoin(Role, Role.id == EventAssignment.role_id)
+        .outerjoin(Verifier, Verifier.id == AttendanceLog.verified_by)
+        .where(AttendanceLog.event_id == event_id)
+        .order_by(
+            AttendanceLog.check_in_time.desc().nullslast(),
+            AttendanceLog.created_at.desc(),
+        )
+    )
+
+    # --- Formato legible para humanos (se abre en Excel) ---
+    METHOD_LABELS = {
+        "manual": "Manual",
+        "qr": "Código QR",
+        "offline": "Offline",
+    }
+    STATUS_LABELS = {
+        "pending": "Pendiente",
+        "confirmed": "Confirmado",
+        "checked_in": "Ingresó",
+        "rejected": "Rechazado",
+        "standby": "En espera",
+        "no_show": "No asistió",
+        "sin_acreditacion": "Sin acreditación",
+    }
+
+    def _pretty(value, mapping):
+        v = (value or "").strip()
+        return mapping.get(v.lower(), v)
+
+    def _sobrecupo_cell(notes):
+        """Siempre visible: 'No' = dentro de cupo; 'SÍ (COORD)' = sobre el cupo."""
+        if (notes or "").startswith("sobrecupo:"):
+            coord = notes.split(":", 1)[1].strip()
+            return f"SÍ ({coord})" if coord else "SÍ"
+        return "No"
+
+    def _role_change_cell(notes):
+        """'OLD -> NEW' si hubo cambio de rol en el check-in, '' si no."""
+        _, role_change = _parse_log_notes(notes)
+        return role_change.replace("->", " -> ") if role_change else ""
+
+    # Delimitador ';' para que Excel en español (es-CO/es-ES) abra cada
+    # campo en su propia celda (con ',' lo deja todo en una sola columna).
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow([
+        "Fecha Ingreso", "Operador", "Documento", "Teléfono", "Coordinador",
+        "Sobrecupo", "Rol", "Cambio de Rol", "Estado", "Método", "Offline", "Registrado Por",
+    ])
+    for log, assignment, operator, op_user, role, verifier in result.all():
+        writer.writerow([
+            log.check_in_time.strftime("%d/%m/%Y %H:%M") if log.check_in_time else "",
+            f"{op_user.first_name} {op_user.last_name}".strip() if op_user else "-",
+            (op_user.document_number or "") if op_user else "",
+            (op_user.phone or "") if op_user else "",
+            (
+                getattr(assignment, "admitted_by", None)
+                or getattr(assignment, "programmed_by", None)
+                or ""
+            ) if assignment else "",
+            _sobrecupo_cell(log.notes),
+            role.name if role else "",
+            _role_change_cell(log.notes),
+            _pretty(assignment.status, STATUS_LABELS) if assignment else "",
+            _pretty(log.check_in_method, METHOD_LABELS),
+            "Sí" if log.is_offline else "No",
+            f"{verifier.first_name} {verifier.last_name}".strip() if verifier else "",
+        ])
+
+    stamp = datetime.utcnow().strftime("%Y%m%d_%H%M")
+    filename = f"log_ingresos_{str(event_id)[:8]}_{stamp}.csv"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.patch("/assignments/{assignment_id}/reassign")
@@ -934,6 +1117,119 @@ async def reassign_coordinator(
         "old_coordinator": old,
         "new_coordinator": new_coordinator,
         "message": f"{old or 'Sin coordinador'} cedió el operador a {new_coordinator}",
+    }
+
+
+@router.patch("/assignments/{assignment_id}/role")
+async def change_assignment_role(
+    assignment_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Cambia el rol de un operador en el evento (antes o después del check-in).
+
+    Actualiza EventAssignment.role_id y, si ya hay check-in, anota el cambio
+    en el AttendanceLog existente (notes: 'cambio_rol:OLD->NEW') para que
+    aparezca en el log de ingresos y en el CSV.
+    """
+    from app.models.roles import Role
+
+    new_role_id = _to_uuid(payload.get("role_id"))
+    if not new_role_id:
+        raise HTTPException(400, "role_id requerido")
+
+    assignment = await db.get(EventAssignment, assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+
+    await _resolve_staff_access(db, user, assignment.event_id)
+
+    new_role = await db.get(Role, new_role_id)
+    if not new_role:
+        raise HTTPException(404, "Rol no encontrado")
+
+    old_role = await db.get(Role, assignment.role_id) if assignment.role_id else None
+    old_name = old_role.name if old_role else "Sin rol"
+
+    if assignment.role_id and str(assignment.role_id) == str(new_role_id):
+        return {
+            "status": "unchanged",
+            "assignment_id": str(assignment.id),
+            "old_role": old_name,
+            "new_role": new_role.name,
+        }
+
+    assignment.role_id = new_role_id
+
+    # Anotar en el log de asistencia si ya hizo check-in
+    role_note = f"cambio_rol:{old_name}->{new_role.name}"
+    if assignment.status == "checked_in":
+        existing = await db.execute(
+            select(AttendanceLog).where(
+                AttendanceLog.event_id == assignment.event_id,
+                AttendanceLog.operator_id == assignment.operator_id,
+            )
+        )
+        log = existing.scalar_one_or_none()
+        if log:
+            parts = [p for p in (log.notes or "").split("|") if p]
+            parts.append(role_note)
+            log.notes = "|".join(parts)
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error al cambiar rol de asignación",
+            exc=exc,
+        )
+
+    # --- Audit log ---
+    try:
+        from app.services.events import _add_audit_log
+        await _add_audit_log(
+            db,
+            event_id=assignment.event_id,
+            user_id=user.id,
+            action="role_change",
+            changes={
+                "assignment_id": str(assignment.id),
+                "operator_id": str(assignment.operator_id),
+                "old_role": old_name,
+                "new_role": new_role.name,
+                "reason": (payload.get("reason") or "").strip() or "Cambio manual en check-in",
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.warning("No se pudo registrar audit log de cambio de rol: %s", exc)
+
+    # --- Notificar por WebSocket (cambio de rol) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(assignment.event_id),
+            "role_change",
+            {
+                "assignment_id": str(assignment.id),
+                "old_role": old_name,
+                "new_role": new_role.name,
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir role_change: %s", exc)
+
+    return {
+        "status": "role_changed",
+        "assignment_id": str(assignment.id),
+        "old_role": old_name,
+        "new_role": new_role.name,
+        "message": f"Rol cambiado de {old_name} a {new_role.name}",
     }
 
 
@@ -1097,12 +1393,14 @@ async def get_checkin_status(
     _register_presence(str(event_id), device_id or "anon", viewer_name)
     active_count, viewers = _get_active_viewers(str(event_id))
 
-    # --- Fase 1: status + uniform por asignación ---
+    # --- Fase 1: status + uniform + rol por asignación ---
+    from app.models.roles import Role
     result = await db.execute(
-        select(EventAssignment)
+        select(EventAssignment, Role)
+        .outerjoin(Role, Role.id == EventAssignment.role_id)
         .where(EventAssignment.event_id == event_id)
     )
-    assignments = result.scalars().all()
+    assignment_rows = result.all()
 
     # --- Fase 3: log compartido de ingresos recientes (otros dispositivos) ---
     recent_activity = []
@@ -1111,14 +1409,21 @@ async def get_checkin_status(
             select(AttendanceLog, Operator)
             .join(Operator, Operator.id == AttendanceLog.operator_id)
             .where(AttendanceLog.event_id == event_id)
-            .order_by(AttendanceLog.check_in_time.desc())
+            .order_by(
+                AttendanceLog.check_in_time.desc().nullslast(),
+                AttendanceLog.created_at.desc(),
+            )
             .limit(15)
         )
         for log, op in recent_result.all():
+            overquota_coord, role_change = _parse_log_notes(log.notes)
             recent_activity.append({
                 "operator_name": f"{op.user.first_name} {op.user.last_name}" if op.user else "—",
                 "check_in_time": log.check_in_time.isoformat() if log.check_in_time else None,
                 "method": log.check_in_method,
+                "overquota": overquota_coord is not None,
+                "coordinator": overquota_coord,
+                "role_change": role_change,
             })
     except Exception:
         # No bloquear el polling si falla el log
@@ -1137,7 +1442,9 @@ async def get_checkin_status(
                 "shirt_number": a.shirt_number,
                 "jacket_number": a.jacket_number,
                 "cap_number": a.cap_number,
+                "role_id": str(a.role_id) if a.role_id else None,
+                "role_name": r.name if r else None,
             }
-            for a in assignments
+            for a, r in assignment_rows
         ],
     }
