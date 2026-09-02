@@ -285,6 +285,51 @@ docker exec -it logistica_backend python -m scripts.reset_password
 
 ---
 
+## 🧹 PURGA DE OPERADORES SIN RUT
+
+Borra **permanentemente** (hard delete en cascada: nómina, evaluaciones,
+asignaciones, referidos, archivos) todos los operadores cuyo perfil NO tiene
+RUT adjunto (
+ut_path vacío). **Conserva** todos los administradores/staff
+y los operadores que SÍ adjuntaron RUT.
+
+Script: ackend/scripts/purge_operators_without_rut.py (commit 600884f).
+Si el contenedor se creó con un deploy anterior, copiarlo con docker cp.
+
+### 1. Copiar el script al contenedor (sin downtime, sin rebuild)
+`ash
+cd /home/server/Logistica
+git pull origin master
+docker cp backend/scripts/purge_operators_without_rut.py logistica_backend:/app/scripts/
+`
+
+### 2. DRY-RUN — revisar qué se borraría (no borra nada)
+`ash
+docker exec logistica_backend python -m scripts.purge_operators_without_rut
+`
+Lista los operadores sin RUT (nombre, documento, estado) y los conteos de lo
+que se conserva (staff + operadores con RUT).
+
+### 3. Backup + BORRADO REAL
+`ash
+# Backup obligatorio antes del borrado
+bash scripts/backup.sh
+
+# Borrado real
+docker exec logistica_backend python -m scripts.purge_operators_without_rut --execute
+`
+
+### 4. Si algo salió mal → restaurar backup
+`ash
+bash scripts/restore_backup.sh <fecha_backup>
+docker restart logistica_backend
+`
+
+⚠️ **Irreversible:** el borrado es permanente (Ley de Tratamiento de Datos).
+Siempre dry-run + backup primero.
+
+---
+
 ## 🌐 CERTIFICADOS SSL
 
 ### Verificar expiración
