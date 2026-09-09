@@ -12,9 +12,11 @@ from app.schemas.events import (
     EventCreate, EventUpdate, EventResponse, EventListResponse,
     AssignmentResponse, AssignOperatorsRequest,
     ImportSummary, DeleteEventRequest,
+    ImportJobAccepted, ImportJobStatus,
 )
 from app.services import events as svc
 from app.services import operator_import as imp_svc
+from app.services import import_jobs
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -124,19 +126,20 @@ async def download_import_template(
     )
 
 
-@router.post("/{event_id}/import-operators", response_model=ImportSummary)
+@router.post("/{event_id}/import-operators", response_model=ImportJobAccepted, status_code=202)
 async def import_operators_excel(
     event_id: uuid.UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Importa operadores masivamente desde un Excel (.xlsx).
+    """Importa operadores masivamente desde un Excel (.xlsx) — ASÍNCRONO.
 
-    - Crea usuarios + perfiles para operadores nuevos.
-    - Asigna (nuevos y existentes) al evento con status='confirmed'.
-    - Resuelve coordinador contra cupos del evento.
-    - Devuelve ImportSummary con métricas y detalle fila por fila.
+    Archivos grandes (1000+ filas) tardan minutos (bcrypt por operador) y
+    excedían el timeout de nginx/Cloudflare: el loader desaparecía sin
+    respuesta. Ahora el POST valida y responde 202 de inmediato con un
+    ``job_id``; el Excel se procesa en background y el frontend consulta
+    el progreso con GET /api/events/import/status/{job_id}.
     """
     if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
@@ -153,8 +156,30 @@ async def import_operators_excel(
     if not file_bytes:
         raise HTTPException(400, "Archivo vacío")
 
-    summary = await imp_svc.import_operators_from_excel(db, file_bytes, event_id)
-    return summary
+    job_id = import_jobs.start_import_job(event_id, file_bytes)
+    return ImportJobAccepted(
+        job_id=job_id,
+        status="queued",
+        status_url=f"/api/events/import/status/{job_id}",
+    )
+
+
+@router.get("/import/status/{job_id}", response_model=ImportJobStatus)
+async def get_import_status(
+    job_id: str,
+    user=Depends(get_current_user),
+):
+    """Progreso/resultado de un job de importación en background.
+
+    status: queued | running | completed | failed.
+    Al completar incluye el ImportSummary completo (métricas + filas).
+    """
+    if user.user_type not in ("superadmin", "admin"):
+        raise HTTPException(403, "Sin permisos")
+    status = import_jobs.get_job_status(job_id)
+    if status is None:
+        raise HTTPException(404, "Job no encontrado o expirado (TTL 1h)")
+    return status
 
 
 @router.post("/{event_id}/assign")

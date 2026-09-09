@@ -198,3 +198,22 @@ class ImportSummary(BaseModel):
     errors: int
     duration_seconds: float
     rows: List[ImportRowResult] = []              # detalle fila por fila
+
+
+class ImportJobAccepted(BaseModel):
+    """Respuesta 202 del POST de importación: el Excel se procesa en background."""
+    job_id: str
+    status: str                                   # queued
+    status_url: str                               # GET para consultar progreso/resultado
+
+
+class ImportJobStatus(BaseModel):
+    """Estado de un job de importación en background."""
+    job_id: str
+    event_id: uuid.UUID
+    status: str                                   # queued | running | completed | failed
+    stage: Optional[str] = None                   # hashing | processing
+    processed: int = 0
+    total: int = 0
+    error: Optional[str] = None
+    summary: Optional[ImportSummary] = None       # presente al completar

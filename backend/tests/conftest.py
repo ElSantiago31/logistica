@@ -74,3 +74,22 @@ async def client():
 def app_settings():
     """Return application settings for testing."""
     return settings
+
+
+@pytest.fixture(autouse=True)
+def _import_jobs_test_session():
+    """Apunta el registro de jobs de importación a la BD de prueba.
+
+    Los jobs corren en background con su propia sesión (fuera del override
+    de dependencias de FastAPI), así que hay que re-configurar la factory
+    del servicio para que apunten a ``logistica_test``.
+    """
+    from app.services import import_jobs
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    engine = get_test_engine()
+    import_jobs.set_session_factory(async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False,
+    ))
+    yield
+    import_jobs.reset_session_factory()

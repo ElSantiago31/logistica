@@ -19,6 +19,7 @@ Decisiones del producto:
   - Pre-carga batch de catálogos (evita N+1).
   - Commit único al final.
 """
+import asyncio
 import io
 import re
 import time
@@ -697,14 +698,21 @@ async def _load_assigned_operators(db: AsyncSession, event_id: uuid.UUID) -> dic
 
 async def import_operators_from_excel(
     db: AsyncSession, file_bytes: bytes, event_id: uuid.UUID,
+    progress_cb=None,
 ) -> ImportSummary:
     """Procesa el Excel completo y devuelve un ImportSummary.
 
     Flujo:
       1. Lee el Excel.
       2. Pre-carga catálogos (roles, EPS, pensiones, coordinadores, usuarios existentes).
-      3. Por cada fila: valida, crea/asigna, registra resultado.
-      4. Commit único.
+      3. Pre-hashing PARALELO de contraseñas de operadores nuevos (bcrypt
+         libera el GIL → hashing en ThreadPool real; ~8x más rápido con 8 CPUs).
+      4. Por cada fila: valida, crea/asigna, registra resultado.
+      5. Commit único.
+
+    ``progress_cb(processed, total, stage)`` permite reportar avance
+    (stage: 'hashing' | 'processing'); lo consume el job en background
+    (app.services.import_jobs) para el polling del frontend.
     """
     t0 = time.time()
     rows_result: list[ImportRowResult] = []
@@ -754,6 +762,43 @@ async def import_operators_from_excel(
     existing_users = await _load_existing_users_by_doc(db, list(set(all_docs)))
     assigned_ops = await _load_assigned_operators(db, event_id)
 
+    # --- 2a. Pre-validación + pre-hash PARALELO de contraseñas ---
+    # bcrypt cuesta ~350ms por operador. Para 1000+ filas nuevas eso son
+    # ~6 minutos SI se hace secuencial dentro del loop. Haciéndolo aquí en
+    # paralelo (asyncio.to_thread: bcrypt libera el GIL) el costo baja a
+    # total*0.35/n_cpus segundos, sin cambiar el resultado final.
+    pre_validated: dict[int, tuple[dict, list[str]]] = {}
+    _pre_seen: set[str] = set()
+    pending_pws: dict[str, str] = {}
+    for idx, raw in enumerate(raw_rows, 1):
+        clean, val_errors = _validate_row(raw, idx)
+        pre_validated[idx] = (clean, val_errors)
+        doc = clean["document_number"]
+        if val_errors or not doc or doc in _pre_seen:
+            continue
+        _pre_seen.add(doc)
+        if doc not in existing_users:
+            pending_pws[doc] = _build_password(doc, clean["document_type"])
+
+    pw_hashes: dict[str, str] = {}
+    if pending_pws:
+        docs_to_hash = list(pending_pws.keys())
+        total_hash = len(docs_to_hash)
+        # Chunks para no crear miles de threads de golpe; el pool por defecto
+        # limita la concurrencia real a ~min(32, cpus+4).
+        CHUNK = 64
+        done = 0
+        for i in range(0, total_hash, CHUNK):
+            chunk = docs_to_hash[i:i + CHUNK]
+            hashes = await asyncio.gather(*[
+                asyncio.to_thread(hash_password, pending_pws[d]) for d in chunk
+            ])
+            for d, h in zip(chunk, hashes):
+                pw_hashes[d] = h
+            done += len(chunk)
+            if progress_cb:
+                progress_cb(done, total_hash, "hashing")
+
     # --- 2b. Auto-crear quotas de coordinadores faltantes ---
     # Recolectar coordinadores únicos del Excel con su conteo de operadores.
     excel_coords: dict[str, tuple[str, int]] = {}  # {norm_name: (display, count)}
@@ -782,7 +827,9 @@ async def import_operators_from_excel(
 
     # --- 3. Procesar filas ---
     for idx, raw in enumerate(raw_rows, 1):
-        clean, val_errors = _validate_row(raw, idx)
+        if progress_cb and (idx % 20 == 0 or idx == len(raw_rows)):
+            progress_cb(idx, len(raw_rows), "processing")
+        clean, val_errors = pre_validated[idx]
         doc = clean["document_number"]
         full_name = f"{clean['first_name']} {clean['last_name']}".strip()
 
@@ -907,7 +954,10 @@ async def import_operators_from_excel(
             password = _build_password(doc, clean["document_type"])
 
             try:
-                user_id = await _create_user(db, email, password, clean, role_id)
+                user_id = await _create_user(
+                    db, email, password, clean, role_id,
+                    pw_hash=pw_hashes.get(doc),
+                )
             except Exception as exc:
                 errors += 1
                 rows_result.append(ImportRowResult(
@@ -975,9 +1025,13 @@ async def import_operators_from_excel(
 #  Funciones de creación (SQL crudo, como el script CLI)
 # ──────────────────────────────────────────────
 
-async def _create_user(db, email, password, clean, role_id) -> uuid.UUID:
-    """Crea un User y retorna su id."""
-    pw_hash = hash_password(password)
+async def _create_user(db, email, password, clean, role_id, pw_hash: str | None = None) -> uuid.UUID:
+    """Crea un User y retorna su id.
+
+    ``pw_hash`` permite reutilizar un hash pre-calculado en paralelo
+    (optimización para archivos grandes); si no llega, hashea en línea.
+    """
+    pw_hash = pw_hash or hash_password(password)
     result = await db.execute(text("""
         INSERT INTO users (
             id, email, password_hash, first_name, last_name,

@@ -4,6 +4,7 @@ Cubre el flujo de RE-IMPORTACIÓN (actualización de operadores ya asignados
 al evento): cambio de cargo, preservación de campos vacíos (COALESCE),
 rol no encontrado → NULL y detección de "sin cambios".
 """
+import asyncio
 import io
 import uuid
 from datetime import datetime, timezone
@@ -67,13 +68,48 @@ def _base_row(**overrides) -> dict:
     return row
 
 
+class _ImportResponse:
+    """Wrapper compatible con httpx.Response para el flujo asíncrono.
+
+    El POST de importación ahora responde 202 + job_id (job en background).
+    Este helper hace polling del endpoint de status hasta que el job
+    termina y expone ``.status_code``/``.json()`` con el ImportSummary,
+    manteniendo compatibles los asserts de los tests existentes:
+      - completed → 200 + summary
+      - failed    → 500 + {"detail": error}
+    """
+
+    def __init__(self, status_code: int, payload: dict):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
+
+
 async def _do_import(client: AsyncClient, token: str, event_id, rows: list[dict]):
     data = _build_xlsx(rows)
-    return await client.post(
+    res = await client.post(
         f"/api/events/{event_id}/import-operators",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("operadores.xlsx", data, XLSX_MIME)},
     )
+    if res.status_code != 202:
+        return res  # error de validación (400/403/404) tal cual
+
+    job_id = res.json()["job_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+    for _ in range(120):  # ~60s máximo esperando el job
+        await asyncio.sleep(0.5)  # cede el loop: el job avanza en background
+        st = await client.get(f"/api/events/import/status/{job_id}", headers=headers)
+        if st.status_code != 200:
+            return _ImportResponse(st.status_code, {"detail": st.json().get("detail")})
+        body = st.json()
+        if body["status"] == "completed":
+            return _ImportResponse(200, body["summary"])
+        if body["status"] == "failed":
+            return _ImportResponse(500, {"detail": body.get("error")})
+    return _ImportResponse(504, {"detail": "timeout esperando el job de importación"})
 
 
 async def _get_assignment(db: AsyncSession, event_id):
@@ -311,3 +347,87 @@ async def test_catalog_roles_excludes_advanced_event_only(client, db, setup_impo
     assert r2.status_code == 200, r2.text
     slugs2 = [r["slug"] for r in r2.json()]
     assert "catalogo-avanzado-test" in slugs2
+
+
+# ── Flujo asíncrono: 202 + job_id + endpoint de status ───────
+async def test_import_returns_202_with_job(client, admin_token, setup_import_env):
+    """El POST debe responder 202 inmediato con job_id + status_url."""
+    event, _, _, _ = setup_import_env
+    data = _build_xlsx([_base_row()])
+    res = await client.post(
+        f"/api/events/{event.id}/import-operators",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": ("operadores.xlsx", data, XLSX_MIME)},
+    )
+    assert res.status_code == 202, res.text
+    body = res.json()
+    assert body["job_id"]
+    assert body["status"] == "queued"
+    assert body["status_url"] == f"/api/events/import/status/{body['job_id']}"
+
+
+async def test_import_status_unknown_job_404(client, admin_token):
+    """Status de un job inexistente → 404."""
+    res = await client.get(
+        "/api/events/import/status/00000000-0000-0000-0000-000000000000",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 404
+
+
+async def test_import_status_requires_admin(client, db, setup_import_env):
+    """Un operador NO puede consultar el estado de un job (403)."""
+    op_user = User(
+        id=uuid.uuid4(), email="op-status@test.com",
+        password_hash=hash_password("password"),
+        first_name="Op", last_name="Status", user_type="operator",
+        document_number="555900", is_verified=True, is_approved=True,
+    )
+    db.add(op_user)
+    await db.commit()
+
+    res = await client.post("/api/auth/login", json={
+        "document_number": "555900", "password": "password",
+    })
+    assert res.status_code == 200, res.text
+    op_token = res.json()["access_token"]
+
+    res2 = await client.get(
+        "/api/events/import/status/cualquier-job-id",
+        headers={"Authorization": f"Bearer {op_token}"},
+    )
+    assert res2.status_code == 403
+
+
+async def test_import_job_completes_and_persists(client, db, admin_token, setup_import_env):
+    """El job en background procesa el Excel y el status incluye el summary."""
+    event, _, _, _ = setup_import_env
+    data = _build_xlsx([_base_row()])
+    res = await client.post(
+        f"/api/events/{event.id}/import-operators",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": ("operadores.xlsx", data, XLSX_MIME)},
+    )
+    assert res.status_code == 202, res.text
+    job_id = res.json()["job_id"]
+
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    final = None
+    for _ in range(120):  # ~60s
+        await asyncio.sleep(0.5)
+        st = await client.get(f"/api/events/import/status/{job_id}", headers=headers)
+        assert st.status_code == 200, st.text
+        body = st.json()
+        if body["status"] in ("completed", "failed"):
+            final = body
+            break
+    assert final is not None, "el job no terminó en 60s"
+    assert final["status"] == "completed", final.get("error")
+    assert final["summary"]["created"] == 1
+
+    # El operador quedó persistido en la BD
+    await db.rollback()
+    user = (await db.execute(
+        select(User).where(User.document_number == "555001")
+    )).scalar_one()
+    assert user is not None

@@ -130,9 +130,11 @@
                         <input type="file" id="importFileInput" accept=".xlsx" class="hidden" onchange="handleImportFile(event)">
                     </label>
                 </div>
-                <div id="importProgress" class="hidden text-center py-4">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                    <p class="text-sm text-gray-600 mt-2">Procesando Excel...</p>
+                <div id="importProgress" class="hidden py-4">
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2 overflow-hidden">
+                        <div id="importProgressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width:5%"></div>
+                    </div>
+                    <p id="importProgressText" class="text-sm text-gray-600 text-center">Procesando Excel…</p>
                 </div>
             </div>
 
@@ -596,6 +598,7 @@ loadEvent();loadAuditLogs();
 let _importSummary=null;
 
 function showImportModal(){
+    stopImportPolling();
     document.getElementById('importStep1').classList.remove('hidden');
     document.getElementById('importStep2').classList.add('hidden');
     document.getElementById('importProgress').classList.add('hidden');
@@ -620,25 +623,78 @@ async function downloadTemplate(){
     }catch(e){showToast('Error: '+e.message,'bg-red-500')}
 }
 
+// La importación corre EN BACKGROUND (202 + job_id): archivos grandes ya no
+// se cortan por timeout de nginx/Cloudflare. Aquí se sube el archivo y se
+// consulta el progreso con polling (barra de avance fila por fila).
+let _importPollTimer=null;
+
+function stopImportPolling(){
+    if(_importPollTimer){clearInterval(_importPollTimer);_importPollTimer=null}
+}
+
+function setImportProgress(processed,total,label){
+    const bar=document.getElementById('importProgressBar');
+    const txt=document.getElementById('importProgressText');
+    const pct=total>0?Math.round(processed/total*100):5;
+    bar.style.width=Math.max(pct,5)+'%';
+    txt.textContent=label||`Procesando ${processed}/${total}…`;
+}
+
 async function handleImportFile(ev){
     const file=ev.target.files[0];
     if(!file)return;
     if(!file.name.toLowerCase().endsWith('.xlsx')){showToast('El archivo debe ser .xlsx','bg-red-500');return}
-    document.getElementById('importProgress').classList.remove('hidden');
     const token=getToken();
+    document.getElementById('importProgress').classList.remove('hidden');
+    setImportProgress(0,0,'Subiendo archivo…');
     const fd=new FormData();
     fd.append('file',file);
     try{
         const res=await fetch(`/api/events/${EVENT_ID}/import-operators`,{
             method:'POST',headers:{'Authorization':'Bearer '+token},body:fd
         });
-        document.getElementById('importProgress').classList.add('hidden');
         if(!res.ok){
+            stopImportPolling();
+            document.getElementById('importProgress').classList.add('hidden');
             let msg='Error al importar';
             try{const d=await res.json();msg=d.detail||msg}catch(_){}
             showToast(msg,'bg-red-500');return;
         }
-        const summary=await res.json();
+        const acc=await res.json();
+        _importPollTimer=setInterval(()=>pollImportStatus(acc.job_id,token),1500);
+    }catch(e){
+        stopImportPolling();
+        document.getElementById('importProgress').classList.add('hidden');
+        showToast('Error: '+e.message,'bg-red-500');
+    }
+}
+
+async function pollImportStatus(jobId,token){
+    try{
+        const res=await fetch(`/api/events/import/status/${jobId}`,{headers:{'Authorization':'Bearer '+token}});
+        if(!res.ok){
+            stopImportPolling();
+            document.getElementById('importProgress').classList.add('hidden');
+            showToast('No se pudo consultar el progreso de la importación','bg-red-500');
+            return;
+        }
+        const st=await res.json();
+        if(st.status==='queued'){setImportProgress(0,0,'En cola…');return}
+        if(st.status==='running'){
+            const label=st.stage==='hashing'
+                ?`Generando credenciales ${st.processed}/${st.total}…`
+                :`Procesando fila ${st.processed}/${st.total}…`;
+            setImportProgress(st.processed,st.total,label);
+            return;
+        }
+        stopImportPolling();
+        document.getElementById('importProgress').classList.add('hidden');
+        if(st.status==='failed'){
+            showToast('Error importando: '+(st.error||'desconocido'),'bg-red-500');
+            return;
+        }
+        // completed → mostrar resumen
+        const summary=st.summary;
         _importSummary=summary;
         renderImportSummary();
         renderImportRows();
@@ -648,6 +704,7 @@ async function handleImportFile(ev){
         // Recargar asignaciones del evento
         loadEvent();
     }catch(e){
+        stopImportPolling();
         document.getElementById('importProgress').classList.add('hidden');
         showToast('Error: '+e.message,'bg-red-500');
     }
