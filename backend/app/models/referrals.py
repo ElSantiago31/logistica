@@ -7,7 +7,7 @@ Flujo:
   landing con ese código → se crea una fila en `referrals` (relación
   permanente e inmutable: un referido tiene UN solo referente).
 - Las métricas del referente (personas referidas, activos, asignados,
-  trabajaron, cupos generados) son CÁLCULO DERIVADO sobre
+  trabajaron) son CÁLCULO DERIVADO sobre
   `referrals` + `event_assignments`; NO se usan contadores +1/-1.
 """
 import uuid

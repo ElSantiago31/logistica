@@ -9,10 +9,6 @@ Reglas de negocio:
     * active_referrals   = referidos con operator.is_active = True
     * assigned_referrals = referidos con >= 1 EventAssignment activa
     * worked_referrals   = referidos con >= 1 assignment status='checked_in'
-- Cupos por derivación (F6): cuando un referido CONFIRMA un evento y su
-  asistencia se registra (checked_in), genera un cupo para el referente.
-  (Implementado como consulta derivada; los cupos tradicionales viven en
-  event_coordinator_quotas y NO se tocan aquí.)
 """
 import json
 import secrets
@@ -238,8 +234,6 @@ async def get_referrer_metrics(db: AsyncSession, referrer_operator_id: uuid.UUID
     - active_referrals:   referidos activos (operator.is_active)
     - assigned_referrals: referidos con >= 1 asignación activa
     - worked_referrals:   referidos con >= 1 asignación checked_in
-    - derived_quota:      cupos derivados = worked_referrals (1 cupo por
-                          referido que trabajó al menos 1 evento)
     """
     referred_ids_q = select(Referral.referred_operator_id).where(
         Referral.referrer_operator_id == referrer_operator_id
@@ -281,7 +275,6 @@ async def get_referrer_metrics(db: AsyncSession, referrer_operator_id: uuid.UUID
         "active_referrals": active,
         "assigned_referrals": assigned,
         "worked_referrals": worked,
-        "derived_quota": worked,
     }
 
 

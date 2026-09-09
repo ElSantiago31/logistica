@@ -296,7 +296,7 @@ Documentación completa: [REFERIDOS.md](REFERIDOS.md)
 
 **Servicio:** `services/referrals.py` — códigos `AC-NOMBRE-XXXX`, validación,
 registro de referidos (relación inmutable), métricas derivadas
-(`derived_quota` = referidos con `checked_in`), auditoría en
+(incluye referidos con `checked_in`), auditoría en
 `referral_audit_logs`.
 
 **Registro público:** `POST /api/auth/register` acepta `referral_code`

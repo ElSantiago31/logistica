@@ -229,7 +229,6 @@ class TestDerivedMetrics:
         assert m["active_referrals"] == 3
         assert m["assigned_referrals"] == 2
         assert m["worked_referrals"] == 1
-        assert m["derived_quota"] == 1, "1 cupo por referido que TRABAJO (no por asignado)"
 
     async def test_varios_eventos_no_duplican_cupo(self, db):
         referrer = await _mk_operator(db)
@@ -245,7 +244,6 @@ class TestDerivedMetrics:
 
         m = await get_referrer_metrics(db, referrer.id)
         assert m["worked_referrals"] == 1
-        assert m["derived_quota"] == 1, "DISTINCT: 2 eventos trabajados = 1 solo cupo"
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +315,6 @@ class TestReferralsAPI:
         item = next(c for c in items if c["code"] == "AC-LISTC-0010")
         assert item["operator_name"] == "Santiago Perez"
         assert item["total_referrals"] == 0
-        assert item["derived_quota"] == 0
 
     async def test_create_code_endpoint(self, db, sa_client):
         ref = await _mk_operator(db, first="Pepito", last="Lopez")

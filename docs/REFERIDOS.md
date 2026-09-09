@@ -31,9 +31,6 @@ referente acumula metricas derivadas (no contadores).
 - `active_referrals`: referidos con `operator.is_active = true`.
 - `assigned_referrals`: referidos con >= 1 asignacion activa.
 - `worked_referrals`: referidos con >= 1 asignacion `checked_in` (DISTINCT).
-- `derived_quota`: **cupos derivados = worked_referrals**. Un cupo por cada
-  referido que TRABAJO al menos un evento (no por asignarse). Varios eventos
-  del mismo referido NO generan mas cupos.
 
 ## Endpoints API (SuperAdmin)
 
