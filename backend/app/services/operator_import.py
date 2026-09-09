@@ -193,15 +193,27 @@ def _match_role(role_name: str, role_map: dict) -> Optional[uuid.UUID]:
         if key_norm == norm or key_norm == norm_singular:
             return rid
 
-    # Match parcial (contains)
+    # Match parcial (contains) con aislamiento de roles "Avanzada":
+    # si el texto trae "AVANZAD" solo se aceptan roles avanzados, y si no lo
+    # trae solo se aceptan roles básicos (evita que "Operador Logístico"
+    # caiga en "Operador Logístico Avanzada" o viceversa).
+    wants_advanced = "AVANZAD" in norm
+    candidates: list[tuple[str, uuid.UUID]] = []
     for key, rid in role_map.items():
         key_norm = _strip_accents(str(key)).upper().strip()
+        if ("AVANZAD" in key_norm) != wants_advanced:
+            continue
         if norm in key_norm or key_norm in norm:
-            return rid
+            candidates.append((key_norm, rid))
+            continue
         if "BRIGADISTA" in norm and "BRIGADISTA" in key_norm:
-            return rid
+            candidates.append((key_norm, rid))
+            continue
         if "OPERADOR" in norm and "LOGIST" in norm and "LOGIST" in key_norm:
-            return rid
+            candidates.append((key_norm, rid))
+    if candidates:
+        # Empate: gana el candidato más largo (más específico).
+        return max(candidates, key=lambda t: len(t[0]))[1]
 
     return None
 

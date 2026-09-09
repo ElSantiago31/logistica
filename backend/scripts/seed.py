@@ -47,6 +47,9 @@ ROLES = [
     ("Coordinadores Externos", "coordinadores_externos", "Coordinación externa (reporta al Coordinador General)", None, 3, "Externa", True),
     ("Brigadista Externo", "brigadista_externo", "Brigada de emergencias externa (reporta al Coordinador General)", None, 3, "Externa", True),
     ("Personal Oficina", "personal_oficina", "Personal de oficina (reporta al Coordinador General)", None, 3, "Oficina", True),
+    # Roles avanzados event-only (solo asignables vía importación Excel)
+    ("Operador Logístico Avanzada", "operador_logistico_avanzado", "Operador logístico avanzado (solo asignable por importación de personal)", None, 3, "Logística", True),
+    ("Brigadista Avanzada", "brigadista_avanzado", "Brigadista avanzado (solo asignable por importación de personal)", None, 3, "Emergencias", True),
 ]
 
 # Catálogo oficial de Fondos de Pensión (Colombia)

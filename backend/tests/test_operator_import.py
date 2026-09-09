@@ -249,3 +249,65 @@ async def test_reimport_identical_row_no_changes(client, admin_token, setup_impo
     assert summary["updated"] == 0
     assert summary["already_assigned"] == 1
     assert summary["rows"][0]["status"] == "already_assigned"
+
+
+# ── Caso 7: roles avanzados event-only vía importación ───────
+async def test_import_advanced_roles_no_collision(client, db, admin_token, setup_import_env):
+    """'Operador Logístico Avanzada' y 'Brigadista Avanzada' deben matchear
+    su propio rol (event-only) y NO colisionar con los roles básicos."""
+    event, role_log, _, _ = setup_import_env
+    role_adv_log = Role(
+        id=uuid.uuid4(), name="Operador Logístico Avanzada",
+        slug="operador_logistico_avanzado",
+        area="Logistica", hierarchy_level=3, is_event_only=True,
+    )
+    role_adv_brig = Role(
+        id=uuid.uuid4(), name="Brigadista Avanzada",
+        slug="brigadista_avanzado",
+        area="Emergencias", hierarchy_level=3, is_event_only=True,
+    )
+    db.add_all([role_adv_log, role_adv_brig])
+    await db.commit()
+
+    res = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"NUMERO CEDULA": "555100", "ROL ASIGANDO": "Operador Logístico Avanzada"}),
+        _base_row(**{"NUMERO CEDULA": "555101", "ROL ASIGANDO": "Operador Logistico"}),
+        _base_row(**{"NUMERO CEDULA": "555102", "ROL ASIGANDO": "Brigadista Avanzada"}),
+    ])
+    assert res.status_code == 200, res.text
+    summary = res.json()
+    assert summary["created"] == 3
+    for row in summary["rows"]:
+        assert not any("no encontrado" in w for w in (row.get("warnings") or [])), row
+
+    await db.rollback()
+    res2 = await db.execute(
+        select(EventAssignment).where(EventAssignment.event_id == event.id)
+    )
+    role_ids = {str(a.role_id) for a in res2.scalars().all()}
+    assert str(role_adv_log.id) in role_ids      # avanzada NO cayó en la básica
+    assert str(role_adv_brig.id) in role_ids     # brigadista avanzada matcheó
+    assert str(role_log.id) in role_ids          # rol básico sigue matcheando
+
+
+# ── Caso 8: catálogo excluye roles event-only por defecto ────
+async def test_catalog_roles_excludes_advanced_event_only(client, db, setup_import_env):
+    """/api/catalogs/roles no debe listar los roles event-only (registro de
+    operadores), pero sí listarlos con include_event_only=true (eventos)."""
+    role_adv = Role(
+        id=uuid.uuid4(), name="Operador Logístico Avanzada",
+        slug="catalogo-avanzado-test",
+        area="Logistica", hierarchy_level=3, is_event_only=True,
+    )
+    db.add(role_adv)
+    await db.commit()
+
+    r1 = await client.get("/api/catalogs/roles")
+    assert r1.status_code == 200, r1.text
+    slugs = [r["slug"] for r in r1.json()]
+    assert "catalogo-avanzado-test" not in slugs
+
+    r2 = await client.get("/api/catalogs/roles?include_event_only=true")
+    assert r2.status_code == 200, r2.text
+    slugs2 = [r["slug"] for r in r2.json()]
+    assert "catalogo-avanzado-test" in slugs2
