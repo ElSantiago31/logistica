@@ -46,7 +46,7 @@ def _apply_print_setup(wb) -> None:
       con alto ilimitado (fitToHeight=0) para que pagine por filas.
     - Márgenes estrechos para aprovechar el espacio.
     - Centrado horizontal.
-    - Área de impresión limitada a las columnas B:M (las que usa la plantilla).
+    - Área de impresión limitada a las columnas B:N (las que usa la plantilla).
     """
     from openpyxl.worksheet.properties import PageSetupProperties
     from openpyxl.worksheet.page import PageMargins
@@ -66,10 +66,10 @@ def _apply_print_setup(wb) -> None:
         )
         # Centrado horizontal en la página
         ws.print_options.horizontalCentered = True
-        # Área de impresión: columnas B:M (las que usa la plantilla),
+        # Área de impresión: columnas B:N (las que usa la plantilla),
         # desde la fila 1 hasta el final del contenido.
         last_row = max(ws.max_row, 28)
-        ws.print_area = f"B1:M{last_row}"
+        ws.print_area = f"B1:N{last_row}"
 
 
 # ============================================================

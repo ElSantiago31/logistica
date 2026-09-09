@@ -30,6 +30,7 @@ def test_generate_planilla_xlsx_structure():
             "address": f"Calle {i}",
             "phone": f"300{i:07d}",
             "coordinator_name": "Coordinador A",
+            "role_name": f"Rol_{i:02d}",
             "jacket_number": f"J_{i}",
             "cap_number": f"C_{i}"
         })
@@ -63,17 +64,21 @@ def test_generate_planilla_xlsx_structure():
     assert ws1["D5"].value in (None, "")
     assert ws1["D6"].value == event_name
     assert ws1["D7"].value == "26/06/2026"
-    assert ws1["K7"].value == event_location
-    
+    assert ws1["J7"].value == event_location
+
     # Check that first operator name is split
     assert ws1["C9"].value == "Operador_00"
     assert ws1["D9"].value == "Apellido_00"
+    # Columna ROL (H) con el rol del operador
+    assert ws1["H9"].value == "Rol_00"
+    # VALOR (L) queda vacío — no hay dato
+    assert ws1["L9"].value in (None, "")
     assert ws1["E9"].value == "Doc_0"
     assert ws1["F9"].value == "Calle 0"
     assert ws1["G9"].value == "3000000000"
-    assert ws1["H9"].value == "Coordinador A"
-    assert ws1["I9"].value == "J_0"
-    assert ws1["J9"].value == "C_0"
+    assert ws1["I9"].value == "Coordinador A"
+    assert ws1["J9"].value == "J_0"
+    assert ws1["K9"].value == "C_0"
     
     # Check that 20th operator is in sheet 1 (row 28)
     assert ws1["C28"].value == "Operador_19"
@@ -250,6 +255,19 @@ async def test_download_planilla_coordinador_endpoint(client: AsyncClient, admin
     assert juan_row is not None, "Operator 1 (doc 11111) should be in the spreadsheet"
     assert ws.cell(row=juan_row, column=3).value == "Juan"
     assert ws.cell(row=juan_row, column=4).value == "Perez"
+    # Columna ROL (H): Juan es "Logistico"
+    assert ws.cell(row=juan_row, column=8).value == "Logistico"
+    # Fila del coordinador Carlos (doc 77777): rol "Coordinador General"
+    carlos_row = None
+    for row in range(9, 29):
+        if ws.cell(row=row, column=5).value == "77777":
+            carlos_row = row
+            break
+    assert carlos_row is not None, "Coordinator (doc 77777) should be in the spreadsheet"
+    assert ws.cell(row=carlos_row, column=8).value == "Coordinador General"
+    # No CHAQ (J=10) y No GORRA (K=11) de Juan siguen alineados
+    assert ws.cell(row=juan_row, column=10).value == "J-10"
+    assert ws.cell(row=juan_row, column=11).value == "C-05"
     # Ensure operator 2 is not in the sheet since status was 'confirmed' and not 'checked_in'
     for row in range(9, 29):
         if ws.cell(row=row, column=5).value == "22222":
@@ -264,3 +282,73 @@ async def test_download_planilla_coordinador_forbidden(client: AsyncClient, oper
         headers={"Authorization": f"Bearer {operator_token}"}
     )
     assert response.status_code == 403
+
+
+def test_planilla_rol_column_and_layout():
+    """Verifica el layout de la plantilla nueva: headers de la fila 8 y que
+    cada dato caiga bajo su encabezado (nada descuadrado tras insertar ROL)."""
+    event_name = "Evento Layout"
+    event_date = datetime(2026, 8, 15, 10, 0, 0)
+    event_location = "Teatro Central"
+
+    ops = [
+        {
+            "full_name": "Ana Ruiz",
+            "document_number": "1010",
+            "address": "Cra 1",
+            "phone": "3011111111",
+            "coordinator_name": "Coord X",
+            "role_name": "Anfitriona",
+            "jacket_number": "JX-1",
+            "cap_number": "GX-1",
+        },
+        {
+            "full_name": "Luis Soto",
+            "document_number": "2020",
+            "address": "Cra 2",
+            "phone": "3022222222",
+            "coordinator_name": "Coord X",
+            "role_name": "Logistico",
+            "jacket_number": "JX-2",
+            "cap_number": "GX-2",
+        },
+    ]
+
+    xlsx_bytes = generate_planilla_xlsx(
+        event_name=event_name,
+        event_date=event_date,
+        event_location=event_location,
+        operators=ops,
+        group_by="none",
+    )
+
+    wb = openpyxl.load_workbook(BytesIO(xlsx_bytes))
+    ws = wb[wb.sheetnames[0]]
+
+    # --- Encabezados de la tabla (fila 8) según la plantilla nueva ---
+    assert ws["B8"].value == "No"
+    assert ws["H8"].value == "ROL"
+    assert ws["I8"].value == "COORDINADOR"
+    assert ws["J8"].value == "No CHAQ"
+    assert ws["K8"].value == "No GORRA"
+    assert ws["L8"].value == "VALOR"
+    assert ws["M8"].value == "FIRMA"
+
+    # --- Encabezado del evento: LUGAR ahora en J7 ---
+    assert ws["J7"].value == event_location
+
+    # --- Datos de la fila 9 (Ana, ordenada por apellido: Ruiz < Soto) ---
+    assert ws["C9"].value == "Ana"
+    assert ws["D9"].value == "Ruiz"
+    assert ws["E9"].value == "1010"
+    assert ws["F9"].value == "Cra 1"
+    assert ws["G9"].value == "3011111111"
+    assert ws["H9"].value == "Anfitriona"
+    assert ws["I9"].value == "Coord X"
+    assert ws["J9"].value == "JX-1"
+    assert ws["K9"].value == "GX-1"
+    assert ws["L9"].value in (None, "")  # VALOR vacío
+    assert ws["M9"].value in (None, "")  # FIRMA sin firma embebida
+
+    # --- Fila 10 (Luis, rol distinto) ---
+    assert ws["H10"].value == "Logistico"

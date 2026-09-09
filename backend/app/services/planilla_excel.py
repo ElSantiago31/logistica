@@ -21,12 +21,12 @@ Estructura de la plantilla (1 hoja "Planilla"):
     Encabezado:
         D5  → COORDINADOR GENERAL  (celda combinada D5:J5)
         D6  → NOMBRE DEL EVENTO    (celda combinada D6:G6)
-        D7  → FECHA                (celda combinada D7:H7)
-        K7  → LUGAR                (celda combinada K7:M7)
+        D7  → FECHA                (celda combinada D7:I7)
+        J7  → LUGAR                (celda combinada J7:K7)
     Tabla (filas 9-28, 20 operadores pre-numerados):
         B=No | C=NOMBRES | D=APELLIDOS | E=CEDULA | F=DIRECCION
-        G=CELULAR | H=COORDINADOR | I=No CHAQ | J=No GORRA
-        K=VALOR | L=FIRMA | M=No DSE   (estos quedan vacíos)
+        G=CELULAR | H=ROL | I=COORDINADOR | J=No CHAQ | K=No GORRA
+        L=VALOR | M=FIRMA | N=No DSE   (VALOR y No DSE quedan vacíos)
 """
 import io
 import re
@@ -53,8 +53,8 @@ logger = logging.getLogger(__name__)
 # Rojo claro (vetado) tiene prioridad sobre amarillo claro (novedad).
 BAN_FILL = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")  # red-200
 INCIDENT_FILL = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")  # amber-100
-# Última columna de datos en la plantilla (M=13). Se usa para pintar toda la fila.
-LAST_COL = 13
+# Última columna de datos en la plantilla (N=14). Se usa para pintar toda la fila.
+LAST_COL = 14
 
 # --- Configuración de la plantilla ---
 TEMPLATE_PATH = (
@@ -74,17 +74,18 @@ COL_APELLIDOS = 4    # D
 COL_CEDULA = 5       # E
 COL_DIRECCION = 6    # F
 COL_CELULAR = 7      # G
-COL_COORDINADOR = 8  # H
-COL_CHAQ = 9         # I
-COL_GORRA = 10       # J
-COL_FIRMA = 12       # L — columna donde van las firmas embebidas
-# K=VALOR, M=No DSE → se dejan vacíos (no tenemos el dato)
+COL_ROL = 8          # H  — ROL del operador en el evento
+COL_COORDINADOR = 9  # I
+COL_CHAQ = 10        # J
+COL_GORRA = 11       # K
+COL_FIRMA = 13       # M — columna donde van las firmas embebidas
+# L=VALOR, N=No DSE → se dejan vacíos (no tenemos el dato)
 
 # --- Celdas del encabezado (top-left de la celda combinada) ---
 CELL_COORD = "D5"
 CELL_EVENTO = "D6"
 CELL_FECHA = "D7"
-CELL_LUGAR = "K7"
+CELL_LUGAR = "J7"
 
 
 def _split_name(full_name: str) -> tuple[str, str]:
@@ -360,7 +361,7 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
     """Rellena las filas de operadores (a partir de la fila 9).
 
     ``operators`` es una lista de dicts con las claves:
-        full_name, document_number, address, phone,
+        full_name, document_number, address, phone, role_name,
         coordinator_name, jacket_number, cap_number,
         is_banned (bool), has_incident (bool),
         signature_data (str|None, base64 PNG — solo cuando with_signatures)
@@ -373,7 +374,7 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
 
     Cuando ``with_signatures=True`` y el operador tiene ``signature_data``,
     se aumenta la altura de la fila a ``_SIGNATURE_ROW_HEIGHT_PT`` (50pt) y
-    se embebe la firma centrada en la columna L (``COL_FIRMA``).
+    se embebe la firma centrada en la columna M (``COL_FIRMA``).
     """
     for idx, op in enumerate(operators):
         row = FIRST_DATA_ROW + idx
@@ -390,11 +391,12 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
         ws.cell(row=row, column=COL_CEDULA, value=op.get("document_number", ""))
         ws.cell(row=row, column=COL_DIRECCION, value=op.get("address", ""))
         ws.cell(row=row, column=COL_CELULAR, value=op.get("phone", ""))
+        ws.cell(row=row, column=COL_ROL, value=op.get("role_name", ""))
         ws.cell(row=row, column=COL_COORDINADOR, value=op.get("coordinator_name", ""))
         ws.cell(row=row, column=COL_CHAQ, value=op.get("jacket_number", ""))
         ws.cell(row=row, column=COL_GORRA, value=op.get("cap_number", ""))
 
-        # --- Embeber firma (opcional) en la columna L ---
+        # --- Embeber firma (opcional) en la columna M ---
         # Solo si with_signatures=True y el operador tiene signature_data.
         # Se aumenta la altura de la fila ANTES de calcular el centrado,
         # porque _add_centered_signature lee ws.row_dimensions[row].height.
