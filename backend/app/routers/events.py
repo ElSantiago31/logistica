@@ -11,7 +11,7 @@ from app.models.users import User
 from app.schemas.events import (
     EventCreate, EventUpdate, EventResponse, EventListResponse,
     AssignmentResponse, AssignOperatorsRequest,
-    ImportSummary,
+    ImportSummary, DeleteEventRequest,
 )
 from app.services import events as svc
 from app.services import operator_import as imp_svc
@@ -83,12 +83,20 @@ async def update_event(
 @router.delete("/{event_id}")
 async def delete_event(
     event_id: uuid.UUID,
+    data: DeleteEventRequest,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Delete an event."""
-    if user.user_type not in ("superadmin", "admin"):
-        raise HTTPException(403, "Sin permisos")
+    """Elimina un evento. Solo superadmin y con confirmación de contraseña.
+
+    El cuerpo debe incluir la contraseña de acceso del superadmin
+    ({"password": "..."}) como doble factor de confirmación.
+    """
+    if user.user_type != "superadmin":
+        raise HTTPException(403, "Solo un superadmin puede eliminar eventos")
+    from app.services.auth import verify_password
+    if not verify_password(data.password, user.password_hash):
+        raise HTTPException(403, "Contraseña incorrecta. Eliminación cancelada.")
     ok = await svc.delete_event(db, event_id)
     if not ok:
         raise HTTPException(404, "Evento no encontrado")

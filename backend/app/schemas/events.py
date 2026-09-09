@@ -6,6 +6,15 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, model_validator
 
 
+class DeleteEventRequest(BaseModel):
+    """Confirmación obligatoria para eliminar un evento (solo superadmin).
+
+    El superadmin debe re-ingresar su contraseña de acceso para que la
+    eliminación proceda (doble factor de confirmación).
+    """
+    password: str = Field(..., min_length=1)
+
+
 # --- Staff Need ---
 class StaffNeedCreate(BaseModel):
     role_id: uuid.UUID
