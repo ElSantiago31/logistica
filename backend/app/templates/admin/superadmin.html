@@ -19,11 +19,6 @@
             <button onclick="showCreateModal()" class="px-5 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">+ Nuevo Admin</button>
         </div>
 
-        <div class="mb-6 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-            ℹ️ Las solicitudes de operadores pendientes se aprueban en
-            <a href="/admin/operators" class="underline font-semibold">Operadores → ⏳ Pendientes</a>.
-        </div>
-
         <div id="adminsTable" class="bg-white rounded-xl shadow-lg overflow-hidden">
             <div class="p-8 text-center text-gray-400">Cargando...</div>
         </div>
@@ -45,7 +40,15 @@
                 </div>
                 <div><label class="text-xs text-gray-500">Email (opcional)</label><input id="email" type="email" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="correo@ejemplo.com"></div>
                 <div><label class="text-xs text-gray-500">Teléfono</label><input id="phone" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="text-xs text-gray-500">Contraseña*</label><input id="password" type="password" required class="w-full px-3 py-2 border rounded-lg text-sm" minlength="8"></div>
+                <div>
+                    <label class="text-xs text-gray-500">Contraseña*</label>
+                    <div class="relative">
+                        <input id="password" type="password" required class="w-full px-3 py-2 pr-10 border rounded-lg text-sm" minlength="8">
+                        <button type="button" onclick="togglePw()" aria-label="Mostrar u ocultar contraseña" class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700">
+                            <span id="pwToggleIcon">👁️</span>
+                        </button>
+                    </div>
+                </div>
 <div><label class="text-xs text-gray-500">Rol</label><select id="userType" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="superadmin">Superadmin (acceso total)</option><option value="admin">Admin (gestión operativa)</option><option value="web_admin">Web Admin (contenido del sitio)</option><option value="checkin">Check-in (e Indumentaria)</option><option value="intendencia">Intendencia (Check-in + Indumentaria)</option></select></div>
                 <div class="flex gap-3 pt-2">
                     <button type="button" onclick="saveAdmin()" class="flex-1 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">Guardar</button>
@@ -58,6 +61,17 @@
     <script>
     (function(){const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');if(!t||u.user_type!=='superadmin'){location.href='/admin/login';return}})();
     function authH(){return{Authorization:'Bearer '+localStorage.getItem('access_token')}}
+    // Mostrar/ocultar contraseña del formulario de admins
+    function togglePw(){
+        const i=document.getElementById('password'),icon=document.getElementById('pwToggleIcon');
+        const show=i.type==='password';
+        i.type=show?'text':'password';
+        icon.textContent=show?'🙈':'👁️';
+    }
+    function resetPwVisibility(){
+        const i=document.getElementById('password'),icon=document.getElementById('pwToggleIcon');
+        i.type='password';icon.textContent='👁️';
+    }
     function toast(m,t){const c=document.getElementById('toast-container'),e=document.createElement('div');e.className='toast '+(t==='error'?'bg-red-500':t==='success'?'bg-green-500':'bg-blue-500')+' text-white px-6 py-3 rounded-lg shadow-lg';e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),4000)}
 
     async function loadAdmins(){
@@ -101,6 +115,7 @@
         document.getElementById('modalTitle').textContent='Nuevo Administrador';
         document.getElementById('editId').value='';
         document.getElementById('adminForm').reset();
+        resetPwVisibility();
         document.getElementById('password').required=true;
         document.getElementById('userType').disabled=false;
         document.getElementById('modal').classList.remove('hidden');
@@ -123,6 +138,7 @@
             if(a.user_type==='superadmin'){ut.disabled=true;ut.value='superadmin'}
             else{ut.disabled=false}
             document.getElementById('password').value='';
+            resetPwVisibility();
             document.getElementById('password').required=false;
             document.getElementById('modal').classList.remove('hidden');
         }catch(e){toast('Error','error')}
