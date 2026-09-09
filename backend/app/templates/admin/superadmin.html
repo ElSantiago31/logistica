@@ -152,7 +152,7 @@
 
     async function saveAdmin(){
         const id=document.getElementById('editId').value;
-        const body={first_name:document.getElementById('fName').value,last_name:document.getElementById('lName').value,document_type:document.getElementById('docType').value,document_number:document.getElementById('docNum').value,email:document.getElementById('email').value||undefined,phone:document.getElementById('phone').value||undefined,user_type:document.getElementById('userType').value};
+        const body={first_name:document.getElementById('fName').value,last_name:document.getElementById('lName').value,document_type:document.getElementById('docType').value,document_number:document.getElementById('docNum').value,email:document.getElementById('email').value.trim(),phone:document.getElementById('phone').value||undefined,user_type:document.getElementById('userType').value};
         const pw=document.getElementById('password').value;
         if(pw)body.password=pw;
         try{

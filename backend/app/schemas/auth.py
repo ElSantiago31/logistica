@@ -22,7 +22,7 @@ class LoginResponse(BaseModel):
 
 class UserBrief(BaseModel):
     id: uuid.UUID
-    email: str
+    email: Optional[str] = None
     first_name: str
     last_name: str
     user_type: str
@@ -60,7 +60,7 @@ class RefreshTokenRequest(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: str  # user_id
-    email: str
+    email: Optional[str] = None
     type: str  # access | refresh
     role: Optional[str] = None
     jti: str  # unique token identifier

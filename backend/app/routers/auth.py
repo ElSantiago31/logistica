@@ -420,9 +420,10 @@ async def create_admin(
         raise HTTPException(status_code=409, detail="El número de documento ya está registrado")
 
     # Check duplicate email if provided
-    if request.get("email"):
+    email = (request.get("email") or "").strip() or None
+    if email:
         existing = await db.execute(
-            select(User).where(User.email == request["email"])
+            select(User).where(User.email == email)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado")
@@ -440,7 +441,7 @@ async def create_admin(
     user_type = requested_type if requested_type in allowed_create else permissions.CHECKIN
 
     user = User(
-        email=request.get("email", f"{request['document_number']}@logistica.local"),
+        email=email,
         password_hash=hash_password(request["password"]),
         first_name=request["first_name"],
         last_name=request["last_name"],
@@ -541,14 +542,17 @@ async def update_admin(
             raise HTTPException(status_code=409, detail="El número de documento ya está registrado")
         admin.document_number = new_doc
 
-    # Email (with duplicate check on change)
-    if "email" in request and request["email"] and request["email"] != admin.email:
-        new_email = request["email"]
-        existing = await db.execute(
-            select(User).where(User.email == new_email, User.id != admin.id)
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado")
+    # Email (with duplicate check on change).
+    # El email es opcional: si se envía vacío, se limpia (NULL) — nunca se
+    # genera un correo sintético automáticamente.
+    if "email" in request:
+        new_email = (request.get("email") or "").strip() or None
+        if new_email and new_email != admin.email:
+            existing = await db.execute(
+                select(User).where(User.email == new_email, User.id != admin.id)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado")
         admin.email = new_email
 
     if request.get("password"):
