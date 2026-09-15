@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editar Evento - Logística Admin</title>
     <link rel="stylesheet" href="/static/frontend/tailwind.css?v=20260718">
+    <style>.stage-hidden{display:none!important}</style>
 </head>
 <body class="bg-gray-50 min-h-screen">
     {% include 'admin/_admin_nav.html' %}
@@ -74,10 +75,21 @@
                     <div id="checkinList" class="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3"><p class="text-xs text-gray-400">Cargando...</p></div>
                 </div>
             </div>
+            <!-- Etapas del evento: tabs que filtran Personal Requerido y Cupos -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-1">Etapas del Evento</h2>
+                <p class="text-xs text-gray-500 mb-3">Define el personal requerido y los cupos de coordinador <b>por etapa</b>. Un operador asignado a varias etapas genera <b>doble turno</b> (cobra cada etapa).</p>
+                <div id="stageTabs" class="flex flex-wrap gap-2">
+                    <button type="button" data-stage="previa" class="stage-tab px-4 py-2 rounded-lg text-sm font-medium border bg-white text-gray-600 hover:bg-gray-50">Previa (0)</button>
+                    <button type="button" data-stage="avanzada" class="stage-tab px-4 py-2 rounded-lg text-sm font-medium border bg-white text-gray-600 hover:bg-gray-50">Avanzada (0)</button>
+                    <button type="button" data-stage="evento" class="stage-tab px-4 py-2 rounded-lg text-sm font-medium border bg-blue-600 text-white border-blue-600">Evento (0)</button>
+                    <button type="button" data-stage="desmontaje" class="stage-tab px-4 py-2 rounded-lg text-sm font-medium border bg-white text-gray-600 hover:bg-gray-50">Desmontaje (0)</button>
+                </div>
+            </div>
             <!-- Staff Needs -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-800">Personal Requerido</h2>
+                    <h2 class="text-lg font-semibold text-gray-800">Personal Requerido <span id="needsStageLabel" class="text-sm font-normal text-gray-500"></span></h2>
                     <button type="button" onclick="addStaffRow()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ Agregar rol</button>
                 </div>
                 <div id="staffRows" class="space-y-3"></div>
@@ -85,10 +97,10 @@
             <!-- Coordinator Quotas (nuevo flujo) -->
             <div class="bg-white rounded-lg shadow p-6 space-y-4">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-800">Cupos de Coordinadores</h2>
+                    <h2 class="text-lg font-semibold text-gray-800">Cupos de Coordinadores <span id="quotaStageLabel" class="text-sm font-normal text-gray-500"></span></h2>
                     <button type="button" onclick="addQuotaRow()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">+ Agregar coordinador</button>
                 </div>
-                <p class="text-xs text-gray-500">Asigna cupos a coordinadores. El cupo es informativo (no bloquea la asignación).</p>
+                <p class="text-xs text-gray-500">Asigna cupos a coordinadores por etapa. El cupo es informativo (no bloquea la asignación).</p>
                 <div id="quotaRows" class="space-y-3"></div>
             </div>
             <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white"></div>
@@ -112,6 +124,42 @@ function updateEndDateMin(){
 }
 let roles=[];
 
+// ===== Etapas del evento (stage) =====
+const STAGES=['previa','avanzada','evento','desmontaje'];
+const STAGE_LABELS={previa:'Previa',avanzada:'Avanzada',evento:'Evento',desmontaje:'Desmontaje'};
+let currentStageVal='evento';
+function currentStage(){return currentStageVal}
+function switchStage(stage){
+    if(!STAGES.includes(stage))stage='evento';
+    currentStageVal=stage;
+    document.querySelectorAll('#stageTabs .stage-tab').forEach(b=>{
+        const active=b.dataset.stage===stage;
+        b.className='stage-tab px-4 py-2 rounded-lg text-sm font-medium border '+(active?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-600 hover:bg-gray-50');
+    });
+    applyStageFilter();
+}
+function applyStageFilter(){
+    const st=currentStageVal;
+    document.querySelectorAll('#staffRows > div[data-stage], #quotaRows > div[data-stage]').forEach(row=>{
+        row.classList.toggle('stage-hidden',row.dataset.stage!==st);
+    });
+    const lbl='· Etapa: '+STAGE_LABELS[st];
+    const n=document.getElementById('needsStageLabel'); if(n)n.textContent=lbl;
+    const q=document.getElementById('quotaStageLabel'); if(q)q.textContent=lbl;
+    updateTabCounts();
+}
+function updateTabCounts(){
+    document.querySelectorAll('#stageTabs .stage-tab').forEach(b=>{
+        const s=b.dataset.stage;
+        const needs=document.querySelectorAll('#staffRows > div[data-stage="'+s+'"]').length;
+        const quotas=document.querySelectorAll('#quotaRows > div[data-stage="'+s+'"]').length;
+        b.textContent=STAGE_LABELS[s]+' ('+(needs+quotas)+')';
+    });
+}
+document.querySelectorAll('#stageTabs .stage-tab').forEach(b=>{
+    b.addEventListener('click',()=>switchStage(b.dataset.stage));
+});
+
 async function loadRoles(){
     const token=getToken();
     const res=await fetch('/api/catalogs/roles?include_event_only=true',{headers:{'Authorization':'Bearer '+token}});
@@ -119,19 +167,23 @@ async function loadRoles(){
     roles=data.items||data;
 }
 
-function addStaffRow(roleId='',qty=1,rate='',edu=''){
+function addStaffRow(roleId='',qty=1,rate='',edu='',stage=''){
+    const st=STAGES.includes(stage)&&stage?stage:currentStage();
     const div=document.getElementById('staffRows');
     const opts=roles.map(r=>`<option value="${r.id}" ${r.id===roleId?'selected':''}>${r.name}</option>`).join('');
     const eduOpts=`<option value="">Sin requisito</option><option value="primaria" ${edu==='primaria'?'selected':''}>Primaria</option><option value="secundaria" ${edu==='secundaria'?'selected':''}>Secundaria</option><option value="tecnico" ${edu==='tecnico'?'selected':''}>Tecnico</option><option value="tecnologo" ${edu==='tecnologo'?'selected':''}>Tecnologo</option><option value="universitario" ${edu==='universitario'?'selected':''}>Universitario</option><option value="postgrado" ${edu==='postgrado'?'selected':''}>Postgrado</option>`;
     const row=document.createElement('div');
     row.className='grid grid-cols-2 sm:grid-cols-[1fr_80px_130px_130px_40px] gap-2 items-center';
+    row.dataset.stage=st;
+    row.title='Etapa: '+STAGE_LABELS[st];
     row.innerHTML=`
         <select class="staff-role border rounded-lg px-3 py-2 text-sm col-span-2 sm:col-span-1"><option value="">Seleccionar rol</option>${opts}</select>
         <input type="number" class="staff-qty border rounded-lg px-3 py-2 text-sm" min="1" value="${qty}" placeholder="Cant.">
         <input type="number" class="staff-rate border rounded-lg px-3 py-2 text-sm" step="1" value="${rate||''}" placeholder="Costo/turno $">
         <select class="staff-edu border rounded-lg px-2 py-2 text-xs">${eduOpts}</select>
-        <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
+        <button type="button" onclick="this.parentElement.remove();updateTabCounts()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
     div.appendChild(row);
+    applyStageFilter();
 }
 
 let allStaffUsers = [];
@@ -326,7 +378,7 @@ async function loadEvent(){
     // Load existing staff needs
     await loadRoles();
     if(ev.staff_needs&&ev.staff_needs.length){
-        ev.staff_needs.forEach(n=>addStaffRow(n.role_id,n.quantity_needed,n.rate_per_shift||'',n.education_level||''));
+        ev.staff_needs.forEach(n=>addStaffRow(n.role_id,n.quantity_needed,n.rate_per_shift||'',n.education_level||'',n.stage||'evento'));
     }
     // Load staff system assignments
     await loadStaffUsers();
@@ -336,8 +388,9 @@ async function loadEvent(){
     if(ev.coordinator_quotas && ev.coordinator_quotas.length){
         // Pasar q.coordinator como 3er arg (legacyName) para los coordinadores
         // importados de Excel que NO tienen FK (coordinator_operator_id es null).
-        ev.coordinator_quotas.forEach(q => addQuotaRow(q.coordinator_operator_id, q.quota, q.coordinator));
+        ev.coordinator_quotas.forEach(q => addQuotaRow(q.coordinator_operator_id, q.quota, q.coordinator, q.stage||'evento'));
     }
+    switchStage('evento');
 }
 
 document.getElementById('eventForm').addEventListener('submit',async(e)=>{
@@ -352,7 +405,7 @@ document.getElementById('eventForm').addEventListener('submit',async(e)=>{
         const qty=parseInt(row.querySelector('.staff-qty').value)||0;
         const rate=parseFloat(row.querySelector('.staff-rate').value)||null;
         const edu=row.querySelector('.staff-edu').value||null;
-        if(roleId&&qty>0) staffNeeds.push({role_id:roleId,quantity_needed:qty,rate_per_shift:rate,education_level:edu||null});
+        if(roleId&&qty>0) staffNeeds.push({role_id:roleId,quantity_needed:qty,rate_per_shift:rate,education_level:edu||null,stage:row.dataset.stage||'evento'});
     });
     const body={
         name:document.getElementById('name').value,
@@ -400,12 +453,15 @@ async function loadCoordinators(){
         coordinatorOperators=(data.items||[]).filter(o=>o.is_active!==false);
     }catch(e){console.error('Error cargando coordinadores',e);}
 }
-function addQuotaRow(opId='',quota=5,legacyName=''){
+function addQuotaRow(opId='',quota=5,legacyName='',stage=''){
+    const st=STAGES.includes(stage)&&stage?stage:currentStage();
     const div=document.getElementById('quotaRows');
     const rowId='qr'+Date.now()+Math.random().toString(36).slice(2,6);
     const row=document.createElement('div');
     row.className='relative grid grid-cols-[1fr_100px_40px] gap-2 items-center';
     row.dataset.rowId=rowId;
+    row.dataset.stage=st;
+    row.title='Etapa: '+STAGE_LABELS[st];
     // Resolver preset:
     //  - opId (FK) → buscar coordinador real en la lista y armar label.
     //  - legacyName (sin FK, importado de Excel) → usar el nombre tal cual,
@@ -434,8 +490,9 @@ function addQuotaRow(opId='',quota=5,legacyName=''){
             <div class="quota-dropdown hidden absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto"></div>
         </div>
         <input type="number" class="quota-val border rounded-lg px-3 py-2 text-sm" min="0" value="${quota}" placeholder="Cupo">
-        <button type="button" onclick="this.closest('[data-row-id]').remove()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
+        <button type="button" onclick="this.closest('[data-row-id]').remove();updateTabCounts()" class="text-red-500 hover:text-red-700 text-lg justify-self-center">✕</button>`;
     div.appendChild(row);
+    applyStageFilter();
 }
 
 function filterCoordinator(input,rowId){
@@ -476,13 +533,14 @@ function collectQuotas(){
         const opId=row.querySelector('.quota-op').value;
         const val=parseInt(row.querySelector('.quota-val').value)||0;
         const name=row.querySelector('.quota-search').value.trim();
+        const stage=row.dataset.stage||'evento';
         if(opId && val>=0){
             // Coordinador real (con FK).
-            out.push({operator_id:opId,quota:val});
+            out.push({operator_id:opId,quota:val,stage});
         } else if(name && val>=0){
             // Coordinador legacy (texto libre, sin FK). Se conserva tal cual,
             // no se hace matching con ningún operador.
-            out.push({coordinator_name:name,quota:val});
+            out.push({coordinator_name:name,quota:val,stage});
         }
     });
     return out;
