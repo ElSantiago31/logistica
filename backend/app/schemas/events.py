@@ -5,6 +5,11 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.models.events import EVENT_STAGES, DEFAULT_STAGE
+
+# Patrón de validación de etapa (una sola fuente de verdad: EVENT_STAGES).
+_STAGE_PATTERN = f"^({'|'.join(EVENT_STAGES)})$"
+
 
 class DeleteEventRequest(BaseModel):
     """Confirmación obligatoria para eliminar un evento (solo superadmin).
@@ -21,6 +26,7 @@ class StaffNeedCreate(BaseModel):
     quantity_needed: int = Field(ge=1)
     rate_per_shift: Optional[float] = None
     education_level: Optional[str] = Field(None, description="Nivel educativo minimo requerido")
+    stage: str = Field(DEFAULT_STAGE, pattern=_STAGE_PATTERN, description="Etapa: previa|avanzada|evento|desmontaje")
 
 
 class StaffNeedResponse(BaseModel):
@@ -31,6 +37,7 @@ class StaffNeedResponse(BaseModel):
     quantity_confirmed: int
     rate_per_shift: Optional[float]
     education_level: Optional[str] = None
+    stage: str = DEFAULT_STAGE
 
     model_config = {"from_attributes": True}
 
@@ -47,6 +54,7 @@ class CoordinatorQuotaCreate(BaseModel):
     operator_id: Optional[uuid.UUID] = None
     coordinator_name: Optional[str] = Field(None, max_length=200, description="Nombre legacy (texto libre, sin FK)")
     quota: int = Field(ge=0, description="Cupo informativo (no bloquea la asignación)")
+    stage: str = Field(DEFAULT_STAGE, pattern=_STAGE_PATTERN, description="Etapa: previa|avanzada|evento|desmontaje")
 
     @model_validator(mode='after')
     def validate_coordinator(self):
@@ -61,6 +69,7 @@ class CoordinatorQuotaResponse(BaseModel):
     coordinator_operator_id: Optional[uuid.UUID] = None
     coordinator: str
     quota: int
+    stage: str = DEFAULT_STAGE
     # Conteo calculado en runtime (no es columna)
     used: int = 0
     available: Optional[int] = None
@@ -128,6 +137,8 @@ class EventResponse(BaseModel):
     coordinator_quotas: List[CoordinatorQuotaResponse] = []
     total_staff_needed: int = 0
     total_confirmed: int = 0
+    # Resumen por etapa: {"previa": {"needed": n, "confirmed": m}, ...}
+    by_stage: dict[str, dict] = {}
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
@@ -152,6 +163,9 @@ class AssignmentResponse(BaseModel):
     invited_at: Optional[datetime]
     confirmed_at: Optional[datetime]
     rate_applied: Optional[float]
+    stage: str = DEFAULT_STAGE
+    # Computado en runtime: operador con ≥2 asignaciones (etapas) en el mismo evento.
+    double_shift: bool = False
     operator_first_name: Optional[str] = None
     operator_last_name: Optional[str] = None
     operator_document_number: Optional[str] = None
@@ -167,6 +181,8 @@ class AssignOperatorsRequest(BaseModel):
     operator_ids: List[uuid.UUID]
     role_id: Optional[uuid.UUID] = None
     rate_applied: Optional[float] = None
+    # Etapa a la que se asignan los operadores (default: evento).
+    stage: str = Field(DEFAULT_STAGE, pattern=_STAGE_PATTERN, description="Etapa: previa|avanzada|evento|desmontaje")
     # Operador-coordinador que programa/admite a estos operadores (nuevo flujo).
     programmed_by_operator_id: Optional[uuid.UUID] = None
     # Nombre del coordinador (flujo legacy / fallback si no hay operator_id).

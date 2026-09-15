@@ -34,7 +34,10 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.events import Event, EventStaffNeed, EventAssignment, EventAuditLog, EventCoordinatorQuota
+from app.models.events import (
+    Event, EventStaffNeed, EventAssignment, EventAuditLog, EventCoordinatorQuota,
+    EVENT_STAGES, DEFAULT_STAGE,
+)
 from app.models.operators import Operator
 from app.models.roles import Role
 from app.models.users import User
@@ -110,16 +113,21 @@ async def _save_coordinator_quotas(
     await db.flush()
 
     summary = []
+    seen_keys = set()  # dedup por (coordinador, stage) dentro del payload
     for q in quotas_data:
         # Extraer campos según sea dict o modelo Pydantic.
         if isinstance(q, dict):
             operator_id = q.get("operator_id")
             coordinator_name = q.get("coordinator_name")
             quota = q.get("quota")
+            stage = q.get("stage") or DEFAULT_STAGE
         else:
             operator_id = getattr(q, "operator_id", None)
             coordinator_name = getattr(q, "coordinator_name", None)
             quota = getattr(q, "quota", None)
+            stage = getattr(q, "stage", None) or DEFAULT_STAGE
+        if stage not in EVENT_STAGES:
+            stage = DEFAULT_STAGE
 
         # Modo 1: coordinador real (con FK).
         if operator_id:
@@ -131,28 +139,38 @@ async def _save_coordinator_quotas(
             name = f"{user.first_name} {user.last_name}".upper() if user else None
             if not name:
                 continue
+            key = (str(operator.id), stage)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             ecq = EventCoordinatorQuota(
                 event_id=event_id,
                 coordinator_operator_id=operator.id,
                 coordinator=name,
                 quota=int(quota),
+                stage=stage,
             )
             db.add(ecq)
-            summary.append({"operator_id": str(operator.id), "coordinator": name, "quota": int(quota)})
+            summary.append({"operator_id": str(operator.id), "coordinator": name, "quota": int(quota), "stage": stage})
 
         # Modo 2: coordinador legacy (texto libre, sin FK).
         elif coordinator_name:
             name = str(coordinator_name).strip().upper()
             if not name:
                 continue
+            key = (name, stage)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             ecq = EventCoordinatorQuota(
                 event_id=event_id,
                 coordinator_operator_id=None,  # sin FK
                 coordinator=name,
                 quota=int(quota),
+                stage=stage,
             )
             db.add(ecq)
-            summary.append({"operator_id": None, "coordinator": name, "quota": int(quota)})
+            summary.append({"operator_id": None, "coordinator": name, "quota": int(quota), "stage": stage})
 
     return summary
 
@@ -161,6 +179,7 @@ async def _count_used_by_coordinator(
     db: AsyncSession, event_id: uuid.UUID,
     operator_id: uuid.UUID = None,
     coordinator_name: str = None,
+    stage: str = None,
 ) -> int:
     """Cuenta cuántos operadores confirmados/activos admitió este coordinador.
 
@@ -175,7 +194,11 @@ async def _count_used_by_coordinator(
         antiguos que solo tienen texto libre, sin FK).
     Si se pasa operator_id, se usa la FK (más confiable). Si solo se pasa
     coordinator_name, se cuenta por nombre (mayúsculas, comparación ILIKE).
+
+    stage: si se pasa, cuenta solo asignaciones de esa etapa (cupos por etapa).
     """
+    _extra = [EventAssignment.stage == stage] if stage else []
+
     if operator_id:
         result = await db.execute(
             select(func.count()).select_from(EventAssignment)
@@ -184,6 +207,7 @@ async def _count_used_by_coordinator(
                 EventAssignment.admitted_by_operator_id == operator_id,
                 EventAssignment.status.in_(["confirmed", "checked_in"]),
                 EventAssignment.is_active == True,
+                *_extra,
             )
         )
         return int(result.scalar() or 0)
@@ -197,6 +221,7 @@ async def _count_used_by_coordinator(
                 func.upper(func.coalesce(EventAssignment.admitted_by, "")).ilike(coordinator_name.upper()),
                 EventAssignment.status.in_(["confirmed", "checked_in"]),
                 EventAssignment.is_active == True,
+                *_extra,
             )
         )
         return int(result.scalar() or 0)
@@ -225,16 +250,28 @@ async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) 
     await db.flush()
 
     staff_summary = []
+    # Merge defensivo: duplicados (role_id, stage) en el payload se suman.
+    merged_needs: dict[tuple, dict] = {}
     for need in data.staff_needs:
-        sn = EventStaffNeed(
-            event_id=event.id,
-            role_id=need.role_id,
-            quantity_needed=need.quantity_needed,
-            rate_per_shift=need.rate_per_shift,
-            education_level=need.education_level,
-        )
+        stage = need.stage or DEFAULT_STAGE
+        key = (need.role_id, stage)
+        if key in merged_needs:
+            merged_needs[key]["quantity_needed"] += need.quantity_needed
+            continue
+        merged_needs[key] = {
+            "role_id": need.role_id,
+            "quantity_needed": need.quantity_needed,
+            "rate_per_shift": need.rate_per_shift,
+            "education_level": need.education_level,
+            "stage": stage,
+        }
+    for m in merged_needs.values():
+        sn = EventStaffNeed(event_id=event.id, **m)
         db.add(sn)
-        staff_summary.append({"role_id": str(need.role_id), "qty": need.quantity_needed, "education_level": need.education_level})
+        staff_summary.append({
+            "role_id": str(m["role_id"]), "qty": m["quantity_needed"],
+            "education_level": m["education_level"], "stage": m["stage"],
+        })
 
     # Coordinator quotas (nuevo flujo)
     quota_summary = []
@@ -324,33 +361,45 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
                 "qty": sn.quantity_needed,
                 "rate": sn.rate_per_shift,
                 "education_level": sn.education_level,
+                "stage": sn.stage or DEFAULT_STAGE,
             })
         for sn in existing:
             await db.delete(sn)
         await db.flush()
 
-        new_staff = []
+        # Merge defensivo: duplicados (role_id, stage) en el payload se suman.
+        merged: dict[tuple, dict] = {}
         for need in staff_needs_data:
-            role_r = await db.execute(select(Role).where(Role.id == need['role_id']))
+            stage = need.get('stage') or DEFAULT_STAGE
+            key = (need['role_id'], stage)
+            if key in merged:
+                merged[key]['quantity_needed'] += need['quantity_needed']
+                continue
+            merged[key] = {
+                'role_id': need['role_id'],
+                'quantity_needed': need['quantity_needed'],
+                'rate_per_shift': need.get('rate_per_shift'),
+                'education_level': need.get('education_level'),
+                'stage': stage,
+            }
+
+        new_staff = []
+        for m in merged.values():
+            role_r = await db.execute(select(Role).where(Role.id == m['role_id']))
             r = role_r.scalar_one_or_none()
-            sn = EventStaffNeed(
-                event_id=event_id,
-                role_id=need['role_id'],
-                quantity_needed=need['quantity_needed'],
-                rate_per_shift=need.get('rate_per_shift'),
-                education_level=need.get('education_level'),
-            )
+            sn = EventStaffNeed(event_id=event_id, **m)
             db.add(sn)
             new_staff.append({
-                "role_id": str(need['role_id']),
+                "role_id": str(m['role_id']),
                 "role_name": r.name if r else "Desconocido",
-                "qty": need['quantity_needed'],
-                "rate": need.get('rate_per_shift'),
-                "education_level": need.get('education_level'),
+                "qty": m['quantity_needed'],
+                "rate": m.get('rate_per_shift'),
+                "education_level": m.get('education_level'),
+                "stage": m['stage'],
             })
 
-        old_sig = sorted((str(s.get('role_id')), int(s.get('qty') or 0), round(float(s.get('rate') or 0), 2), str(s.get('education_level') or '')) for s in old_staff)
-        new_sig = sorted((str(s.get('role_id')), int(s.get('qty') or 0), round(float(s.get('rate') or 0), 2), str(s.get('education_level') or '')) for s in new_staff)
+        old_sig = sorted((str(s.get('role_id')), str(s.get('stage') or ''), int(s.get('qty') or 0), round(float(s.get('rate') or 0), 2), str(s.get('education_level') or '')) for s in old_staff)
+        new_sig = sorted((str(s.get('role_id')), str(s.get('stage') or ''), int(s.get('qty') or 0), round(float(s.get('rate') or 0), 2), str(s.get('education_level') or '')) for s in new_staff)
         if old_sig != new_sig:
             changed_fields["staff_needs"] = {"antes": old_staff, "despues": new_staff}
 
@@ -447,6 +496,7 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
             "quantity_confirmed": sn.quantity_confirmed,
             "rate_per_shift": sn.rate_per_shift,
             "education_level": sn.education_level,
+            "stage": sn.stage or DEFAULT_STAGE,
         })
 
     # Coordinator quotas con conteo used/available (nuevo flujo).
@@ -455,12 +505,13 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
     )
     coordinator_quotas = []
     for q in coord_quotas_r.scalars().all():
-        # Conteo de "usados": por FK (flujo nuevo) o por nombre (legacy).
+        # Conteo de "usados": por FK (flujo nuevo) o por nombre (legacy),
+        # contando SOLO asignaciones de la etapa del cupo.
         if q.coordinator_operator_id:
-            used = await _count_used_by_coordinator(db, event_id, q.coordinator_operator_id)
+            used = await _count_used_by_coordinator(db, event_id, q.coordinator_operator_id, stage=q.stage)
         elif q.coordinator:
             # Coordinador legacy (sin FK) → contar por admitted_by ILIKE.
-            used = await _count_used_by_coordinator(db, event_id, coordinator_name=q.coordinator)
+            used = await _count_used_by_coordinator(db, event_id, coordinator_name=q.coordinator, stage=q.stage)
         else:
             used = 0
         available = (q.quota - used) if q.quota is not None else None
@@ -470,9 +521,23 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
             "coordinator_operator_id": q.coordinator_operator_id,
             "coordinator": q.coordinator,
             "quota": q.quota,
+            "stage": q.stage or DEFAULT_STAGE,
             "used": used,
             "available": available,
         })
+
+    # Resumen por etapa (needs + cuotas).
+    by_stage: dict[str, dict] = {}
+    for sn in event.staff_needs:
+        st = sn.stage or DEFAULT_STAGE
+        d = by_stage.setdefault(st, {"needed": 0, "confirmed": 0, "quota_total": 0, "quota_used": 0})
+        d["needed"] += sn.quantity_needed
+        d["confirmed"] += sn.quantity_confirmed
+    for q in coordinator_quotas:
+        st = q.get("stage") or DEFAULT_STAGE
+        d = by_stage.setdefault(st, {"needed": 0, "confirmed": 0, "quota_total": 0, "quota_used": 0})
+        d["quota_total"] += q.get("quota") or 0
+        d["quota_used"] += q.get("used") or 0
 
     return {
         "id": event.id,
@@ -494,6 +559,7 @@ async def get_event(db: AsyncSession, event_id: uuid.UUID) -> Optional[dict]:
         "coordinator_quotas": coordinator_quotas,
         "total_staff_needed": total_needed,
         "total_confirmed": total_confirmed,
+        "by_stage": by_stage,
         "created_at": event.created_at,
     }
 
@@ -533,6 +599,12 @@ async def list_events(
 
         total_needed = sum(sn.quantity_needed for sn in e.staff_needs)
         total_confirmed = sum(sn.quantity_confirmed for sn in e.staff_needs)
+        by_stage: dict[str, dict] = {}
+        for sn in e.staff_needs:
+            st = sn.stage or DEFAULT_STAGE
+            d = by_stage.setdefault(st, {"needed": 0, "confirmed": 0})
+            d["needed"] += sn.quantity_needed
+            d["confirmed"] += sn.quantity_confirmed
         items.append({
             "id": e.id,
             "name": e.name,
@@ -552,6 +624,7 @@ async def list_events(
             "staff_needs": [],
             "total_staff_needed": total_needed,
             "total_confirmed": total_confirmed,
+            "by_stage": by_stage,
             "created_at": e.created_at,
         })
     if status_updates:
@@ -564,6 +637,7 @@ async def assign_operators(
     role_id: Optional[uuid.UUID] = None, rate: Optional[float] = None,
     programmed_by_operator_id: Optional[uuid.UUID] = None,
     programmed_by_name: Optional[str] = None,
+    stage: str = DEFAULT_STAGE,
 ) -> List[EventAssignment]:
     """Assign operators to an event. operator_ids can be user_ids or operator_ids.
     If no rate is provided, uses the rate_per_shift from EventStaffNeed for the role.
@@ -578,7 +652,12 @@ async def assign_operators(
     Se usa cuando NO hay operator_id (cuotas legacy) o cuando la FK no se
     pudo resolver, para garantizar que SIEMPRE quede estampado el nombre
     en programmed_by / admitted_by. Se normaliza a MAYÚSCULAS.
+
+    stage: etapa del evento (previa | avanzada | evento | desmontaje).
+    Un mismo operador puede tener una asignación por etapa (doble turno).
     """
+    if stage not in EVENT_STAGES:
+        stage = DEFAULT_STAGE
     # Resolver coordinador (si vino el nuevo flujo): objeto Operator + nombre.
     coord_operator: Optional[Operator] = None
     coord_name: Optional[str] = None
@@ -589,15 +668,27 @@ async def assign_operators(
     # Fallback: si no se resolvió nombre por FK, usar el nombre en texto libre.
     if not coord_name and programmed_by_name:
         coord_name = str(programmed_by_name).strip().upper() or None
-    # Auto-fill rate from EventStaffNeed if not provided
+    # Auto-fill rate from EventStaffNeed if not provided (prioriza la etapa,
+    # fallback a cualquier etapa del mismo rol).
     if not rate and role_id:
         sn_result = await db.execute(
             select(EventStaffNeed).where(
                 EventStaffNeed.event_id == event_id,
                 EventStaffNeed.role_id == role_id,
+                EventStaffNeed.stage == stage,
             )
         )
         staff_need = sn_result.scalar_one_or_none()
+        if not (staff_need and staff_need.rate_per_shift):
+            sn_result = await db.execute(
+                select(EventStaffNeed)
+                .where(
+                    EventStaffNeed.event_id == event_id,
+                    EventStaffNeed.role_id == role_id,
+                )
+                .order_by(EventStaffNeed.created_at)
+            )
+            staff_need = sn_result.scalars().first()
         if staff_need and staff_need.rate_per_shift:
             rate = staff_need.rate_per_shift
 
@@ -619,11 +710,13 @@ async def assign_operators(
         if not operator:
             continue
 
-        # Check not already assigned to THIS event
+        # Check not already assigned to THIS event AND stage
+        # (mismo operador puede estar en varias etapas = doble turno)
         existing = await db.execute(
             select(EventAssignment).where(
                 EventAssignment.event_id == event_id,
                 EventAssignment.operator_id == operator.id,
+                EventAssignment.stage == stage,
             )
         )
         if existing.scalar_one_or_none():
@@ -672,6 +765,7 @@ async def assign_operators(
             status="invited",
             invited_at=datetime.now(timezone.utc),
             rate_applied=rate,
+            stage=stage,
         )
         # Estampar coordinador (explícito o referente F11) si se resolvió.
         if op_coord_operator:
@@ -707,6 +801,15 @@ async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
         .order_by(EventAssignment.status, EventAssignment.invited_at)
     )
 
+    # Operadores con ≥2 etapas distintas en este evento (doble turno).
+    multi_r = await db.execute(
+        select(EventAssignment.operator_id)
+        .where(EventAssignment.event_id == event_id)
+        .group_by(EventAssignment.operator_id)
+        .having(func.count(func.distinct(EventAssignment.stage)) >= 2)
+    )
+    multi_stage_ops = {row[0] for row in multi_r.all()}
+
     items = []
     for a, op, user, role in result.all():
         items.append({
@@ -722,6 +825,8 @@ async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
             "invited_at": a.invited_at,
             "confirmed_at": a.confirmed_at,
             "rate_applied": a.rate_applied,
+            "stage": a.stage or DEFAULT_STAGE,
+            "double_shift": a.operator_id in multi_stage_ops,
             "operator_first_name": user.first_name if user else None,
             "operator_last_name": user.last_name if user else None,
             "operator_document_number": user.document_number if user else None,
@@ -733,11 +838,12 @@ async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
 
 
 async def list_available_operators(
-    db: AsyncSession, event_id: uuid.UUID
+    db: AsyncSession, event_id: uuid.UUID, stage: Optional[str] = None
 ) -> List[dict]:
     """Lista operadores disponibles para asignar a un evento.
 
-    - Excluye los ya asignados al evento.
+    - Excluye los ya asignados al evento (si stage se pasa, solo los de esa
+      etapa: un operador en otra etapa puede volver a asignarse = doble turno).
     - Marca los que tienen solapamiento con otro evento en las mismas fechas.
     """
     current_event = await db.get(Event, event_id)
@@ -745,9 +851,12 @@ async def list_available_operators(
         return []
 
     # Operadores ya asignados a este evento (para excluirlos).
-    assigned_r = await db.execute(
-        select(EventAssignment.operator_id).where(EventAssignment.event_id == event_id)
+    assigned_q = select(EventAssignment.operator_id).where(
+        EventAssignment.event_id == event_id
     )
+    if stage:
+        assigned_q = assigned_q.where(EventAssignment.stage == stage)
+    assigned_r = await db.execute(assigned_q)
     assigned_ids = {row[0] for row in assigned_r.all()}
 
     # Todos los operadores activos.

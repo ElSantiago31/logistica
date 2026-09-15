@@ -200,6 +200,7 @@ async def assign_operators(
         db, event_id, data.operator_ids, data.role_id, data.rate_applied,
         programmed_by_operator_id=data.programmed_by_operator_id,
         programmed_by_name=data.programmed_by_name,
+        stage=data.stage,
     )
     # Return updated assignments + any conflicts
     all_assignments = await svc.get_assignments(db, event_id)
@@ -542,15 +543,26 @@ async def delete_assignment(
         raise HTTPException(404, "Asignaciรณn no encontrada")
 
     # Si estaba confirmado, decrementar quantity_confirmed del EventStaffNeed
+    # (del need de la MISMA etapa de la asignación; fallback a cualquier etapa).
     if assignment.status == "confirmed" and assignment.role_id:
         from app.models.events import EventStaffNeed
+        stage = getattr(assignment, "stage", None) or "evento"
         sn_r = await db.execute(
             sel(EventStaffNeed).where(
                 EventStaffNeed.event_id == assignment.event_id,
                 EventStaffNeed.role_id == assignment.role_id,
+                EventStaffNeed.stage == stage,
             )
         )
         sn = sn_r.scalar_one_or_none()
+        if not sn:
+            sn_r = await db.execute(
+                sel(EventStaffNeed).where(
+                    EventStaffNeed.event_id == assignment.event_id,
+                    EventStaffNeed.role_id == assignment.role_id,
+                )
+            )
+            sn = sn_r.scalar_one_or_none()
         if sn:
             sn.quantity_confirmed = max(sn.quantity_confirmed - 1, 0)
 

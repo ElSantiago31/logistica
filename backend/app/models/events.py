@@ -6,6 +6,19 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
 
+# Etapas de un evento (columna `stage` en needs/assignments/quotas).
+# Constantes de aplicación (NO tabla de BD). Todo dato pre-existente en BD
+# queda en la etapa "evento" (server_default) para compatibilidad.
+EVENT_STAGES: tuple[str, ...] = ("previa", "avanzada", "evento", "desmontaje")
+DEFAULT_STAGE: str = "evento"
+
+STAGE_LABELS: dict[str, str] = {
+    "previa": "Previa",
+    "avanzada": "Avanzada",
+    "evento": "Evento",
+    "desmontaje": "Desmontaje",
+}
+
 
 class Event(BaseModel):
     """Eventos configurados por coordinadores."""
@@ -61,13 +74,18 @@ class EventStaffNeed(BaseModel):
         String(50), nullable=True,
         comment="Nivel educativo minimo requerido: primaria,secundaria,tecnico,tecnologo,universitario,postgrado",
     )
+    stage: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_STAGE, server_default=DEFAULT_STAGE,
+        nullable=False, index=True,
+        comment="Etapa: previa | avanzada | evento | desmontaje",
+    )
 
     # Relationships
     event = relationship("Event", back_populates="staff_needs")
     role = relationship("Role", back_populates="event_staff_needs")
 
     def __repr__(self):
-        return f"<EventStaffNeed event={self.event_id} role={self.role_id} qty={self.quantity_needed}>"
+        return f"<EventStaffNeed event={self.event_id} role={self.role_id} stage={self.stage} qty={self.quantity_needed}>"
 
 
 class EventAuditLog(BaseModel):
@@ -177,6 +195,13 @@ class EventAssignment(BaseModel):
         DateTime(timezone=True), nullable=True,
         comment="Fecha/hora de devolución de uniforme. NULL = pendiente.",
     )
+    # Etapa del evento a la que pertenece esta asignación.
+    # Un operador puede tener una asignación por etapa (doble turno).
+    stage: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_STAGE, server_default=DEFAULT_STAGE,
+        nullable=False, index=True,
+        comment="Etapa: previa | avanzada | evento | desmontaje",
+    )
 
     # Relationships
     event = relationship("Event", back_populates="assignments")
@@ -229,18 +254,18 @@ class EventCoordinatorQuota(BaseModel):
     """
     __tablename__ = "event_coordinator_quotas"
     __table_args__ = (
-        # Índice único para el flujo legacy (nombre string).
+        # Índice único para el flujo legacy (nombre string), por etapa.
         Index(
             "uq_event_coordinator",
-            "event_id", "coordinator",
+            "event_id", "coordinator", "stage",
             unique=True,
             postgresql_where=text("coordinator_operator_id IS NULL"),
             sqlite_where=text("coordinator_operator_id IS NULL"),
         ),
-        # Índice único para el nuevo flujo (FK a operador).
+        # Índice único para el nuevo flujo (FK a operador), por etapa.
         Index(
             "uq_event_coordinator_operator",
-            "event_id", "coordinator_operator_id",
+            "event_id", "coordinator_operator_id", "stage",
             unique=True,
             postgresql_where=text("coordinator_operator_id IS NOT NULL"),
             sqlite_where=text("coordinator_operator_id IS NOT NULL"),
@@ -262,10 +287,16 @@ class EventCoordinatorQuota(BaseModel):
         comment="Operador-coordinador (nuevo flujo). NULL en datos legacy.",
     )
     quota: Mapped[int] = mapped_column(Integer, nullable=False, comment="Cupo (informativo, no bloquea)")
+    # Etapa a la que aplica el cupo (independiente por etapa).
+    stage: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_STAGE, server_default=DEFAULT_STAGE,
+        nullable=False,
+        comment="Etapa: previa | avanzada | evento | desmontaje",
+    )
 
     # Relationships
     event = relationship("Event", back_populates="coordinator_quotas")
     coordinator_operator = relationship("Operator", foreign_keys=[coordinator_operator_id])
 
     def __repr__(self):
-        return f"<EventCoordinatorQuota event={self.event_id} coord={self.coordinator} quota={self.quota}>"
+        return f"<EventCoordinatorQuota event={self.event_id} coord={self.coordinator} stage={self.stage} quota={self.quota}>"

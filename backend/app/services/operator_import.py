@@ -1323,9 +1323,10 @@ async def _update_operator_profile_fields(db, operator_id, eps_id, pf_id, clean)
 async def _recalculate_confirmed_counts(db: AsyncSession, event_id: uuid.UUID) -> None:
     """Recalcula event_staff_needs.quantity_confirmed desde las asignaciones reales.
 
-    Cuenta operadores con status IN ('confirmed', 'checked_in') agrupados por rol,
-    y actualiza el contador de cada cargo. Repara drift histórico (p. ej. cuando
-    los operadores se importaron por Excel sin actualizar el contador).
+    Cuenta operadores con status IN ('confirmed', 'checked_in') agrupados por
+    rol Y ETAPA (a.stage = esn2.stage), y actualiza el contador de cada cargo.
+    Repara drift histórico (p. ej. cuando los operadores se importaron por
+    Excel sin actualizar el contador).
     """
     await db.execute(text("""
         UPDATE event_staff_needs esn
@@ -1336,6 +1337,7 @@ async def _recalculate_confirmed_counts(db: AsyncSession, event_id: uuid.UUID) -
             LEFT JOIN event_assignments a
                 ON a.event_id = esn2.event_id
                 AND a.role_id = esn2.role_id
+                AND a.stage = esn2.stage
                 AND a.status IN ('confirmed', 'checked_in')
                 AND a.is_active = true
             WHERE esn2.event_id = :eid
