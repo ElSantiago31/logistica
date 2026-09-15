@@ -876,8 +876,10 @@ async def get_payroll_status(
 # Solo se incluyen operadores con status='checked_in'.
 
 # Valores válidos para los modos de generación de planilla
-_PLANILLA_GROUP_BY = {"coordinator", "role", "coordinator_role", "none"}
+_PLANILLA_GROUP_BY = {"coordinator", "role", "coordinator_role", "none", "stage"}
 _PLANILLA_SORT_BY = {"lastname", "document"}
+# Etapas válidas para el filtro ``stage`` de la planilla
+_PLANILLA_STAGES = {"previa", "avanzada", "evento", "desmontaje"}
 
 
 @router.get("/events/{event_id}/planilla-coordinador")
@@ -887,6 +889,7 @@ async def download_planilla_coordinador(
     sort_by: str = "lastname",
     format: str = "xlsx",
     with_signatures: bool = False,
+    stage: str | None = None,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -901,6 +904,9 @@ async def download_planilla_coordinador(
         - ``"coordinator"`` (default): una hoja por coordinador.
         - ``"role"``: una hoja por cada rol.
         - ``"coordinator_role"``: una hoja por combinación coordinador-rol.
+        - ``"stage"``: una hoja por etapa (PRE-MONTAJE, MONTAJE AVANZADA,
+          EVENTO, DESMONTAJE) en orden cronológico. Un operador con doble
+          turno (asignado a dos etapas) aparece en ambas hojas.
         - ``"none"``: lista única (no agrupar), hojas tituladas con el evento.
     - ``sort_by``:
         - ``"lastname"`` (default): ordenado por apellido.
@@ -936,6 +942,14 @@ async def download_planilla_coordinador(
         raise HTTPException(
             400,
             f"format inválido '{format}'. Valores válidos: ['pdf', 'xlsx']",
+        )
+    # Filtro opcional por etapa (None = todas las etapas)
+    stage_filter = (stage or "").strip().lower() or None
+    if stage_filter is not None and stage_filter not in _PLANILLA_STAGES:
+        raise HTTPException(
+            400,
+            f"stage inválido '{stage_filter}'. Valores válidos: "
+            f"{sorted(_PLANILLA_STAGES)}",
         )
 
     if user.user_type not in _PERMITTED:
@@ -1023,6 +1037,11 @@ async def download_planilla_coordinador(
                 coord_name = area_to_coord[role.area][0]
 
         op_id_str = str(operator.id)
+        # Etapa de la asignación (previa/avanzada/evento/desmontaje).
+        op_stage = getattr(assignment, "stage", None) or "evento"
+        # Filtro opcional por etapa: saltar asignaciones de otras etapas.
+        if stage_filter and op_stage != stage_filter:
+            continue
         operators.append({
             # Campos separados (first_name/last_name) para que la planilla
             # los use directamente SIN tener que re-dividir full_name (lo cual
@@ -1037,6 +1056,8 @@ async def download_planilla_coordinador(
             "role_name": role.name if role else "Operador",
             "jacket_number": assignment.jacket_number or "",
             "cap_number": assignment.cap_number or "",
+            # Etapa del evento (para group_by="stage")
+            "stage": op_stage,
             # Flags para resaltar filas en la planilla impresa:
             #   rojo = vetado (is_banned), amarillo = tiene novedad (has_incident).
             # El veto tiene prioridad visual sobre la novedad.
@@ -1061,8 +1082,17 @@ async def download_planilla_coordinador(
         mode_suffix = f"_porRol{'Cedula' if sort_by == 'document' else 'Apellido'}"
     elif group_by == "coordinator_role":
         mode_suffix = f"_porCoordyRol{'Cedula' if sort_by == 'document' else 'Apellido'}"
+    elif group_by == "stage":
+        mode_suffix = f"_porEtapa{'Cedula' if sort_by == 'document' else 'Apellido'}"
     elif sort_by == "document":
         mode_suffix = "_porCedula"
+    if stage_filter:
+        # Sufijo de etapa para distinguir descargas filtradas (ej. solo evento).
+        _stage_suffix = {
+            "previa": "PreMontaje", "avanzada": "MontajeAvanzada",
+            "evento": "Evento", "desmontaje": "Desmontaje",
+        }
+        mode_suffix += f"_solo{_stage_suffix[stage_filter]}"
 
     if format == "pdf":
         # --- Generar PDF ---

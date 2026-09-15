@@ -28,6 +28,7 @@ HEADERS = [
     "NOMBRE CONTACTO EN CASO DE EMERGENCIA",
     "TELEFONO CONTACTO EN CASO DE EMERGENCIA",
     "COORDINADOR QUE LO PROGRAMA",
+    "ETAPA",
 ]
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -63,6 +64,7 @@ def _base_row(**overrides) -> dict:
         "NOMBRE CONTACTO EN CASO DE EMERGENCIA": "",
         "TELEFONO CONTACTO EN CASO DE EMERGENCIA": "",
         "COORDINADOR QUE LO PROGRAMA": "",
+        "ETAPA": "",
     }
     row.update(overrides)
     return row
@@ -431,3 +433,111 @@ async def test_import_job_completes_and_persists(client, db, admin_token, setup_
         select(User).where(User.document_number == "555001")
     )).scalar_one()
     assert user is not None
+
+
+# ──── ETAPA (stages): columna ETAPA del Excel ─────────────────────────────
+
+async def test_import_stage_creates_assignment_in_stage(client, db, admin_token, setup_import_env):
+    """Fila con ETAPA='previa' crea la asignación con stage='previa'."""
+    event, _, _, _ = setup_import_env
+    res = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"ETAPA": "previa"}),
+    ])
+    assert res.status_code == 200, res.text
+    assert res.json()["created"] == 1
+
+    await db.rollback()
+    assign = await _get_assignment(db, event.id)
+    assert assign is not None
+    assert assign.stage == "previa"
+
+
+async def test_import_stage_default_is_evento(client, db, admin_token, setup_import_env):
+    """Sin columna ETAPA (legacy) la asignación cae en 'evento'."""
+    event, _, _, _ = setup_import_env
+    res = await _do_import(client, admin_token, event.id, [_base_row()])
+    assert res.status_code == 200, res.text
+
+    await db.rollback()
+    assign = await _get_assignment(db, event.id)
+    assert assign is not None
+    assert assign.stage == "evento"
+
+
+async def test_import_same_operator_two_stages(client, db, admin_token, setup_import_env):
+    """Mismo documento en dos etapas = dos asignaciones (doble turno), sin error."""
+    event, _, _, _ = setup_import_env
+    res = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"ETAPA": "previa"}),
+        _base_row(**{"ETAPA": "desmontaje"}),
+    ])
+    assert res.status_code == 200, res.text
+    summary = res.json()
+    # La 1ª fila crea el operador; la 2ª (misma persona, otra etapa) lo
+    # asigna como existente. Nunca debe ser error ni duplicado.
+    assert summary["created"] + summary["existing"] == 2
+    assert summary["errors"] == 0
+
+    await db.rollback()
+    result = await db.execute(
+        select(EventAssignment).where(EventAssignment.event_id == event.id)
+    )
+    assigns = result.scalars().all()
+    assert len(assigns) == 2
+    assert {a.stage for a in assigns} == {"previa", "desmontaje"}
+
+
+async def test_import_duplicate_same_stage_is_error(client, db, admin_token, setup_import_env):
+    """Mismo documento dos veces EN LA MISMA etapa → error de duplicado."""
+    event, _, _, _ = setup_import_env
+    res = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"ETAPA": "previa"}),
+        _base_row(**{"ETAPA": "previa", "PRIMER NOMBRE": "Ana2"}),
+    ])
+    assert res.status_code == 200, res.text
+    summary = res.json()
+    assert summary["created"] == 1
+    assert summary["errors"] == 1
+    assert "duplicado" in summary["rows"][1]["message"].lower()
+
+
+async def test_import_invalid_stage_warns_and_defaults(client, db, admin_token, setup_import_env):
+    """ETAPA con valor inválido → warning por fila + asignación en 'evento'."""
+    event, _, _, _ = setup_import_env
+    res = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"ETAPA": "montaje"}),
+    ])
+    assert res.status_code == 200, res.text
+    row0 = res.json()["rows"][0]
+    assert row0["status"] == "created"
+    assert any("no válida" in w for w in row0.get("warnings", []))
+
+    await db.rollback()
+    assign = await _get_assignment(db, event.id)
+    assert assign.stage == "evento"
+
+
+async def test_reimport_stage_updates_only_that_stage(client, db, admin_token, setup_import_env):
+    """Re-importar la fila de una etapa NO toca la asignación de la otra etapa."""
+    event, role_log, role_univ, _ = setup_import_env
+    res = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"ETAPA": "previa"}),
+        _base_row(**{"ETAPA": "evento"}),
+    ])
+    assert res.status_code == 200, res.text
+
+    # Re-import: solo la fila de 'previa' cambia de rol
+    res2 = await _do_import(client, admin_token, event.id, [
+        _base_row(**{"ETAPA": "previa", "ROL ASIGANDO": "Universitario"}),
+    ])
+    assert res2.status_code == 200, res2.text
+    summary = res2.json()
+    assert summary["updated"] == 1, summary["rows"]
+
+    await db.rollback()
+    result = await db.execute(
+        select(EventAssignment).where(EventAssignment.event_id == event.id)
+    )
+    assigns = {a.stage: a for a in result.scalars().all()}
+    assert str(assigns["previa"].role_id) == str(role_univ.id)
+    assert str(assigns["evento"].role_id) == str(role_log.id)

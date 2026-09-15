@@ -180,6 +180,17 @@ Algunos endpoints usan `@limiter.limit("N/minute")` via slowapi:
 | `GET` | `/api/events/{id}/availability` | User | Verificar disponibilidad de operadores |
 | `GET` | `/api/events/{id}/assignments` | User | Listar asignaciones del evento |
 
+
+### Etapas de evento (FASE 5)
+
+Needs, cuotas y asignaciones soportan `stage`: `previa` | `avanzada` | `evento` | `desmontaje` (default `evento`; cualquier payload sin `stage` equivale a `evento` -> compatible con clientes legacy). Detalle completo en [FASE5_ETAPAS.md](FASE5_ETAPAS.md).
+
+- `POST /api/events/` y `PUT /api/events/{id}`: needs/quotas con `stage`; unicidad `(role, stage)` y `(coordinador, stage)`.
+- `GET /api/events/{id}` y listado: incluye `stage` en cada need/quota/assignment y bloque `by_stage` con `needed`/`confirmed`/`quota_total`/`quota_used` por etapa.
+- `POST /api/events/{id}/assign`: body acepta `stage` opcional; dedup por `(event, stage, operator)`; tarifa autollenada por `(event, role, stage)` con fallback; respuesta con `double_shift` (operador en 2+ etapas).
+- Import Excel: columna opcional `ETAPA` (default `evento`; valor invalido -> warning + `evento`); cupo del coordinador consume solo de la etapa de la fila.
+- Check-in (`/api/sync/events/{id}/checkin`): asignaciones identificadas por `(assignment_id, stage)`; un operador puede tener check-in en varias etapas.
+
 ### Ciclo de vida de evento
 ```
 draft → published → in_progress → completed
@@ -262,6 +273,17 @@ Operadores registrados con codigo de referido asignados a un evento SIN coordina
 - Calcula `hours_worked × rate_per_hour = total_amount`
 - Aplica deducciones
 - `net_amount = total_amount - deductions`
+
+---
+
+
+### Planillas por etapa (FASE 5)
+
+`GET /api/payroll/events/{id}/planilla-coordinador` acepta:
+
+- `stage=previa|avanzada|evento|desmontaje`: limita la planilla a una sola etapa (el nombre de archivo incluye la etapa).
+- `group_by=stage`: Excel con una hoja por etapa en orden cronologico (PREVIA -> AVANZADA -> EVENTO -> DESMONTAJE); tambien en PDF.
+- Operador multi-etapa aparece en cada planilla de sus etapas con la fila marcada DOBLE TURNO (relleno amarillo + etiqueta; cobra la tarifa de cada etapa).
 
 ---
 

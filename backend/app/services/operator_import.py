@@ -33,6 +33,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.events import DEFAULT_STAGE, EVENT_STAGES
 from app.schemas.events import ImportRowResult, ImportSummary
 from app.services.auth import hash_password
 from app.services.referrals import get_referrer_operator_of
@@ -66,10 +67,29 @@ EXPECTED_COLUMNS = [
     {"key": "emergency_name",     "label": "NOMBRE CONTACTO EN CASO DE EMERGENCIA"},
     {"key": "emergency_phone",    "label": "TELEFONO CONTACTO EN CASO DE EMERGENCIA"},
     {"key": "coordinator_name",   "label": "COORDINADOR QUE LO PROGRAMA"},
+    {"key": "stage",              "label": "ETAPA"},
 ]
 
 # Columna obligatoria (clave interna).
 REQUIRED_KEYS = {"document_number"}
+
+
+def _normalize_stage(raw) -> tuple[str, bool]:
+    """Normaliza la columna ETAPA del Excel.
+
+    Valores válidos: previa, avanzada, evento, desmontaje (sin acentos,
+    case-insensitive). Vacío/None → ('evento', True) para mantener
+    compatibilidad con plantillas legacy que no traen la columna.
+
+    Retorna (stage, es_valida). Si no es válida retorna ('evento', False)
+    para que el caller emita un warning por fila.
+    """
+    if raw is None or not str(raw).strip():
+        return DEFAULT_STAGE, True
+    s = _strip_accents(str(raw)).strip().lower()
+    if s in EVENT_STAGES:
+        return s, True
+    return DEFAULT_STAGE, False
 
 
 # ──────────────────────────────────────────────
@@ -312,7 +332,7 @@ def build_template() -> bytes:
     # (Sin fila de ejemplo: la plantilla se entrega vacía, solo con encabezados.)
 
     # Anchos de columna
-    col_widths = [16, 16, 16, 16, 14, 16, 16, 22, 12, 22, 18, 28, 16, 28, 22, 22]
+    col_widths = [16, 16, 16, 16, 14, 16, 16, 22, 12, 22, 18, 28, 16, 28, 22, 22, 12]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -459,6 +479,12 @@ def _validate_row(row: dict, row_num: int) -> tuple[dict, list[str]]:
     coord_raw = row.get("coordinator_name")
     clean["coordinator_name"] = str(coord_raw).strip() if coord_raw else None
 
+    # Etapa (columna opcional ETAPA; default 'evento')
+    stage_norm, stage_ok = _normalize_stage(row.get("stage"))
+    clean["stage"] = stage_norm
+    if not stage_ok:
+        clean["stage_invalid"] = str(row.get("stage")).strip()
+
     return clean, errors
 
 
@@ -492,12 +518,12 @@ async def _load_pension_fund_list(db: AsyncSession) -> list:
 async def _load_coordinators(db: AsyncSession, event_id: uuid.UUID) -> list:
     """Carga coordinadores del evento desde EventCoordinatorQuota.
 
-    Retorna [(operator_id, norm_name, display_name), ...].
+    Retorna [(operator_id, norm_name, display_name, stage), ...].
     Incluye coordinadores legacy (sin operator_id) y del nuevo flujo (con FK).
     """
     result = await db.execute(
         text("""
-            SELECT coordinator_operator_id, coordinator
+            SELECT coordinator_operator_id, coordinator, stage
             FROM event_coordinator_quotas
             WHERE event_id = :eid
         """),
@@ -507,7 +533,7 @@ async def _load_coordinators(db: AsyncSession, event_id: uuid.UUID) -> list:
     for r in result:
         norm = _strip_accents(r.coordinator).upper().strip()
         op_id = str(r.coordinator_operator_id) if r.coordinator_operator_id else None
-        coords.append((op_id, norm, r.coordinator))
+        coords.append((op_id, norm, r.coordinator, r.stage or DEFAULT_STAGE))
     return coords
 
 
@@ -528,7 +554,7 @@ async def _ensure_coordinator_quotas(
     Los coordinadores nuevos del Excel se guardan como legacy (sin FK).
 
     Args:
-        excel_coords: {norm_name: (display_name, count)} del Excel.
+        excel_coords: {(norm_name, stage): (display_name, count)} del Excel.
         existing_coords: lista de coordinadores ya con quota.
 
     Returns:
@@ -537,25 +563,27 @@ async def _ensure_coordinator_quotas(
     created = 0
     updated = 0
 
-    for cnorm, (display, count) in excel_coords.items():
-        # Buscar match exacto en las quotas existentes (por nombre normalizado).
+    for (cnorm, stage), (display, count) in excel_coords.items():
+        # Buscar match exacto en las quotas existentes (nombre + etapa).
         matched = None
         for item in existing_coords:
-            ex_op_id, ex_norm, ex_display = item
-            if cnorm == ex_norm:
+            ex_op_id, ex_norm, ex_display, ex_stage = item
+            if cnorm == ex_norm and ex_stage == stage:
                 matched = item
                 break
 
         if matched:
-            # Ya tiene quota → actualizar al count exacto del Excel.
-            ex_op_id, ex_norm, ex_display = matched
+            # Ya tiene quota en esta etapa → actualizar al count exacto del Excel.
+            ex_op_id, ex_norm, ex_display, ex_stage = matched
             await db.execute(text("""
                 UPDATE event_coordinator_quotas
                 SET quota = :quota
                 WHERE event_id = :eid AND coordinator = :coord_name
+                  AND stage = :stage
             """), {
                 "eid": str(event_id),
                 "coord_name": ex_display,
+                "stage": stage,
                 "quota": count,
             })
             updated += 1
@@ -568,18 +596,19 @@ async def _ensure_coordinator_quotas(
         try:
             await db.execute(text("""
                 INSERT INTO event_coordinator_quotas (
-                    id, event_id, coordinator, coordinator_operator_id, quota
+                    id, event_id, coordinator, coordinator_operator_id, quota, stage
                 ) VALUES (
-                    gen_random_uuid(), :eid, :coord, NULL, :quota
+                    gen_random_uuid(), :eid, :coord, NULL, :quota, :stage
                 )
                 ON CONFLICT DO NOTHING
             """), {
                 "eid": str(event_id),
                 "coord": display_upper,
                 "quota": count,
+                "stage": stage,
             })
             created += 1
-            existing_coords.append((None, cnorm, display_upper))
+            existing_coords.append((None, cnorm, display_upper, stage))
         except Exception:
             pass
 
@@ -602,7 +631,7 @@ def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.U
     norm_tokens = norm.split()
 
     # 1. Match exacto normalizado
-    for op_id, c_norm, display in coords:
+    for op_id, c_norm, display, _stage in coords:
         if c_norm == norm:
             return op_id, display
 
@@ -611,7 +640,7 @@ def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.U
     #    Solo si hay un único candidato.
     if len(norm_tokens) >= 2:
         candidates = []
-        for op_id, c_norm, display in coords:
+        for op_id, c_norm, display, _stage in coords:
             c_tokens = c_norm.split()
             if len(c_tokens) >= len(norm_tokens) and all(
                 c_tokens[i].startswith(norm_tokens[i]) for i in range(len(norm_tokens))
@@ -624,7 +653,7 @@ def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.U
     #    Solo si hay un único candidato.
     prefix_candidates = [
         (op_id, c_norm, display)
-        for op_id, c_norm, display in coords
+        for op_id, c_norm, display, _stage in coords
         if c_norm and c_norm.startswith(norm)
     ]
     if len(prefix_candidates) == 1:
@@ -635,7 +664,7 @@ def _resolve_coordinator(coord_name: str, coords: list) -> tuple[Optional[uuid.U
     if first_token:
         first_token_candidates = [
             (op_id, c_norm, display)
-            for op_id, c_norm, display in coords
+            for op_id, c_norm, display, _stage in coords
             if c_norm.split() and c_norm.split()[0] == first_token
         ]
         if len(first_token_candidates) == 1:
@@ -671,15 +700,16 @@ async def _load_existing_users_by_doc(db: AsyncSession, doc_numbers: list[str]) 
 
 
 async def _load_assigned_operators(db: AsyncSession, event_id: uuid.UUID) -> dict:
-    """Carga {operator_id: role_id} de las asignaciones existentes al evento.
+    """Carga {(operator_id, stage): role_id} de las asignaciones del evento.
 
     Mantiene la membresía del set original (sin filtro is_active) para no
     cambiar la semántica de detección, pero prefiere el role_id de la fila
-    activa cuando hay históricos inactivos.
+    activa cuando hay históricos inactivos. La clave incluye la ETAPA: el
+    mismo operador puede tener una asignación por cada etapa (doble turno).
     """
     result = await db.execute(
         text(
-            "SELECT operator_id, role_id, is_active "
+            "SELECT operator_id, role_id, stage, is_active "
             "FROM event_assignments WHERE event_id = :eid "
             "ORDER BY is_active DESC"
         ),
@@ -687,8 +717,9 @@ async def _load_assigned_operators(db: AsyncSession, event_id: uuid.UUID) -> dic
     )
     out: dict = {}
     for r in result:
-        if r.operator_id not in out:
-            out[r.operator_id] = r.role_id
+        key = (r.operator_id, r.stage or DEFAULT_STAGE)
+        if key not in out:
+            out[key] = r.role_id
     return out
 
 
@@ -800,19 +831,23 @@ async def import_operators_from_excel(
                 progress_cb(done, total_hash, "hashing")
 
     # --- 2b. Auto-crear quotas de coordinadores faltantes ---
-    # Recolectar coordinadores únicos del Excel con su conteo de operadores.
-    excel_coords: dict[str, tuple[str, int]] = {}  # {norm_name: (display, count)}
+    # Recolectar coordinadores únicos del Excel con su conteo de operadores,
+    # separados por ETAPA (un coordinador puede tener cupo distinto en cada
+    # etapa del mismo evento).
+    excel_coords: dict[tuple[str, str], tuple[str, int]] = {}  # {(norm, stage): (display, count)}
     for raw in raw_rows:
         coord_val = raw.get("coordinator_name")
         if not coord_val or not str(coord_val).strip():
             continue
+        stage, _stage_ok = _normalize_stage(raw.get("stage"))
         display = _strip_accents(str(coord_val)).upper().strip()
         cnorm = display
-        if cnorm not in excel_coords:
-            excel_coords[cnorm] = (display, 0)
-        # Incrementar el conteo de operadores para este coordinador
-        prev_display, prev_count = excel_coords[cnorm]
-        excel_coords[cnorm] = (prev_display, prev_count + 1)
+        key = (cnorm, stage)
+        if key not in excel_coords:
+            excel_coords[key] = (display, 0)
+        # Incrementar el conteo de operadores para este coordinador+etapa
+        prev_display, prev_count = excel_coords[key]
+        excel_coords[key] = (prev_display, prev_count + 1)
 
     # Sincronizar quotas: crea las faltantes y actualiza las existentes al
     # count exacto del Excel (source of truth).
@@ -820,8 +855,10 @@ async def import_operators_from_excel(
         db, event_id, excel_coords, coords,
     )
 
-    # Detección de duplicados dentro del Excel
-    seen_docs: set[str] = set()
+    # Detección de duplicados dentro del Excel: mismo documento EN LA MISMA
+    # etapa es error; el mismo operador en etapas distintas es legítimo
+    # (doble turno: p. ej. 'previa' + 'evento').
+    seen_keys: set[tuple[str, str]] = set()
 
     now_utc = datetime.now(timezone.utc)
 
@@ -832,6 +869,7 @@ async def import_operators_from_excel(
         clean, val_errors = pre_validated[idx]
         doc = clean["document_number"]
         full_name = f"{clean['first_name']} {clean['last_name']}".strip()
+        stage = clean.get("stage") or DEFAULT_STAGE
 
         # Error de validación
         if val_errors:
@@ -842,18 +880,24 @@ async def import_operators_from_excel(
             ))
             continue
 
-        # Duplicado dentro del mismo Excel
-        if doc in seen_docs:
+        # Duplicado dentro del mismo Excel (misma etapa)
+        if (doc, stage) in seen_keys:
             errors += 1
             rows_result.append(ImportRowResult(
                 row=idx, document_number=doc, full_name=full_name,
                 status="error",
-                message=f"Documento duplicado dentro del Excel: {doc}",
+                message=f"Documento duplicado en la etapa '{stage}': {doc}",
             ))
             continue
-        seen_docs.add(doc)
+        seen_keys.add((doc, stage))
 
         warnings = []
+        if "stage_invalid" in clean:
+            bad = clean.pop("stage_invalid")
+            warnings.append(
+                f"Etapa '{bad}' no válida — se usó 'evento' "
+                "(válidas: previa, avanzada, evento, desmontaje)"
+            )
 
         # --- Resolver catálogos ---
         role_id = _match_role(clean["role_name"], role_map) if clean["role_name"] else None
@@ -873,12 +917,12 @@ async def import_operators_from_excel(
         # --- Caso 1: operador ya existe en BD ---
         if doc in existing_users:
             user_id, operator_id = existing_users[doc]
-            if operator_id and operator_id in assigned_ops:
+            if operator_id and (operator_id, stage) in assigned_ops:
                 # Ya asignado a este evento → actualizar cargo del evento,
                 # datos de perfil y coordinador con lo que traiga el Excel.
                 # Regla: un campo vacío del Excel NUNCA borra el valor
                 # existente (semántica COALESCE).
-                current_role_id = assigned_ops[operator_id]
+                current_role_id = assigned_ops[(operator_id, stage)]
                 new_role_id, role_changed = _resolve_role_update(
                     current_role_id, clean["role_name"], role_id,
                 )
@@ -888,13 +932,13 @@ async def import_operators_from_excel(
                     db, operator_id, eps_id, pf_id, clean,
                 )) or profile_changed
                 coord_changed = await _update_assignment_coordinator(
-                    db, event_id, operator_id, coord_op_id, coord_display,
+                    db, event_id, operator_id, coord_op_id, coord_display, stage,
                 )
                 if role_changed:
                     await _update_assignment_role(
-                        db, event_id, operator_id, new_role_id,
+                        db, event_id, operator_id, new_role_id, stage,
                     )
-                    assigned_ops[operator_id] = new_role_id
+                    assigned_ops[(operator_id, stage)] = new_role_id
 
                 if role_changed or profile_changed or coord_changed:
                     updated += 1
@@ -928,9 +972,9 @@ async def import_operators_from_excel(
             if operator_id:
                 await _create_assignment(
                     db, event_id, operator_id, role_id,
-                    coord_op_id, coord_display,
+                    coord_op_id, coord_display, stage,
                 )
-                assigned_ops[operator_id] = role_id
+                assigned_ops[(operator_id, stage)] = role_id
                 existing += 1
                 rows_result.append(ImportRowResult(
                     row=idx, document_number=doc, full_name=full_name,
@@ -981,12 +1025,12 @@ async def import_operators_from_excel(
             existing_users[doc] = (user_id, operator_id)
 
         # --- Asignar al evento ---
-        if operator_id and operator_id not in assigned_ops:
+        if operator_id and (operator_id, stage) not in assigned_ops:
             await _create_assignment(
                 db, event_id, operator_id, role_id,
-                coord_op_id, coord_display,
+                coord_op_id, coord_display, stage,
             )
-            assigned_ops[operator_id] = role_id
+            assigned_ops[(operator_id, stage)] = role_id
             created += 1
             rows_result.append(ImportRowResult(
                 row=idx, document_number=doc, full_name=full_name,
@@ -1090,7 +1134,7 @@ async def _create_operator_profile(db, user_id, eps_id, pf_id, clean, role_id) -
     return result.scalar()
 
 
-async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, coord_display):
+async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, coord_display, stage: str = DEFAULT_STAGE):
     """Crea un EventAssignment con status='confirmed' y datos del coordinador.
 
     F11 (atribución por referido): si la fila del Excel NO trae coordinador
@@ -1113,12 +1157,12 @@ async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, co
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.execute(text("""
         INSERT INTO event_assignments (
-            id, event_id, operator_id, role_id, status,
+            id, event_id, operator_id, role_id, status, stage,
             confirmed_at, is_active, reminder_sent,
             programmed_by, admitted_by,
             programmed_by_operator_id, admitted_by_operator_id
         ) VALUES (
-            gen_random_uuid(), :eid, :oid, :rid, 'confirmed',
+            gen_random_uuid(), :eid, :oid, :rid, 'confirmed', :stage,
             NOW(), true, false,
             :coord_display, :coord_display,
             :coord_op_id, :coord_op_id
@@ -1128,6 +1172,7 @@ async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, co
         "eid": str(event_id),
         "oid": str(operator_id),
         "rid": role_id,
+        "stage": stage,
         "coord_display": coord_display,
         "coord_op_id": str(coord_op_id) if coord_op_id else None,
     })
@@ -1135,6 +1180,7 @@ async def _create_assignment(db, event_id, operator_id, role_id, coord_op_id, co
 
 async def _update_assignment_coordinator(
     db, event_id, operator_id, coord_op_id, coord_display,
+    stage: str = DEFAULT_STAGE,
 ) -> bool:
     """Actualiza las FKs/strings de coordinador de una asignación existente.
 
@@ -1154,10 +1200,12 @@ async def _update_assignment_coordinator(
         SELECT programmed_by, programmed_by_operator_id
         FROM event_assignments
         WHERE event_id = :eid AND operator_id = :oid AND is_active = true
+          AND stage = :stage
         LIMIT 1
     """), {
         "eid": str(event_id),
         "oid": str(operator_id),
+        "stage": stage,
     })
     row = res.first()
     if row is None:
@@ -1174,11 +1222,13 @@ async def _update_assignment_coordinator(
         WHERE event_id = :eid
           AND operator_id = :oid
           AND is_active = true
+          AND stage = :stage
     """), {
         "eid": str(event_id),
         "oid": str(operator_id),
         "coord_display": coord_display,
         "coord_op_id": str(coord_op_id) if coord_op_id else None,
+        "stage": stage,
     })
     return True
 
@@ -1201,18 +1251,20 @@ def _resolve_role_update(current_role_id, role_name, matched_role_id):
     return matched_role_id, matched_role_id != current_role_id
 
 
-async def _update_assignment_role(db, event_id, operator_id, new_role_id):
-    """Cambia el cargo (role_id) de la asignación activa en este evento."""
+async def _update_assignment_role(db, event_id, operator_id, new_role_id, stage: str = DEFAULT_STAGE):
+    """Cambia el cargo (role_id) de la asignación activa de esta etapa."""
     await db.execute(text("""
         UPDATE event_assignments
         SET role_id = :rid
         WHERE event_id = :eid
           AND operator_id = :oid
           AND is_active = true
+          AND stage = :stage
     """), {
         "eid": str(event_id),
         "oid": str(operator_id),
         "rid": str(new_role_id) if new_role_id else None,
+        "stage": stage,
     })
 
 

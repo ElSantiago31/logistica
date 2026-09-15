@@ -248,6 +248,17 @@
                         <span class="text-xs text-gray-700 font-medium">✍️ Con firmas digitalizadas</span>
                         <span class="ml-auto text-[10px] text-gray-400" title="Embebe las firmas guardadas en la columna FIRMA">(col L)</span>
                     </label>
+                    <!-- [ETAPAS] Filtro opcional: descargar solo una etapa del evento -->
+                    <div class="px-3 py-2 border-b border-gray-100 bg-orange-50">
+                        <label for="planilla-stage-filter" class="text-xs text-gray-700 font-medium block mb-1">Filtrar solo etapa:</label>
+                        <select id="planilla-stage-filter" class="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white" title="Aplica a cualquier opción de descarga">
+                            <option value="">Todas las etapas</option>
+                            <option value="previa">Pre-montaje</option>
+                            <option value="avanzada">Montaje avanzada</option>
+                            <option value="evento">Evento</option>
+                            <option value="desmontaje">Desmontaje</option>
+                        </select>
+                    </div>
                     <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">Por coordinador</div>
                     <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
                         <span class="text-sm text-gray-700">📋 Por <b>Apellido</b></span>
@@ -291,6 +302,22 @@
                         <span class="flex gap-1">
                             <button onclick="downloadPlanillaCoordinador('coordinator_role','document','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">📊</button>
                             <button onclick="downloadPlanillaCoordinador('coordinator_role','document','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">📕</button>
+                        </span>
+                    </div>
+                    <!-- [ETAPAS] Una hoja por etapa del evento (orden cronologico) -->
+                    <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Por etapa</div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">Por <b>Apellido</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('stage','lastname','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">Excel</button>
+                            <button onclick="downloadPlanillaCoordinador('stage','lastname','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">PDF</button>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center px-3 py-2 hover:bg-amber-50">
+                        <span class="text-sm text-gray-700">Por <b>Cédula</b></span>
+                        <span class="flex gap-1">
+                            <button onclick="downloadPlanillaCoordinador('stage','document','xlsx')" class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700" title="Excel">Excel</button>
+                            <button onclick="downloadPlanillaCoordinador('stage','document','pdf')" class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="PDF">PDF</button>
                         </span>
                     </div>
                     <div class="px-3 py-1.5 text-xs font-bold text-gray-500 uppercase border-b border-gray-100 border-t">Lista única</div>
@@ -719,6 +746,10 @@ async function downloadPlanillaCoordinador(groupBy = 'coordinator', sortBy = 'la
     try {
         const params = new URLSearchParams({ group_by: groupBy, sort_by: sortBy, format: format });
         if (withSignatures) params.append('with_signatures', 'true');
+        // [ETAPAS] Filtro opcional por etapa (select del menu desplegable)
+        const stageSelect = document.getElementById('planilla-stage-filter');
+        const stageFilter = stageSelect ? stageSelect.value : '';
+        if (stageFilter) params.append('stage', stageFilter);
         const resp = await fetch(
             `/api/payroll/events/${EVENT_ID}/planilla-coordinador?${params.toString()}`,
             { headers: authHeaders() }

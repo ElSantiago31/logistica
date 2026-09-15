@@ -87,6 +87,16 @@ CELL_EVENTO = "D6"
 CELL_FECHA = "D7"
 CELL_LUGAR = "J7"
 
+# --- Etapas de evento (group_by="stage") ---
+# Etiquetas para títulos de hoja y orden natural de las etapas.
+STAGE_SHEET_LABELS = {
+    "previa": "PRE-MONTAJE",
+    "avanzada": "MONTAJE AVANZADA",
+    "evento": "EVENTO",
+    "desmontaje": "DESMONTAJE",
+}
+STAGE_ORDER = {"previa": 0, "avanzada": 1, "evento": 2, "desmontaje": 3}
+
 
 def _split_name(full_name: str) -> tuple[str, str]:
     """Divide un nombre completo en (nombres, apellidos).
@@ -612,6 +622,32 @@ def generate_planilla_xlsx(
                     event_date=event_date,
                     event_location=event_location,
                     sheet_label=role_name,
+                    operators=ops,
+                    sort_by=sort_by,
+                    with_signatures=with_signatures,
+                )
+            )
+    elif group_by == "stage":
+        # Agrupar por etapa del evento (previa/avanzada/evento/desmontaje).
+        # Una operadora en dos etapas (doble turno) aparece en ambas hojas.
+        groups: dict[str, list[dict]] = {}
+        for op in operators:
+            stage_key = op.get("stage") or "evento"
+            groups.setdefault(stage_key, []).append(op)
+
+        # Orden natural de las etapas: previa → avanzada → evento → desmontaje.
+        ordered = sorted(
+            groups.items(), key=lambda kv: STAGE_ORDER.get(kv[0], 99)
+        )
+        for stage_key, ops in ordered:
+            sheets_created.extend(
+                _render_pages(
+                    template_wb=template_wb,
+                    template_ws=template_ws,
+                    event_name=event_name,
+                    event_date=event_date,
+                    event_location=event_location,
+                    sheet_label=STAGE_SHEET_LABELS.get(stage_key, stage_key.upper()),
                     operators=ops,
                     sort_by=sort_by,
                     with_signatures=with_signatures,
