@@ -30,11 +30,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # 1) Limpiar correos sintéticos ANTES de alterar la columna
-    #    (más seguro: quedan en NULL y no violan UNIQUE).
-    op.execute("UPDATE users SET email = NULL WHERE email LIKE '%@logistica.local'")
-
-    # 2) Hacer la columna nullable.
+    # 1) Hacer la columna nullable PRIMERO.
+    #    ⚠️ ORDEN CRÍTICO: si se hace el UPDATE a NULL antes de quitar el
+    #    NOT NULL, PostgreSQL rechaza el UPDATE (IntegrityError) y el
+    #    contenedor de producción muere en el entrypoint (alembic upgrade).
     #    Nota: en SQLite alter_column con nullable requiere batch mode;
     #    en PostgreSQL (producción) funciona directo.
     op.alter_column(
@@ -42,6 +41,10 @@ def upgrade() -> None:
         existing_type=sa.String(255),
         nullable=True,
     )
+
+    # 2) Limpiar correos sintéticos (ya con la columna nullable).
+    #    Quedan en NULL y no violan UNIQUE (NULLs no colisionan en PG).
+    op.execute("UPDATE users SET email = NULL WHERE email LIKE '%@logistica.local'")
 
 
 def downgrade() -> None:
