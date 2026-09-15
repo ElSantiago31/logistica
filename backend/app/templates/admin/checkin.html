@@ -56,6 +56,20 @@
         </div>
     </div>
 
+    <!-- Filtro por etapa (etapas del evento) -->
+    <div class="flex items-center gap-2 mb-3">
+        <label for="stage-filter" class="text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Etapa</label>
+        <select id="stage-filter" onchange="updateStats()"
+            class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-amber-400">
+            <option value="">Todas</option>
+            <option value="previa">Pre-montaje</option>
+            <option value="avanzada">Montaje avanzada</option>
+            <option value="evento">Evento</option>
+            <option value="desmontaje">Desmontaje</option>
+        </select>
+        <span id="stage-count" class="text-xs text-gray-400"></span>
+    </div>
+
     <!-- Stats (compactas) -->
     <div class="grid grid-cols-4 gap-2 mb-4">
         <div class="bg-white rounded-lg p-2 text-center border">
@@ -106,6 +120,7 @@
                         <h3 id="op-name" class="text-lg font-bold" style="color:#5d4224;"></h3>
                         <p id="op-doc" class="text-sm text-gray-500"></p>
                         <p id="op-role" class="text-sm font-medium" style="color:#cf9b62;"></p>
+                        <p id="op-stage" class="text-xs text-gray-500 hidden"></p>
                         <p id="op-coordinator" class="text-xs text-gray-600 mt-1 hidden"></p>
                     </div>
                 </div>
@@ -524,17 +539,45 @@ async function loadEventData() {
     }
 }
 
-function updateStats(total, checked) {
+// --- Etapas: helpers de filtro ---
+const STAGE_LABELS = { previa: 'Pre-montaje', avanzada: 'Montaje avanzada', evento: 'Evento', desmontaje: 'Desmontaje' };
+function _stageFilter() {
+    const sel = document.getElementById('stage-filter');
+    return sel ? sel.value : '';
+}
+function _matchesStage(a) {
+    const f = _stageFilter();
+    if (!f) return true;
+    return (a.stage || 'evento') === f;
+}
+function _visibleAssignments() {
+    return (eventAssignments || []).filter(_matchesStage);
+}
+
+// Stats recalculadas en vivo (respetan el filtro de etapa).
+// Los argumentos (legacy) se ignoran: todos los call-sites antiguos siguen válidos.
+function updateStats() {
+    const list = _visibleAssignments();
+    const total = list.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+    const checked = list.filter(a => a.status === 'checked_in').length;
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-checked').textContent = checked;
     document.getElementById('stat-pending').textContent = total - checked;
+    // Contador junto al filtro de etapa
+    const sc = document.getElementById('stage-count');
+    if (sc) {
+        const all = (eventAssignments || []).length;
+        sc.textContent = `${list.length} de ${all} asignaciones`;
+    }
     // Actualiza también el progreso de check-in agrupado por rol
     try { renderRoleCards(); } catch(e) { console.error('renderRoleCards error:', e); }
 }
 
 // Cuenta solo operadores relevantes para check-in: confirmados + ya ingresados
+// (respeta el filtro de etapa activo)
 function countRelevantForCheckin(assignments) {
-    return assignments.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+    return (assignments || []).filter(a => _matchesStage(a) &&
+        (a.status === 'confirmed' || a.status === 'checked_in')).length;
 }
 
 // ============================================================
@@ -549,9 +592,9 @@ function renderRoleCards() {
     if (!grid) return;
 
     // Conteo en vivo: checked_in agrupado por role_name (instantáneo al
-    // hacer check-in, sin esperar recarga del backend).
+    // hacer check-in, sin esperar recarga del backend). Respeta etapa.
     const checkedMap = {};
-    for (const a of eventAssignments) {
+    for (const a of _visibleAssignments()) {
         const role = (a.role_name || 'Operador').trim() || 'Operador';
         if (a.status === 'checked_in') {
             checkedMap[role] = (checkedMap[role] || 0) + 1;
@@ -569,7 +612,7 @@ function renderRoleCards() {
     } else if (eventAssignments && eventAssignments.length) {
         // Fallback legacy: agrupar assignments por role_name
         const roleMap = {};
-        for (const a of eventAssignments) {
+        for (const a of _visibleAssignments()) {
             const role = (a.role_name || 'Operador').trim() || 'Operador';
             if (!roleMap[role]) roleMap[role] = { total: 0, checked: 0 };
             if (a.status === 'confirmed' || a.status === 'checked_in') {
@@ -658,6 +701,7 @@ async function searchOperator(query) {
         const badge = op.status === 'checked_in' ? 'bg-green-100 text-green-700'
             : op.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700';
         const sub = [op.document_number, op.role_name || 'Operador',
+            (op.stage && op.stage !== 'evento') ? '🏷️ ' + (STAGE_LABELS[op.stage] || op.stage) : null,
             (op.coordinator_name && op.coordinator_name !== 'Sin asignar') ? '👔 ' + op.coordinator_name : null]
             .filter(Boolean).join(' · ');
         return `
@@ -698,6 +742,15 @@ async function showOperator(assignmentId) {
     document.getElementById('op-name').textContent = operator.full_name;
     document.getElementById('op-doc').textContent = operator.document_number;
     document.getElementById('op-role').textContent = operator.role_name || 'Operador';
+
+    // Etapa de la asignación (útil cuando el mismo operador está en varias)
+    const stageEl = document.getElementById('op-stage');
+    if (stageEl) {
+        const st = operator.stage || 'evento';
+        stageEl.textContent = '🏷️ Etapa: ' + (STAGE_LABELS[st] || st);
+        stageEl.classList.toggle('hidden', !eventAssignments.some(a =>
+            a.operator_id === operator.operator_id && (a.stage || 'evento') !== st));
+    }
 
     // --- Actualizar avatar con la foto del operador (o fallback 👤) ---
     const avatarEl = document.getElementById('op-avatar');
@@ -1311,6 +1364,7 @@ async function _cacheEventData(eventId, data) {
                 operator_id: a.operator_id,  // FIX crítico: faltaba guardar operator_id
                 full_name: a.full_name, document_number: a.document_number,
                 role_name: a.role_name, role_id: a.role_id ? String(a.role_id) : null,
+                stage: a.stage || 'evento',  // etapa (previa|avanzada|evento|desmontaje)
                 status: a.status, photo_url: a.photo_url,
                 shirt_number: a.shirt_number, jacket_number: a.jacket_number, cap_number: a.cap_number,
                 coordinator_name: a.coordinator_name || null,

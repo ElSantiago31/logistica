@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
-from app.models.events import Event, EventAssignment, EventCoordinatorQuota
+from app.models.events import Event, EventAssignment, EventCoordinatorQuota, EVENT_STAGES, DEFAULT_STAGE
 from app.models.operators import Operator
 from app.models.payroll import Evaluation
 from app.models.roles import Role
@@ -248,6 +248,7 @@ async def get_team_to_evaluate(
                 "area": role.area if role else None,
                 "level": role.hierarchy_level if role else 3,
                 "photo": op.photo_thumbnail_path,
+                "stage": asn.stage or DEFAULT_STAGE,
                 "already_evaluated": str(op.id) in existing_evals,
                 "overall_score": existing_evals[str(op.id)].overall_score
                     if str(op.id) in existing_evals else None,
@@ -468,7 +469,9 @@ async def my_quotas(
 
     out = []
     for quota, ev in rows:
-        used = await event_svc._count_used_by_coordinator(db, ev.id, operator.id)
+        # El cupo es por etapa: contar solo lo admitido en la etapa del cupo.
+        q_stage = quota.stage if quota.stage in EVENT_STAGES else DEFAULT_STAGE
+        used = await event_svc._count_used_by_coordinator(db, ev.id, operator.id, stage=q_stage)
         out.append({
             "id": str(quota.id),
             "event_id": str(ev.id),
@@ -476,6 +479,7 @@ async def my_quotas(
             "event_start": ev.start_date.isoformat() if ev.start_date else None,
             "event_status": ev.status,
             "quota": quota.quota,
+            "stage": q_stage,
             "used": used,
             "available": (quota.quota - used) if quota.quota is not None else None,
         })
@@ -485,10 +489,15 @@ async def my_quotas(
 @router.get("/events/{event_id}/my-quota")
 async def my_quota_for_event(
     event_id: uuid.UUID,
+    stage: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Cupo del coordinador actual para un evento específico + lista de operadores admitidos."""
+    """Cupo del coordinador actual para un evento específico + lista de operadores admitidos.
+
+    stage (query param, opcional): si se pasa, filtra los operadores admitidos
+    a esa etapa y cuenta el cupo solo para esa etapa.
+    """
     operator = await _get_my_operator(db, user)
     if not operator:
         raise HTTPException(404, "No tienes perfil de operador")
@@ -503,10 +512,11 @@ async def my_quota_for_event(
     if not quota:
         raise HTTPException(404, "No tienes cupo asignado en este evento")
 
-    used = await event_svc._count_used_by_coordinator(db, event_id, operator.id)
+    q_stage = stage if stage in EVENT_STAGES else None
+    used = await event_svc._count_used_by_coordinator(db, event_id, operator.id, stage=q_stage)
 
-    # Operadores que este coordinador admitió en este evento.
-    ops_r = await db.execute(
+    # Operadores que este coordinador admitió en este evento (y etapa si se pide).
+    ops_query = (
         select(EventAssignment, Operator, User, Role)
         .join(Operator, EventAssignment.operator_id == Operator.id)
         .join(User, User.id == Operator.user_id)
@@ -515,8 +525,10 @@ async def my_quota_for_event(
             EventAssignment.event_id == event_id,
             EventAssignment.admitted_by_operator_id == operator.id,
         )
-        .order_by(EventAssignment.invited_at.desc())
     )
+    if q_stage:
+        ops_query = ops_query.where(EventAssignment.stage == q_stage)
+    ops_r = await db.execute(ops_query.order_by(EventAssignment.invited_at.desc()))
     admitted = []
     for a, op, u, role in ops_r.all():
         admitted.append({
@@ -526,6 +538,7 @@ async def my_quota_for_event(
             "document_number": u.document_number,
             "phone": u.phone,
             "role_name": role.name if role else None,
+            "stage": a.stage or DEFAULT_STAGE,
             "status": a.status,
         })
 
@@ -533,6 +546,7 @@ async def my_quota_for_event(
         "event_id": str(event_id),
         "coordinator": quota.coordinator,
         "quota": quota.quota,
+        "stage": q_stage,
         "used": used,
         "available": (quota.quota - used) if quota.quota is not None else None,
         "admitted_operators": admitted,
@@ -548,7 +562,8 @@ async def admit_operators(
 ):
     """Admite (asigna) operadores bajo el cupo del coordinador actual.
 
-    Body: {"operator_ids": [uuid, ...], "role_id": uuid (opcional)}
+    Body: {"operator_ids": [uuid, ...], "role_id": uuid (opcional),
+           "stage": "previa|avanzada|evento|desmontaje" (opcional)}
     El cupo es informativo: no bloquea la asignación.
     """
     operator = await _get_my_operator(db, user)
@@ -588,9 +603,15 @@ async def admit_operators(
         except (ValueError, AttributeError, TypeError):
             role_id = None
 
+    # Etapa del evento a la que se admiten los operadores (default: evento).
+    stage = payload.get("stage") or DEFAULT_STAGE
+    if stage not in EVENT_STAGES:
+        raise HTTPException(422, f"Etapa inválida: {stage}. Debe ser una de {EVENT_STAGES}")
+
     assignments, unavailable = await event_svc.assign_operators(
         db, event_id, operator_ids, role_id,
         programmed_by_operator_id=operator.id,
+        stage=stage,
     )
 
     all_assignments = await event_svc.get_assignments(db, event_id)
@@ -605,6 +626,7 @@ async def admit_operators(
 async def available_operators_for_quota(
     event_id: uuid.UUID,
     search: str | None = None,
+    stage: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -612,6 +634,8 @@ async def available_operators_for_quota(
 
     Excluye los ya asignados al evento y aplica el filtro de solapamiento.
     Soporta búsqueda opcional por nombre/documento (query param `search`).
+    stage (opcional): al pasarlo, solo excluye a los ya asignados a ESA etapa
+    (un operador en otra etapa puede volver a admitirse = doble turno).
     """
     operator = await _get_my_operator(db, user)
     if not operator:
@@ -627,7 +651,8 @@ async def available_operators_for_quota(
     if not quota_r.scalar_one_or_none():
         raise HTTPException(403, "No tienes cupo asignado en este evento")
 
-    operators = await event_svc.list_available_operators(db, event_id)
+    q_stage = stage if stage in EVENT_STAGES else None
+    operators = await event_svc.list_available_operators(db, event_id, stage=q_stage)
 
     # Filtro de búsqueda server-side (nombre/documento/teléfono) si se provee.
     # list_available_operators devuelve los campos: name, document_number, phone.

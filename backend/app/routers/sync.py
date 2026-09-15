@@ -186,6 +186,7 @@ async def get_offline_data(
             "document_number": op_user.document_number or "",
             "role_id": str(assignment.role_id) if assignment.role_id else None,
             "role_name": role.name if role else "Operador",
+            "stage": getattr(assignment, "stage", None) or "evento",
             "status": assignment.status,
             "photo_url": operator.photo_thumbnail_path,
             "shirt_number": assignment.shirt_number,
