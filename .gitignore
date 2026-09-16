@@ -81,3 +81,7 @@ frontend/public/**/*.webp
 backend/frontend/public/**/*.webp
 # temporales de Word
 docs/~*
+
+# manual publico generado localmente (no versionar)
+scripts/generar_manual_publico.py
+docs/MANUAL_ADMINISTRACION_PAGINA_WEB_PUBLICA.docx
