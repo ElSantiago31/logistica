@@ -604,7 +604,8 @@ function countRelevantForCheckin(assignments) {
 // ============================================================
 //  ALERTA DE PROGRESO (>=90%) — banner persistente en pantalla
 // ============================================================
-// Se activa al alcanzar el 90% del personal con check-in y permanece
+// Se activa al entrar en la "zona del 90%" (el último 10% del personal,
+// o cuando falta 1) y permanece
 // visible (se actualiza en vivo) para que el staff sepa en qué cantidad
 // va. Se recalcula junto con updateStats() → cubre check-in local,
 // polling y WebSocket. Respeta el filtro de etapa activo.
@@ -624,10 +625,17 @@ function _updateProgressAlert() {
     const checked = list.filter(a => a.status === 'checked_in').length;
     const pct = total > 0 ? checked / total : 0;
 
+    // "Zona del 90%": el último 10% del personal (mínimo 1 persona). Así la
+    // alerta aparece ANTES de completar aunque el total no dé un 90% exacto
+    // (p. ej. con 5 confirmados aparece al 4/5, cuando solo falta 1;
+    // antes saltaba directo de 80% a 100% y nunca se veía la alerta).
+    const missing = total - checked;
+    const zone = Math.max(1, Math.round(total * 0.1));
+    const inZone = checked > 0 && (pct >= CHECKIN_ALERT_THRESHOLD || missing <= zone);
+
     let level = 'below';
-    if (pct >= 1) level = 'complete';
-    else if (pct >= 0.95) level = 'near';
-    else if (pct >= CHECKIN_ALERT_THRESHOLD) level = 'warn';
+    if (total > 0 && checked >= total) level = 'complete';
+    else if (inZone) level = (pct >= 0.95 || missing === 1) ? 'near' : 'warn';
 
     if (level === 'below') {
         banner.classList.add('hidden');
@@ -643,7 +651,8 @@ function _updateProgressAlert() {
     if (level === 'complete') {
         txt.textContent = `✅ PERSONAL COMPLETO${stageTag} — ${checked}/${total}`;
     } else {
-        txt.textContent = `🚨 ${Math.floor(pct * 100)}% del personal con check-in${stageTag} — ${checked}/${total} · faltan ${total - checked}`;
+        const faltan = missing === 1 ? 'falta 1' : `faltan ${missing}`;
+        txt.textContent = `🚨 ${Math.round(pct * 100)}% del personal con check-in${stageTag} — ${checked}/${total} · ${faltan}`;
     }
 
     // Color del banner (clases pa-warn / pa-near / pa-complete)
