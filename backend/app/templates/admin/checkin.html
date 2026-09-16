@@ -36,10 +36,10 @@
     .coord-detail-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:50; }
     .coord-detail-modal.hidden { display:none; }
     .coord-detail-modal .box { background:#fff; border-radius:14px; padding:24px; max-width:420px; width:90%; }
-    /* Alerta persistente de progreso de check-in (>= 90% del personal) */
+    /* Alerta persistente de progreso de check-in (solo al 90% del cupo) */
     .progress-alert { position:sticky; top:8px; z-index:30; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-radius:12px; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.25); margin-bottom:12px; font-size:.95rem; }
-    .progress-alert.pa-warn { background:#f59e0b; animation:pa-pulse 1.6s ease-in-out infinite; }
-    .progress-alert.pa-near { background:#ea580c; animation:pa-pulse 1.2s ease-in-out infinite; }
+    /* 90-99% del cupo -> ROJO (aparece solo al alcanzar el 90%) */
+    .progress-alert.pa-danger { background:#dc2626; animation:pa-pulse 1.4s ease-in-out infinite; }
     .progress-alert.pa-complete { background:#22c55e; }
     /* .hidden de Tailwind pierde contra .progress-alert (display:flex) — doble clase como en reassign-modal */
     .progress-alert.hidden { display:none; }
@@ -66,7 +66,7 @@
         </div>
     </div>
 
-    <!-- Alerta persistente de check-in: 90% del personal REQUERIDO (no se puede cerrar) -->
+    <!-- Alerta persistente de check-in: ROJA al 90% del cupo (no se puede cerrar) -->
     <div id="checkin-progress-alert" class="progress-alert hidden">
         <span id="checkin-alert-text" class="font-semibold"></span>
         <div class="flex items-center gap-2">
@@ -603,14 +603,14 @@ function countRelevantForCheckin(assignments) {
 // ============================================================
 //  ALERTA DE PROGRESO (>=90%) — banner persistente en pantalla
 // ============================================================
-// Se activa al entrar en la "zona del 90%" del PERSONAL REQUERIDO
+// Se activa SOLO al alcanzar el 90% del cupo del PERSONAL REQUERIDO
 // (staff_needs / quantity_needed, no los asignados) y permanece visible
 // (no se puede descartar) para que el staff sepa en qué cantidad va.
 // Se recalcula junto con updateStats() → cubre check-in local,
 // polling y WebSocket. Respeta el filtro de etapa activo.
 const CHECKIN_ALERT_THRESHOLD = 0.9;
 const CHECKIN_ALERT_MUTE_KEY = 'checkin_alert_muted';
-let _alertLastLevel = null;     // 'below' | 'warn' | 'near' | 'complete' (transiciones)
+let _alertLastLevel = null;     // 'below' | 'danger' | 'complete' (transiciones)
 
 function _updateProgressAlert() {
     const banner = document.getElementById('checkin-progress-alert');
@@ -631,17 +631,14 @@ function _updateProgressAlert() {
     }
     const pct = total > 0 ? checked / total : 0;
 
-    // "Zona del 90%": el último 10% del personal (mínimo 1 persona). Así la
-    // alerta aparece ANTES de completar aunque el total no dé un 90% exacto
-    // (p. ej. con 5 confirmados aparece al 4/5, cuando solo falta 1;
-    // antes saltaba directo de 80% a 100% y nunca se veía la alerta).
+    // La alerta aparece SOLO al alcanzar el 90% del cupo (pct >= 0.9) y se
+    // marca en ROJO hasta completarlo. Si el cupo no permite un 90% exacto
+    // (p. ej. total 5 -> 4/5 = 80%), pasa directo de oculto a COMPLETO.
     const missing = total - checked;
-    const zone = Math.max(1, Math.round(total * 0.1));
-    const inZone = checked > 0 && (pct >= CHECKIN_ALERT_THRESHOLD || missing <= zone);
 
     let level = 'below';
     if (total > 0 && checked >= total) level = 'complete';
-    else if (inZone) level = (pct >= 0.95 || missing === 1) ? 'near' : 'warn';
+    else if (total > 0 && pct >= CHECKIN_ALERT_THRESHOLD) level = 'danger';
 
     if (level === 'below') {
         banner.classList.add('hidden');
@@ -661,11 +658,11 @@ function _updateProgressAlert() {
         txt.textContent = `🚨 ${Math.round(pct * 100)}% del personal requerido con check-in${stageTag} — ${checked}/${total} · ${faltan}`;
     }
 
-    // Color del banner (clases pa-warn / pa-near / pa-complete)
-    // La alerta NO se puede ocultar: permanece mientras se esté en la zona
-    // del 90% o completo (solo el sonido se puede silenciar).
+    // Color del banner: ROJO (pa-danger) del 90% al 99%, verde al completar.
+    // La alerta NO se puede ocultar: permanece mientras pct >= 90% o hasta
+    // completar el cupo (solo el sonido se puede silenciar).
     banner.classList.remove('hidden');
-    banner.classList.remove('pa-warn', 'pa-near', 'pa-complete');
+    banner.classList.remove('pa-danger', 'pa-complete');
     banner.classList.add('pa-' + level);
 
     // Icono de mute según preferencia guardada
@@ -675,12 +672,12 @@ function _updateProgressAlert() {
     // Beep SOLO en transiciones de nivel (no en cada refresh de datos)
     if (_alertLastLevel !== level) {
         if (level === 'complete') _playProgressBeep('complete');
-        else _playProgressBeep('warn');
+        else _playProgressBeep('danger');
     }
     _alertLastLevel = level;
 }
 
-// Beep corto con WebAudio (sin assets). 'warn' = tono único al cruzar 90%;
+// Beep corto con WebAudio (sin assets). 'danger' = tono único al cruzar 90%;
 // 'complete' = doble tono ascendente al llegar al 100%.
 let _audioCtx = null;
 function _playProgressBeep(kind) {
