@@ -986,10 +986,18 @@ function renderTable(operators) {
         const uniformBtn = hasUniform && !isReturned ?
             `<button onclick="toggleUniformReturn('${op.assignment_id}')" class="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 mt-1">📦 Entrega Intendencia</button>` : '';
 
+        // [DOBLE TURNO] Etapa de la asignacion + marcador x2 turnos
+        const stageLabels = { previa: 'PREVIA', avanzada: 'M. AVANZADA', evento: 'EVENTO', desmontaje: 'DESMONTAJE' };
+        const stageSlug = op.stage || 'evento';
+        const stageBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 align-middle" title="Etapa de la asignación">${stageLabels[stageSlug] || stageSlug.toUpperCase()}</span>`;
+        const doubleBadge = op.double_shift
+            ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 align-middle ml-1" title="Operador con 2 asignaciones (2 turnos / 2 pagos)">⚡ DOBLE TURNO</span>`
+            : '';
+
         return `<tr class="pay-row border-b" id="row-${op.assignment_id}">
             <td class="px-4 py-3">
-                <div class="font-medium">${op.full_name}</div>
-                <div class="text-xs text-gray-400">${op.document_number} · ${op.role_name}</div>
+                <div class="font-medium">${op.full_name}${doubleBadge}</div>
+                <div class="text-xs text-gray-400">${op.document_number} · ${op.role_name} ${stageBadge}</div>
             </td>
             <td class="px-4 py-3 text-gray-600 text-sm">${op.coordinator_name || '—'}</td>
             <td class="px-4 py-3 text-right font-mono font-bold">$${(op.payment_amount || 0).toLocaleString('es-CO')}</td>

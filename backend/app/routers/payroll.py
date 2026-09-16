@@ -212,9 +212,20 @@ async def get_payable_operators(
         .where(PayrollRecord.event_id == event_id)
     )
     # has_signature se infiere de status (signed/paid implica firma presente)
-    records_by_op: dict[str, PayrollRecord] = {
-        str(r.operator_id): r for r in rec_result.scalars().all()
+    # [DOBLE TURNO] Mapa por ASIGNACION (no por operador): un operador con
+    # doble turno tiene 2 asignaciones y cada una lleva su propio estado de
+    # firma/pago independiente.
+    records_by_assign: dict[str, PayrollRecord] = {
+        str(r.assignment_id): r for r in rec_result.scalars().all() if r.assignment_id
     }
+
+    # [DOBLE TURNO] Cuantas asignaciones checked_in tiene cada operador:
+    # si tiene 2+, cada fila se marca double_shift para que nomina distinga
+    # que son 2 turnos (2 pagos) y no un duplicado.
+    assign_count_by_op: dict[str, int] = {}
+    for _assignment, _operator, _u, _r in rows:
+        _oid = str(_operator.id)
+        assign_count_by_op[_oid] = assign_count_by_op.get(_oid, 0) + 1
 
     operators = []
     for assignment, operator, op_user, role in rows:
@@ -226,7 +237,7 @@ async def get_payable_operators(
         if rate is None:
             rate = 0.0
 
-        record = records_by_op.get(op_id_str)
+        record = records_by_assign.get(str(assignment.id))
 
         # [NÓMINA-V2] Determinar coordinador: quien lo programó (programmed_by)
         # tiene prioridad. Fallback: admitted_by → mapping por área → "Sin asignar".
@@ -250,6 +261,11 @@ async def get_payable_operators(
             "invoice_number": record.invoice_number if record else None,
             "has_signature": bool(record and record.status in ("signed", "paid")),
             "coordinator_name": coord_name,  # [NÓMINA-V2]
+            # [DOBLE TURNO] Etapa de esta asignacion y flag de doble turno:
+            # el operador aparece en 2 filas (una por etapa) y nomina debe
+            # distinguir que son 2 turnos/2 pagos, no un duplicado.
+            "stage": getattr(assignment, "stage", None) or "evento",
+            "double_shift": assign_count_by_op.get(op_id_str, 0) > 1,
             # Uniformes asignados por intendencia
             "shirt_number": assignment.shirt_number or None,
             "jacket_number": assignment.jacket_number or None,
