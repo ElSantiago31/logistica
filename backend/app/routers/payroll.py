@@ -1041,6 +1041,14 @@ async def download_planilla_coordinador(
             exc=exc,
         )
 
+    # [DOBLE TURNO] Conteo de asignaciones checked_in por operador: quienes
+    # tienen 2+ se marcan en la planilla impresa (X2 DOBLE TURNO) para que
+    # nomina sepa que esa persona cobra 2 turnos.
+    assign_count_by_op: dict[str, int] = {}
+    for _a, _op, _u, _r in rows:
+        _oid = str(_op.id)
+        assign_count_by_op[_oid] = assign_count_by_op.get(_oid, 0) + 1
+
     # Construir lista plana de operadores (con su coordinator_name)
     operators: list[dict] = []
     for assignment, operator, op_user, role in rows:
@@ -1074,8 +1082,11 @@ async def download_planilla_coordinador(
             "cap_number": assignment.cap_number or "",
             # Etapa del evento (para group_by="stage")
             "stage": op_stage,
+            # Doble turno: 2+ asignaciones checked_in en este evento
+            "double_shift": assign_count_by_op.get(op_id_str, 0) > 1,
             # Flags para resaltar filas en la planilla impresa:
-            #   rojo = vetado (is_banned), amarillo = tiene novedad (has_incident).
+            #   rojo = vetado (is_banned), amarillo = tiene novedad (has_incident),
+            #   azul = doble turno (X2 turnos/pagos).
             # El veto tiene prioridad visual sobre la novedad.
             "is_banned": op_id_str in banned_ops,
             "has_incident": op_id_str in ops_with_incident,

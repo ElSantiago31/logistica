@@ -38,7 +38,7 @@ from pathlib import Path
 from datetime import datetime
 
 import openpyxl
-from openpyxl.styles import PatternFill
+from openpyxl.styles import Font, PatternFill
 from openpyxl.drawing.image import Image as XlImage
 from openpyxl.drawing.spreadsheet_drawing import (
     OneCellAnchor,
@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 # Rojo claro (vetado) tiene prioridad sobre amarillo claro (novedad).
 BAN_FILL = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")  # red-200
 INCIDENT_FILL = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")  # amber-100
+DOUBLE_FILL = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")  # blue-100 (doble turno)
 # Última columna de datos en la plantilla (N=14). Se usa para pintar toda la fila.
 LAST_COL = 14
 
@@ -78,6 +79,7 @@ COL_ROL = 8          # H  — ROL del operador en el evento
 COL_COORDINADOR = 9  # I
 COL_CHAQ = 10        # J
 COL_GORRA = 11       # K
+COL_VALOR = 12       # L - texto "X2 DOBLE TURNO" (doble turno)
 COL_FIRMA = 13       # M — columna donde van las firmas embebidas
 # L=VALOR, N=No DSE → se dejan vacíos (no tenemos el dato)
 
@@ -406,6 +408,13 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
         ws.cell(row=row, column=COL_CHAQ, value=op.get("jacket_number", ""))
         ws.cell(row=row, column=COL_GORRA, value=op.get("cap_number", ""))
 
+        # [DOBLE TURNO] Marca visible en la hoja impresa: el operador tiene
+        # 2 asignaciones en el evento (2 etapas) => 2 turnos/2 pagos. Se
+        # escribe en la columna L (VALOR, vacia por diseno) en negrita azul.
+        if op.get("double_shift"):
+            _ds_cell = ws.cell(row=row, column=COL_VALOR, value="X2 DOBLE TURNO")
+            _ds_cell.font = Font(bold=True, color="1D4ED8")
+
         # --- Embeber firma (opcional) en la columna M ---
         # Solo si with_signatures=True y el operador tiene signature_data.
         # Se aumenta la altura de la fila ANTES de calcular el centrado,
@@ -422,6 +431,8 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
             fill = BAN_FILL
         elif op.get("has_incident"):
             fill = INCIDENT_FILL
+        elif op.get("double_shift"):
+            fill = DOUBLE_FILL
 
         if fill is not None:
             for col in range(COL_NO, LAST_COL + 1):
