@@ -36,6 +36,16 @@
     .coord-detail-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:50; }
     .coord-detail-modal.hidden { display:none; }
     .coord-detail-modal .box { background:#fff; border-radius:14px; padding:24px; max-width:420px; width:90%; }
+    /* Alerta persistente de progreso de check-in (>= 90% del personal) */
+    .progress-alert { position:sticky; top:8px; z-index:30; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-radius:12px; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.25); margin-bottom:12px; font-size:.95rem; }
+    .progress-alert.pa-warn { background:#f59e0b; animation:pa-pulse 1.6s ease-in-out infinite; }
+    .progress-alert.pa-near { background:#ea580c; animation:pa-pulse 1.2s ease-in-out infinite; }
+    .progress-alert.pa-complete { background:#22c55e; }
+    /* .hidden de Tailwind pierde contra .progress-alert (display:flex) — doble clase como en reassign-modal */
+    .progress-alert.hidden { display:none; }
+    .progress-alert .pa-btn { background:rgba(255,255,255,.2); border:none; border-radius:8px; color:#fff; width:28px; height:28px; font-size:.85rem; cursor:pointer; transition:background .15s; flex-shrink:0; }
+    .progress-alert .pa-btn:hover { background:rgba(255,255,255,.35); }
+    @keyframes pa-pulse { 0%,100% { opacity:1; } 50% { opacity:.82; } }
 </style>
 {% endblock %}
 {% block content %}
@@ -53,6 +63,15 @@
             <span id="viewers-badge" class="status-badge bg-blue-50 text-blue-700 hidden" title="Personas viendo este check-in">👥 1</span>
             <span id="online-badge" class="status-badge bg-green-100 text-green-700">🟢 Online</span>
             <span id="offline-badge" class="status-badge bg-gray-100 text-gray-700 hidden">📴 Offline</span>
+        </div>
+    </div>
+
+    <!-- Alerta persistente de progreso de check-in (aparece al llegar al 90%) -->
+    <div id="checkin-progress-alert" class="progress-alert hidden">
+        <span id="checkin-alert-text" class="font-semibold"></span>
+        <div class="flex items-center gap-2">
+            <button id="btn-alert-mute" onclick="_toggleAlertMute()" class="pa-btn" title="Silenciar/activar sonido">🔊</button>
+            <button id="btn-alert-close" onclick="_dismissProgressAlert()" class="pa-btn" title="Ocultar (reaparece al volver a cruzar el 90%)">✕</button>
         </div>
     </div>
 
@@ -571,6 +590,8 @@ function updateStats() {
     }
     // Actualiza también el progreso de check-in agrupado por rol
     try { renderRoleCards(); } catch(e) { console.error('renderRoleCards error:', e); }
+    // Alerta persistente de progreso (>=90%) — respeta el filtro de etapa
+    try { _updateProgressAlert(); } catch(e) { console.error('_updateProgressAlert error:', e); }
 }
 
 // Cuenta solo operadores relevantes para check-in: confirmados + ya ingresados
@@ -578,6 +599,109 @@ function updateStats() {
 function countRelevantForCheckin(assignments) {
     return (assignments || []).filter(a => _matchesStage(a) &&
         (a.status === 'confirmed' || a.status === 'checked_in')).length;
+}
+
+// ============================================================
+//  ALERTA DE PROGRESO (>=90%) — banner persistente en pantalla
+// ============================================================
+// Se activa al alcanzar el 90% del personal con check-in y permanece
+// visible (se actualiza en vivo) para que el staff sepa en qué cantidad
+// va. Se recalcula junto con updateStats() → cubre check-in local,
+// polling y WebSocket. Respeta el filtro de etapa activo.
+const CHECKIN_ALERT_THRESHOLD = 0.9;
+const CHECKIN_ALERT_MUTE_KEY = 'checkin_alert_muted';
+let _alertDismissed = false;    // true tras pulsar ✕; se rearma al bajar del 90%
+let _alertLastLevel = null;     // 'below' | 'warn' | 'near' | 'complete' (transiciones)
+
+function _updateProgressAlert() {
+    const banner = document.getElementById('checkin-progress-alert');
+    const txt = document.getElementById('checkin-alert-text');
+    if (!banner || !txt) return;
+
+    // Mismo criterio que updateStats(): confirmed + checked_in, por etapa visible
+    const list = _visibleAssignments();
+    const total = list.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+    const checked = list.filter(a => a.status === 'checked_in').length;
+    const pct = total > 0 ? checked / total : 0;
+
+    let level = 'below';
+    if (pct >= 1) level = 'complete';
+    else if (pct >= 0.95) level = 'near';
+    else if (pct >= CHECKIN_ALERT_THRESHOLD) level = 'warn';
+
+    if (level === 'below') {
+        banner.classList.add('hidden');
+        _alertDismissed = false;  // rearmar: reaparecerá al cruzar el 90% de nuevo
+        _alertLastLevel = level;
+        return;
+    }
+
+    // Etiqueta de etapa cuando hay filtro activo
+    const f = _stageFilter();
+    const stageTag = f ? ' — ' + (STAGE_LABELS[f] || f) : '';
+
+    if (level === 'complete') {
+        txt.textContent = `✅ PERSONAL COMPLETO${stageTag} — ${checked}/${total}`;
+    } else {
+        txt.textContent = `🚨 ${Math.floor(pct * 100)}% del personal con check-in${stageTag} — ${checked}/${total} · faltan ${total - checked}`;
+    }
+
+    // Color del banner (clases pa-warn / pa-near / pa-complete)
+    banner.classList.remove('pa-warn', 'pa-near', 'pa-complete');
+    banner.classList.add('pa-' + level);
+    if (!_alertDismissed) banner.classList.remove('hidden');
+
+    // Icono de mute según preferencia guardada
+    const muteBtn = document.getElementById('btn-alert-mute');
+    if (muteBtn) muteBtn.textContent = localStorage.getItem(CHECKIN_ALERT_MUTE_KEY) === '1' ? '🔇' : '🔊';
+
+    // Beep SOLO en transiciones de nivel (no en cada refresh de datos)
+    if (_alertLastLevel !== level) {
+        if (level === 'complete') _playProgressBeep('complete');
+        else _playProgressBeep('warn');
+    }
+    _alertLastLevel = level;
+}
+
+// Beep corto con WebAudio (sin assets). 'warn' = tono único al cruzar 90%;
+// 'complete' = doble tono ascendente al llegar al 100%.
+let _audioCtx = null;
+function _playProgressBeep(kind) {
+    try {
+        if (localStorage.getItem(CHECKIN_ALERT_MUTE_KEY) === '1') return;
+        if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (_audioCtx.state === 'suspended') _audioCtx.resume();
+        const t0 = _audioCtx.currentTime;
+        const mk = (freq, start, dur) => {
+            const osc = _audioCtx.createOscillator();
+            const gain = _audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.0001, t0 + start);
+            gain.gain.exponentialRampToValueAtTime(0.25, t0 + start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+            osc.connect(gain).connect(_audioCtx.destination);
+            osc.start(t0 + start);
+            osc.stop(t0 + start + dur + 0.02);
+        };
+        if (kind === 'complete') { mk(880, 0, 0.15); mk(1320, 0.18, 0.20); }
+        else { mk(880, 0, 0.15); }
+    } catch (e) { /* audio no disponible (autoplay/permiso) — solo visual */ }
+}
+
+// ✕: oculta el banner hasta que el progreso baje del 90% y vuelva a cruzarlo
+function _dismissProgressAlert() {
+    _alertDismissed = true;
+    const banner = document.getElementById('checkin-progress-alert');
+    if (banner) banner.classList.add('hidden');
+}
+
+// 🔊/🔇: alterna el sonido de la alerta (persiste en localStorage)
+function _toggleAlertMute() {
+    const muted = localStorage.getItem(CHECKIN_ALERT_MUTE_KEY) === '1';
+    localStorage.setItem(CHECKIN_ALERT_MUTE_KEY, muted ? '0' : '1');
+    const muteBtn = document.getElementById('btn-alert-mute');
+    if (muteBtn) muteBtn.textContent = muted ? '🔊' : '🔇';
 }
 
 // ============================================================
