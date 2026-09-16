@@ -455,6 +455,7 @@ async def list_operators(
     city: Optional[str] = Query(None, description="Filtrar por ciudad del operador"),
     education_level: Optional[str] = Query(None, description="Filtrar por nivel educativo minimo"),
     exclude_event_id: Optional[str] = Query(None, description="Excluir operadores ya asignados a este evento"),
+    exclude_stage: Optional[str] = Query(None, description="Con exclude_event_id: excluir solo los de esta etapa (permite doble turno)"),
     current_user: User = Depends(require_superadmin_or_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -465,6 +466,7 @@ async def list_operators(
         role_level=role_level,
         city=city, education_level=education_level,
         exclude_event_id=exclude_event_id,
+        exclude_stage=exclude_stage,
     )
     return OperatorListResponse(items=operators, total=total)
 

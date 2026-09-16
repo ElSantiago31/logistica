@@ -48,11 +48,14 @@ async def get_operators(
     city: Optional[str] = None,
     education_level: Optional[str] = None,
     exclude_event_id: Optional[str] = None,
+    exclude_stage: Optional[str] = None,
 ) -> Tuple[List[User], int]:
     """Get a list of operators with basic filtering and pagination.
     city: filter by operator city (accent-insensitive partial match).
     education_level: filter operators with education >= this level.
     exclude_event_id: exclude operators already assigned to this event.
+    exclude_stage: with exclude_event_id, exclude only operators assigned to
+        THIS stage. Operators in other stages remain selectable (double shift).
     role_level: filter by role hierarchy level(s), comma-separated (e.g. "1,2").
         Matches operators whose experience_roles contains ANY role whose
         hierarchy_level is in the provided set.
@@ -87,6 +90,10 @@ async def get_operators(
         ).where(
             EventAssignment.event_id == exclude_event_id
         )
+        # Solo excluye de la etapa indicada: un operador en OTRA etapa sigue
+        # apareciendo y puede reasignarse (= doble turno, permitido).
+        if exclude_stage:
+            assigned_sq = assigned_sq.where(EventAssignment.stage == exclude_stage)
         query = query.where(User.id.notin_(assigned_sq))
         count_query = count_query.where(User.id.notin_(assigned_sq))
 

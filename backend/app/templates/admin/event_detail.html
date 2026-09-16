@@ -194,6 +194,7 @@ const EVENT_ID='{{ event_id }}';
 function getToken(){return localStorage.getItem('access_token');}
 let selectedOps=new Set(),assignedOps=new Set(),currentStaffNeeds=[],roles=[],currentEventCity='';
 let currentCoordinatorQuotas=[];  // Coordinadores con cupos del evento
+let assignedStagesByUser=new Map();  // user_id -> Set(etapas asignadas)
 let opsPage=0,opsTotal=0,opsPageSize=20,opsLoading=false,searchTimer=null;
 
 // ===== Etapas del evento =====
@@ -301,7 +302,12 @@ async function loadAssignments(){
     const token=getToken();const res=await fetch(`/api/events/${EVENT_ID}/assignments`,{headers:{'Authorization':'Bearer '+token}});
     allAssignments=await res.json();
     assignedOps.clear();
-    allAssignments.forEach(a=>{if(a.operator_user_id)assignedOps.add(String(a.operator_user_id))});
+    assignedStagesByUser.clear();
+    allAssignments.forEach(a=>{
+        if(a.operator_user_id)assignedOps.add(String(a.operator_user_id));
+        const uid=a.operator_user_id?String(a.operator_user_id):null;
+        if(uid){const st=a.stage||'evento';if(!assignedStagesByUser.has(uid))assignedStagesByUser.set(uid,new Set());assignedStagesByUser.get(uid).add(st)}
+    });
     assignmentsPage=0;
     renderAssignments();
 }
@@ -466,7 +472,7 @@ function refreshCoordinatorOptions(){
         coordSel.value='';
     }
 }
-function onAssignStageChange(){refreshCoordinatorOptions();updateSelectionCounter()}
+function onAssignStageChange(){refreshCoordinatorOptions();updateSelectionCounter();searchOperators(true)}
 function closeAssignModal(){document.getElementById('assignModal').classList.add('hidden')}
 
 function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchOperators(true),300)}
@@ -482,7 +488,11 @@ async function searchOperators(resetPage=false){
     const city=(cityCb&&cityCb.checked)?currentEventCity:'';
     const edu=_smartFilter.edu;
     const skip=opsPage*opsPageSize;
-    let url=`/api/operators/?skip=${skip}&limit=${opsPageSize}&is_approved=true&exclude_event_id=${encodeURIComponent(EVENT_ID)}`;
+    // Excluir solo los ya asignados a ESTA etapa: operadores en otras etapas
+    // siguen disponibles (reasignarlos = doble turno permitido).
+    const _stageSel=document.getElementById('assignStage');
+    const _curStage=_stageSel?(_stageSel.value||'evento'):'evento';
+    let url=`/api/operators/?skip=${skip}&limit=${opsPageSize}&is_approved=true&exclude_event_id=${encodeURIComponent(EVENT_ID)}&exclude_stage=${encodeURIComponent(_curStage)}`;
     if(q.length>=2)url+=`&search=${encodeURIComponent(q)}`;
     if(roleId)url+=`&experience_role_id=${encodeURIComponent(roleId)}`;
     if(city)url+=`&city=${encodeURIComponent(city)}`;
@@ -526,7 +536,13 @@ function appendOpsResults(ops){
 function opRow(o){
     const checked=selectedOps.has(String(o.id))?'checked':'';
     const eduBadge=o.education_level?`<span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">🎓 ${EDU_LABELS[o.education_level]||o.education_level}</span>`:'';
-    return`<label class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer flex-wrap"><input type="checkbox" value="${o.id}" onchange="toggleOp(this)" class="rounded flex-shrink-0" ${checked}><span class="font-medium text-sm">${o.first_name} ${o.last_name}</span><span class="text-xs text-gray-500">${o.phone||''}</span><span class="text-xs text-gray-400">${o.city||''}</span>${eduBadge}</label>`;
+    // ¿Ya está en otra etapa del evento? → asignarlo a esta = DOBLE TURNO
+    const stageSel=document.getElementById('assignStage');
+    const curStage=stageSel?(stageSel.value||'evento'):'evento';
+    const stages=assignedStagesByUser.get(String(o.id));
+    const others=stages?[...stages].filter(s=>s!==curStage).map(s=>STAGE_LABELS[s]||s):[];
+    const doubleBadge=others.length?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">DOBLE TURNO (+${others.join(', ')})</span>`:'';
+    return`<label class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer flex-wrap"><input type="checkbox" value="${o.id}" onchange="toggleOp(this)" class="rounded flex-shrink-0" ${checked}><span class="font-medium text-sm">${o.first_name} ${o.last_name}</span><span class="text-xs text-gray-500">${o.phone||''}</span><span class="text-xs text-gray-400">${o.city||''}</span>${eduBadge}${doubleBadge}</label>`;
 }
 
 function loadMoreOps(){opsPage++;searchOperators(false)}
