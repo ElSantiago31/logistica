@@ -904,7 +904,7 @@ async def download_planilla_coordinador(
         - ``"coordinator"`` (default): una hoja por coordinador.
         - ``"role"``: una hoja por cada rol.
         - ``"coordinator_role"``: una hoja por combinación coordinador-rol.
-        - ``"stage"``: una hoja por etapa (PRE-MONTAJE, MONTAJE AVANZADA,
+        - ``"stage"``: una hoja por etapa (PREVIA, MONTAJE AVANZADA,
           EVENTO, DESMONTAJE) en orden cronológico. Un operador con doble
           turno (asignado a dos etapas) aparece en ambas hojas.
         - ``"none"``: lista única (no agrupar), hojas tituladas con el evento.
@@ -1089,7 +1089,7 @@ async def download_planilla_coordinador(
     if stage_filter:
         # Sufijo de etapa para distinguir descargas filtradas (ej. solo evento).
         _stage_suffix = {
-            "previa": "PreMontaje", "avanzada": "MontajeAvanzada",
+            "previa": "Previa", "avanzada": "MontajeAvanzada",
             "evento": "Evento", "desmontaje": "Desmontaje",
         }
         mode_suffix += f"_solo{_stage_suffix[stage_filter]}"

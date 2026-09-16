@@ -90,7 +90,7 @@ CELL_LUGAR = "J7"
 # --- Etapas de evento (group_by="stage") ---
 # Etiquetas para títulos de hoja y orden natural de las etapas.
 STAGE_SHEET_LABELS = {
-    "previa": "PRE-MONTAJE",
+    "previa": "PREVIA",
     "avanzada": "MONTAJE AVANZADA",
     "evento": "EVENTO",
     "desmontaje": "DESMONTAJE",
