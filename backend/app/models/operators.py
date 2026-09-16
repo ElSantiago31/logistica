@@ -1,6 +1,6 @@
 """Operator model - extended profile for operator users."""
 import uuid
-from sqlalchemy import Boolean, String, ForeignKey, Date, Text
+from sqlalchemy import Boolean, String, ForeignKey, Date, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -62,6 +62,13 @@ class Operator(BaseModel):
     is_banned: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, index=True,
         comment="True si el operador está vetado (no puede iniciar sesión)",
+    )
+    # Incorporación Rápida: operador "solo evento" (usuario fantasma inactivo).
+    # No aparece en directorios ni puede iniciar sesión; su limpieza corre por
+    # cuenta del ciclo de vida del evento (ver app/services/quick_add.py).
+    event_only: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False,
+        comment="True: operador 'solo evento' (Incorporación Rápida). Usuario fantasma inactivo.",
     )
 
     # Relationships

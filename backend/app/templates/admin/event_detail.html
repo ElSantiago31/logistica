@@ -49,6 +49,7 @@
                 <h3 class="text-base sm:text-lg font-semibold text-gray-800">Asignaciones</h3>
                 <div class="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button onclick="showAssignModal()" class="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">+ Asignar</button>
+                    <button onclick="showQuickAddModal()" class="bg-teal-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-teal-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">⚡ Rápida</button>
                     <button onclick="showImportModal()" class="bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-indigo-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">📥 Importar Excel</button>
                     <button onclick="sendInvitations()" class="bg-emerald-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-emerald-700 text-xs sm:text-sm flex-1 sm:flex-none text-center">📱 Invitar WA</button>
                     <a href="/admin/events/{{ event_id }}/checkin" class="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 text-xs sm:text-sm flex-1 sm:flex-none text-center block">📷 Check-in</a>
@@ -156,6 +157,33 @@
         </div>
     </div>
 
+    <!-- Quick Add Modal (⚡ Incorporación Rápida) -->
+    <div id="quickAddModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50">
+        <div class="bg-white rounded-t-lg sm:rounded-lg p-4 sm:p-6 w-full sm:max-w-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base sm:text-lg font-semibold">⚡ Incorporación Rápida</h3>
+                <button onclick="closeQuickAddModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div class="bg-teal-50 border border-teal-200 rounded-lg p-3 text-xs sm:text-sm text-teal-800 mb-4">
+                Registra una persona de última hora que llegó al evento sin estar en la base. Se crea un operador <strong>"solo evento"</strong> (sin RUT ni registro completo) y queda <strong>confirmado</strong> en la etapa <strong>Evento</strong>. Si la persona luego se registra con ese mismo documento, toma la cuenta y hereda esta asignación.
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <input type="text" id="qaPrimerNombre" placeholder="Primer nombre *" class="border rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="qaSegundoNombre" placeholder="Segundo nombre" class="border rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="qaPrimerApellido" placeholder="Primer apellido *" class="border rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="qaSegundoApellido" placeholder="Segundo apellido" class="border rounded-lg px-3 py-2 text-sm">
+                <select id="qaDocType" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="CC">CC</option><option value="CE">CE</option><option value="TI">TI</option><option value="PA">PA</option>
+                </select>
+                <input type="text" id="qaDocNumber" placeholder="Número de documento *" class="border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeQuickAddModal()" class="px-4 py-2 border rounded-lg text-sm">Cancelar</button>
+                <button id="btnQuickAdd" onclick="submitQuickAdd()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 text-sm">⚡ Agregar al evento</button>
+            </div>
+        </div>
+    </div>
+
 <script>
 (function(){
     const t=localStorage.getItem('access_token'),u=JSON.parse(localStorage.getItem('user')||'{}');
@@ -174,6 +202,7 @@ const STAGE_COLORS={previa:'bg-sky-100 text-sky-800',avanzada:'bg-violet-100 tex
 function stageBadge(s){const st=STAGES.includes(s)?s:'evento';return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${STAGE_COLORS[st]}">${STAGE_LABELS[st]}</span>`}
 function stageOrder(s){const i=STAGES.indexOf(s);return i<0?STAGES.indexOf('evento'):i}
 const DOUBLE_SHIFT_BADGE='<span class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold align-middle">DOBLE TURNO</span>';
+const EVENT_ONLY_BADGE='<span class="ml-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold align-middle" title="Operador de última hora (solo evento)">SOLO EVENTO</span>';
 
 async function loadEvent(){
     const token=getToken();if(!token){window.location.href='/admin/login';return}
@@ -278,7 +307,7 @@ async function loadAssignments(){
 
 function _assignmentRowHtml(a){
     return `<tr>
-        <td class="px-4 py-2 font-medium">${a.operator_name}${a.double_shift?DOUBLE_SHIFT_BADGE:''}</td>
+        <td class="px-4 py-2 font-medium">${a.operator_name}${a.is_event_only?EVENT_ONLY_BADGE:''}${a.double_shift?DOUBLE_SHIFT_BADGE:''}</td>
         <td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td>
         <td class="px-4 py-2 text-sm">${a.role_name||'-'}</td>
         <td class="px-4 py-2">${stageBadge(a.stage)}</td>
@@ -291,7 +320,7 @@ function _assignmentRowHtml(a){
 function _assignmentCardHtml(a){
     return `<div class="border rounded-lg p-3 space-y-2">
         <div class="flex justify-between items-start">
-            <div><div class="font-medium text-sm">${a.operator_name}${a.double_shift?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">DOBLE TURNO</span></div>':''}</div><div class="text-xs text-gray-500">${a.operator_phone||'-'}</div></div>
+            <div><div class="font-medium text-sm">${a.operator_name}${a.is_event_only?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold">SOLO EVENTO</span></div>':''}${a.double_shift?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">DOBLE TURNO</span></div>':''}</div><div class="text-xs text-gray-500">${a.operator_phone||'-'}</div></div>
             <div class="flex flex-col items-end gap-1">${stageBadge(a.stage)}<span class="px-2 py-1 rounded-full text-xs font-medium ${_SC[a.status]||'bg-gray-100'}">${_SL[a.status]||a.status}</span></div>
         </div>
         <div class="flex justify-between text-xs text-gray-600"><span>Rol: ${a.role_name||'-'}</span><span>${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</span></div>
@@ -637,6 +666,45 @@ async function loadAuditLogs(){
             </div>`;
         }).join('');
     }catch(e){document.getElementById('auditLogContent').innerHTML='<p class="text-red-400 text-sm">Error cargando historial</p>'}
+}
+
+// ============================================================
+// ⚡ INCORPORACIÓN RÁPIDA (operador "solo evento")
+// ============================================================
+function showQuickAddModal(){
+    ['qaPrimerNombre','qaSegundoNombre','qaPrimerApellido','qaSegundoApellido','qaDocNumber'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('qaDocType').value='CC';
+    document.getElementById('quickAddModal').classList.remove('hidden');
+    document.getElementById('qaPrimerNombre').focus();
+}
+function closeQuickAddModal(){document.getElementById('quickAddModal').classList.add('hidden')}
+async function submitQuickAdd(){
+    const primer_nombre=document.getElementById('qaPrimerNombre').value.trim();
+    const primer_apellido=document.getElementById('qaPrimerApellido').value.trim();
+    const document_number=document.getElementById('qaDocNumber').value.trim();
+    if(!primer_nombre||!primer_apellido||!document_number){showToast('Nombre, apellido y documento son obligatorios','bg-yellow-500');return}
+    const btn=document.getElementById('btnQuickAdd');btn.disabled=true;btn.textContent='Agregando…';
+    try{
+        const token=getToken();
+        const res=await fetch(`/api/events/${EVENT_ID}/quick-add`,{
+            method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+            body:JSON.stringify({
+                primer_nombre:primer_nombre,
+                segundo_nombre:document.getElementById('qaSegundoNombre').value.trim()||null,
+                primer_apellido:primer_apellido,
+                segundo_apellido:document.getElementById('qaSegundoApellido').value.trim()||null,
+                document_type:document.getElementById('qaDocType').value,
+                document_number:document_number,
+            })
+        });
+        const d=await res.json().catch(()=>({}));
+        if(!res.ok){showToast(d.detail||'Error al agregar','bg-red-500');return}
+        const modeTxt=d.mode==='existing'?'(operador ya registrado)':'(solo evento)';
+        showToast(`✅ ${d.full_name} agregado y confirmado ${modeTxt}`,'bg-green-500');
+        closeQuickAddModal();
+        loadEvent();
+    }catch(e){showToast('Error: '+e.message,'bg-red-500')}
+    finally{btn.disabled=false;btn.textContent='⚡ Agregar al evento'}
 }
 
 loadEvent();loadAuditLogs();

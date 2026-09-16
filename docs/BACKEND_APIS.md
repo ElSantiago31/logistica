@@ -177,6 +177,7 @@ Algunos endpoints usan `@limiter.limit("N/minute")` via slowapi:
 | `PUT` | `/api/events/{id}` | User | Actualizar evento |
 | `DELETE` | `/api/events/{id}` | User | Eliminar evento |
 | `POST` | `/api/events/{id}/assign` | User | Asignar operadores al evento |
+| `POST` | `/api/events/{id}/quick-add` | Admin/Superadmin | ⚡ Incorporación Rápida: registra persona de última hora como operador "solo evento" (ghost) y lo asigna confirmado a la etapa `evento`. Reutiliza operador real si el documento ya existe (`mode=existing`). 409 si ya está asignado. |
 | `GET` | `/api/events/{id}/availability` | User | Verificar disponibilidad de operadores |
 | `GET` | `/api/events/{id}/assignments` | User | Listar asignaciones del evento |
 
@@ -188,6 +189,7 @@ Needs, cuotas y asignaciones soportan `stage`: `previa` | `avanzada` | `evento` 
 - `POST /api/events/` y `PUT /api/events/{id}`: needs/quotas con `stage`; unicidad `(role, stage)` y `(coordinador, stage)`.
 - `GET /api/events/{id}` y listado: incluye `stage` en cada need/quota/assignment y bloque `by_stage` con `needed`/`confirmed`/`quota_total`/`quota_used` por etapa.
 - `POST /api/events/{id}/assign`: body acepta `stage` opcional; dedup por `(event, stage, operator)`; tarifa autollenada por `(event, role, stage)` con fallback; respuesta con `double_shift` (operador en 2+ etapas).
+- ⚡ **Incorporación Rápida (`POST /{id}/quick-add`)**: crea usuario fantasma (`is_active=false`, `email=NULL`, password aleatoria) + `operator.event_only=true`, asignación `confirmed` en etapa `evento` con rol/tarifa del primer staff_need de esa etapa. Si el documento ya pertenece a un operador real, asigna el existente (`mode="existing"`); si ya está asignado al evento → `409`. Purga automática: al eliminar la última asignación o el evento, el ghost se borra físicamente (junto a su usuario). `GET /{id}/assignments` incluye `is_event_only` por fila (badge "SOLO EVENTO" en el admin). Si la persona después se registra con ese documento, toma la cuenta y hereda la asignación.
 - Import Excel: columna opcional `ETAPA` (default `evento`; valor invalido -> warning + `evento`); cupo del coordinador consume solo de la etapa de la fila.
 - Check-in (`/api/sync/events/{id}/checkin`): asignaciones identificadas por `(assignment_id, stage)`; un operador puede tener check-in en varias etapas.
 

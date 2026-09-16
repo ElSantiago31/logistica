@@ -13,10 +13,12 @@ from app.schemas.events import (
     AssignmentResponse, AssignOperatorsRequest,
     ImportSummary, DeleteEventRequest,
     ImportJobAccepted, ImportJobStatus,
+    QuickAddRequest, QuickAddResponse,
 )
 from app.services import events as svc
 from app.services import operator_import as imp_svc
 from app.services import import_jobs
+from app.services import quick_add as qa_svc
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -417,6 +419,30 @@ async def get_my_staff_events(
     ]
 
 
+@router.post("/{event_id}/quick-add", response_model=QuickAddResponse, status_code=201)
+async def quick_add(
+    event_id: uuid.UUID,
+    data: QuickAddRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """⚡ Incorporación Rápida: registra una persona de última hora en el evento.
+
+    Crea un operador "solo evento" (usuario fantasma inactivo, sin email,
+    contraseña aleatoria) y lo asigna con status='confirmed' a la etapa
+    'evento'. Si el documento ya existe como operador REAL, asigna al
+    existente (mode="existing"). El ghost se purga automáticamente al
+    quedar sin asignaciones activas.
+    """
+    if user.user_type not in ("superadmin", "admin", "coordinator"):
+        raise HTTPException(403, "Sin permisos")
+    event = await svc.get_event(db, event_id)
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+    admin_display = f"{user.first_name} {user.last_name}".upper().strip()
+    return await qa_svc.quick_add_operator(db, event_id, data, admin_display=admin_display)
+
+
 @router.get("/{event_id}/assignments", response_model=list[AssignmentResponse])
 async def get_assignments(
     event_id: uuid.UUID,
@@ -568,6 +594,12 @@ async def delete_assignment(
 
     await db.delete(assignment)
     await db.commit()
+
+    # Purga de ghosts: si era un operador "solo evento" y esta era su
+    # única asignación activa, se elimina junto con su usuario fantasma.
+    from app.services.quick_add import purge_orphan_event_only_operators
+    await purge_orphan_event_only_operators(db)
+
     return {"message": "Operador desasignado del evento"}
 
 

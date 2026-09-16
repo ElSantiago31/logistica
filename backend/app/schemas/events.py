@@ -172,6 +172,8 @@ class AssignmentResponse(BaseModel):
     shirt_number: Optional[str] = None
     jacket_number: Optional[str] = None
     cap_number: Optional[str] = None
+    # True: operador "solo evento" (Incorporación Rápida, usuario fantasma).
+    is_event_only: Optional[bool] = None
 
     model_config = {"from_attributes": True}
 
@@ -233,3 +235,32 @@ class ImportJobStatus(BaseModel):
     total: int = 0
     error: Optional[str] = None
     summary: Optional[ImportSummary] = None       # presente al completar
+
+
+# --- Incorporación Rápida (operador "solo evento") ---
+class QuickAddRequest(BaseModel):
+    """Payload del botón ⚡ Incorporación Rápida del detalle de evento.
+
+    Crea (o reutiliza) un operador "fantasma" event_only y lo asigna al
+    evento con status=confirmed, stage=evento. Si el documento ya existe
+    como operador real, se asigna el existente (mode="existing").
+    """
+    primer_nombre: str = Field(min_length=1, max_length=100)
+    segundo_nombre: Optional[str] = Field(None, max_length=100)
+    primer_apellido: str = Field(min_length=1, max_length=100)
+    segundo_apellido: Optional[str] = Field(None, max_length=100)
+    document_type: str = Field(min_length=1, max_length=10, description="CC | CE | TI | PA")
+    document_number: str = Field(min_length=3, max_length=20)
+
+
+class QuickAddResponse(BaseModel):
+    """Resultado de la Incorporación Rápida."""
+    assignment_id: str
+    operator_id: str
+    user_id: str
+    full_name: str
+    document_number: str
+    role_id: Optional[str] = None
+    role_name: Optional[str] = None
+    mode: str              # "ghost" (nuevo solo-evento) | "existing" (operador real existente)
+    status: str            # "confirmed"

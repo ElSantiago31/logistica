@@ -833,6 +833,7 @@ async def get_assignments(db: AsyncSession, event_id: uuid.UUID) -> List[dict]:
             "shirt_number": a.shirt_number,
             "jacket_number": a.jacket_number,
             "cap_number": a.cap_number,
+            "is_event_only": bool(op.event_only) if op else False,
         })
     return items
 
@@ -897,10 +898,19 @@ async def list_available_operators(
 
 
 async def delete_event(db: AsyncSession, event_id: uuid.UUID) -> bool:
-    """Soft delete an event."""
+    """Elimina un evento y purga ghosts huérfanos.
+
+    Al borrarse el evento mueren sus asignaciones (CASCADE); los
+    operadores "solo evento" (event_only) que quedaron sin ninguna
+    asignación activa se purgan aquí mismo junto con su usuario
+    fantasma, para no dejar basura en el directorio.
+    """
     event = await db.get(Event, event_id)
     if not event:
         return False
     await db.delete(event)
     await db.commit()
+
+    from app.services.quick_add import purge_orphan_event_only_operators
+    await purge_orphan_event_only_operators(db)
     return True

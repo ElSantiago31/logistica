@@ -33,13 +33,19 @@ from app.services.operators import delete_operator
 
 
 async def fetch_candidates(db) -> list:
-    """Operadores (user_type='operator') SIN rut_path válido."""
+    """Operadores (user_type='operator') SIN rut_path válido.
+
+    Se EXCLUYEN los operadores "solo evento" (event_only=true, creados por
+    Incorporación Rápida): son usuarios fantasma legítimos que no tienen
+    RUT por diseño y viven solo mientras tengan asignación activa.
+    """
     result = await db.execute(
         select(User, Operator)
         .join(Operator, Operator.user_id == User.id)
         .where(
             User.user_type == "operator",
             (Operator.rut_path.is_(None)) | (Operator.rut_path == ""),
+            Operator.event_only.is_not(True),
         )
         .order_by(User.created_at.asc())
     )

@@ -162,21 +162,55 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
             detail="Este documento ha sido bloqueado. Contacte al administrador.",
         )
 
-    # Create user (pending approval — superadmin must review RUT)
-    user = User(
-        email=body.email,
-        password_hash=hash_password(body.password),
-        first_name=body.first_name,
-        last_name=body.last_name,
-        phone=body.phone,
-        document_type=body.document_type,
-        document_number=body.document_number,
-        user_type="operator",
-        is_verified=True,
-        is_approved=False,
+    # GHOST TAKEOVER: si el documento pertenece a un operador "solo evento"
+    # (usuario fantasma inactivo creado por Incorporación Rápida), la
+    # persona REAL toma esa cuenta en vez de duplicarla: se reactiva el
+    # user, se completa el perfil y las asignaciones del evento donde fue
+    # registrado quedan a su nombre (misma FK de operator).
+    ghost_user = None
+    ghost_operator = None
+    inactive_r = await db.execute(
+        select(User, Operator)
+        .join(Operator, Operator.user_id == User.id)
+        .where(
+            User.document_number == body.document_number,
+            User.is_active == False,
+            Operator.event_only == True,
+        )
     )
-    db.add(user)
-    await db.flush()
+    _ghost_row = inactive_r.first()
+    if _ghost_row:
+        ghost_user, ghost_operator = _ghost_row
+
+    # Create user (pending approval — superadmin must review RUT)
+    if ghost_user is not None:
+        # Takeover del fantasma: misma fila de user/operator, datos reales.
+        ghost_user.email = body.email
+        ghost_user.password_hash = hash_password(body.password)
+        ghost_user.first_name = body.first_name
+        ghost_user.last_name = body.last_name
+        ghost_user.phone = body.phone
+        ghost_user.document_type = body.document_type
+        ghost_user.is_verified = True
+        ghost_user.is_approved = False
+        ghost_user.is_active = True  # reactivar: deja de ser fantasma
+        user = ghost_user
+        await db.flush()
+    else:
+        user = User(
+            email=body.email,
+            password_hash=hash_password(body.password),
+            first_name=body.first_name,
+            last_name=body.last_name,
+            phone=body.phone,
+            document_type=body.document_type,
+            document_number=body.document_number,
+            user_type="operator",
+            is_verified=True,
+            is_approved=False,
+        )
+        db.add(user)
+        await db.flush()
 
     # Security: filtrar roles event-only de experience_roles (aunque el frontend
     # no los muestre, un usuario malicioso podría enviarlos por API).
@@ -208,36 +242,63 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
     id_doc_front_path = save_id_document_photo(body.id_document_front_data, user.id, "front")
     id_doc_back_path = save_id_document_photo(body.id_document_back_data, user.id, "back")
 
-    # Create operator profile
-    operator = Operator(
-        user_id=user.id,
-        eps_id=body.eps_id,
-        pension_fund_id=body.pension_fund_id,
-        city=body.city,
-        address=body.address,
-        locality=body.locality,
-        blood_type=body.blood_type,
-        birth_date=body.birth_date,
-        gender=body.gender,
-        emergency_contact_name=body.emergency_contact_name,
-        emergency_contact_phone=body.emergency_contact_phone,
-        whatsapp=body.whatsapp,
-        has_protocol_experience=body.has_protocol_experience,
-        event_size_experience=body.event_size_experience,
-        education_level=body.education_level,
-        shirt_size=body.shirt_size,
-        jacket_size=body.jacket_size,
-        experience_roles=json.dumps(filtered_role_ids) if filtered_role_ids else None,
-        photo_path=photo_name,
-        photo_thumbnail_path=thumb_name,
-        rut_path=rut_path,
-        id_document_front_path=id_doc_front_path,
-        id_document_back_path=id_doc_back_path,
-    )
-    db.add(operator)
+    # Create operator profile (o completa el perfil del ghost tomado)
+    if ghost_operator is not None:
+        ghost_operator.eps_id = body.eps_id
+        ghost_operator.pension_fund_id = body.pension_fund_id
+        ghost_operator.city = body.city
+        ghost_operator.address = body.address
+        ghost_operator.locality = body.locality
+        ghost_operator.blood_type = body.blood_type
+        ghost_operator.birth_date = body.birth_date
+        ghost_operator.gender = body.gender
+        ghost_operator.emergency_contact_name = body.emergency_contact_name
+        ghost_operator.emergency_contact_phone = body.emergency_contact_phone
+        ghost_operator.whatsapp = body.whatsapp
+        ghost_operator.has_protocol_experience = body.has_protocol_experience
+        ghost_operator.event_size_experience = body.event_size_experience
+        ghost_operator.education_level = body.education_level
+        ghost_operator.shirt_size = body.shirt_size
+        ghost_operator.jacket_size = body.jacket_size
+        ghost_operator.experience_roles = json.dumps(filtered_role_ids) if filtered_role_ids else None
+        ghost_operator.photo_path = photo_name
+        ghost_operator.photo_thumbnail_path = thumb_name
+        ghost_operator.rut_path = rut_path
+        ghost_operator.id_document_front_path = id_doc_front_path
+        ghost_operator.id_document_back_path = id_doc_back_path
+        ghost_operator.event_only = False  # deja de ser "solo evento"
+        operator = ghost_operator
+        await db.flush()
+    else:
+        operator = Operator(
+            user_id=user.id,
+            eps_id=body.eps_id,
+            pension_fund_id=body.pension_fund_id,
+            city=body.city,
+            address=body.address,
+            locality=body.locality,
+            blood_type=body.blood_type,
+            birth_date=body.birth_date,
+            gender=body.gender,
+            emergency_contact_name=body.emergency_contact_name,
+            emergency_contact_phone=body.emergency_contact_phone,
+            whatsapp=body.whatsapp,
+            has_protocol_experience=body.has_protocol_experience,
+            event_size_experience=body.event_size_experience,
+            education_level=body.education_level,
+            shirt_size=body.shirt_size,
+            jacket_size=body.jacket_size,
+            experience_roles=json.dumps(filtered_role_ids) if filtered_role_ids else None,
+            photo_path=photo_name,
+            photo_thumbnail_path=thumb_name,
+            rut_path=rut_path,
+            id_document_front_path=id_doc_front_path,
+            id_document_back_path=id_doc_back_path,
+        )
+        db.add(operator)
+        await db.flush()
     # Materializa operator.id (default Python) ANTES de usarlo en el referido;
     # sin este flush, referred_operator_id llegaría None y el INSERT fallaría.
-    await db.flush()
 
     # Audit log
     audit = AuditLog(
