@@ -1017,6 +1017,16 @@ async def download_planilla_coordinador(
         )
         banned_ops = {str(oid) for (oid,) in ban_result.all()}
 
+        # --- Tarifas por rol (rate_per_shift definido al crear el evento) ---
+        # Se usan para llenar la columna L (VALOR) de la planilla cuando la
+        # asignación no trae rate_applied congelado (ej. $100.000 por turno).
+        need_result = await db.execute(
+            select(EventStaffNeed).where(EventStaffNeed.event_id == event_id)
+        )
+        rate_by_role: dict[str, float | None] = {}
+        for _need in need_result.scalars():
+            rate_by_role[str(_need.role_id)] = _need.rate_per_shift
+
         # --- Consultar firmas de nómina (solo si with_signatures=True) ---
         signatures_by_op: dict[str, str | None] = {}
         if with_signatures:
@@ -1063,6 +1073,11 @@ async def download_planilla_coordinador(
         op_id_str = str(operator.id)
         # Etapa de la asignación (previa/avanzada/evento/desmontaje).
         op_stage = getattr(assignment, "stage", None) or "evento"
+        # Tarifa de este turno: rate_applied (congelada al asignar) o la del
+        # rol definida al crear el evento (rate_per_shift, ej. $100.000/turno).
+        shift_rate = assignment.rate_applied
+        if shift_rate is None and role:
+            shift_rate = rate_by_role.get(str(role.id))
         # Filtro opcional por etapa: saltar asignaciones de otras etapas.
         if stage_filter and op_stage != stage_filter:
             continue
@@ -1084,6 +1099,8 @@ async def download_planilla_coordinador(
             "stage": op_stage,
             # Doble turno: 2+ asignaciones checked_in en este evento
             "double_shift": assign_count_by_op.get(op_id_str, 0) > 1,
+            # Valor de este turno para la columna L (VALOR) de la planilla.
+            "rate": float(shift_rate) if shift_rate is not None else None,
             # Flags para resaltar filas en la planilla impresa:
             #   rojo = vetado (is_banned), amarillo = tiene novedad (has_incident),
             #   azul = doble turno (X2 turnos/pagos).

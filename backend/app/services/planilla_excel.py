@@ -376,6 +376,7 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
         full_name, document_number, address, phone, role_name,
         coordinator_name, jacket_number, cap_number,
         is_banned (bool), has_incident (bool),
+        double_shift (bool), rate (float|None — tarifa del turno),
         signature_data (str|None, base64 PNG — solo cuando with_signatures)
 
     Resalta toda la fila de color según el estado del operador:
@@ -408,12 +409,22 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
         ws.cell(row=row, column=COL_CHAQ, value=op.get("jacket_number", ""))
         ws.cell(row=row, column=COL_GORRA, value=op.get("cap_number", ""))
 
-        # [DOBLE TURNO] Marca visible en la hoja impresa: el operador tiene
-        # 2 asignaciones en el evento (2 etapas) => 2 turnos/2 pagos. Se
-        # escribe en la columna L (VALOR, vacia por diseno) en negrita azul.
+        # --- Columna L (VALOR): tarifa de ESTE turno + marca de doble turno ---
+        # Cada fila de la planilla = un turno (una asignación). "rate" es lo
+        # que se paga por ese turno (rate_applied de la asignación o
+        # rate_per_shift del rol, definido al crear el evento, ej. $100.000).
+        # El operador con doble turno aparece en 2 filas: ambas llevan la
+        # marca X2 DOBLE TURNO + el valor de ese turno (cobra 2 pagos).
+        _rate = op.get("rate")
+        _valor = f"${_rate:,.0f}".replace(",", ".") if _rate else ""
         if op.get("double_shift"):
-            _ds_cell = ws.cell(row=row, column=COL_VALOR, value="X2 DOBLE TURNO")
-            _ds_cell.font = Font(bold=True, color="1D4ED8")
+            _valor_cell = ws.cell(
+                row=row, column=COL_VALOR,
+                value=f"X2 DOBLE TURNO {_valor}".strip(),
+            )
+            _valor_cell.font = Font(bold=True, color="1D4ED8")
+        elif _valor:
+            ws.cell(row=row, column=COL_VALOR, value=_valor)
 
         # --- Embeber firma (opcional) en la columna M ---
         # Solo si with_signatures=True y el operador tiene signature_data.
