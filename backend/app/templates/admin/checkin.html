@@ -59,7 +59,7 @@
     <!-- Filtro por etapa (etapas del evento) -->
     <div class="flex items-center gap-2 mb-3">
         <label for="stage-filter" class="text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Etapa</label>
-        <select id="stage-filter" onchange="updateStats()"
+        <select id="stage-filter" onchange="updateStats(); populateRoleSelect();"
             class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-amber-400">
             <option value="">Todas</option>
             <option value="previa">Previa</option>
@@ -601,14 +601,33 @@ function renderRoleCards() {
         }
     }
 
+    // [ETAPAS] Cada cupo (EventStaffNeed) pertenece a una etapa. Filtrar
+    // por la etapa activa; sin filtro se agrupa por rol sumando los
+    // cupos de todas las etapas.
+    const f = _stageFilter();
+    const visibleNeeds = (staffNeeds || []).filter(n => !f || (n.stage || 'evento') === f);
+
     // Base: roles requeridos del evento (quantity_needed).
     let roles = [];
-    if (staffNeeds && staffNeeds.length) {
-        roles = staffNeeds.map(n => ({
-            role: (n.role_name || 'Operador').trim() || 'Operador',
-            total: n.quantity_needed || 0,
-            checked: checkedMap[(n.role_name || 'Operador').trim()] || 0,
-        })).sort((a, b) => b.total - a.total);
+    if (visibleNeeds.length) {
+        if (f) {
+            // Etapa específica: una card por cupo de esa etapa
+            roles = visibleNeeds.map(n => ({
+                role: (n.role_name || 'Operador').trim() || 'Operador',
+                total: n.quantity_needed || 0,
+                checked: checkedMap[(n.role_name || 'Operador').trim()] || 0,
+            })).sort((a, b) => b.total - a.total);
+        } else {
+            // Todas las etapas: agregar cupos del mismo rol
+            const agg = {};
+            for (const n of visibleNeeds) {
+                const role = (n.role_name || 'Operador').trim() || 'Operador';
+                agg[role] = (agg[role] || 0) + (n.quantity_needed || 0);
+            }
+            roles = Object.entries(agg)
+                .map(([role, total]) => ({ role, total, checked: checkedMap[role] || 0 }))
+                .sort((a, b) => b.total - a.total);
+        }
     } else if (eventAssignments && eventAssignments.length) {
         // Fallback legacy: agrupar assignments por role_name
         const roleMap = {};
@@ -1829,12 +1848,29 @@ function populateRoleSelect() {
         roles.push({ id: curId, name: currentOperator.role_name });
     }
     sel.innerHTML = '<option value="">— Sin rol —</option>';
+    // [ETAPAS] Progreso del rol respetando la etapa activa: con etapa
+    // elegida usa el cupo de esa etapa; con "Todas" suma los cupos de
+    // todas las etapas para ese rol.
+    const f = _stageFilter();
+    const checkedMap = {};
+    for (const a of _visibleAssignments()) {
+        if (a.status === 'checked_in' && a.role_id) {
+            const key = String(a.role_id);
+            checkedMap[key] = (checkedMap[key] || 0) + 1;
+        }
+    }
     for (const r of roles) {
         const opt = document.createElement('option');
         opt.value = r.id;
-        const need = (staffNeeds || []).find(n => String(n.role_id) === r.id);
+        const candidates = (staffNeeds || []).filter(n => String(n.role_id) === r.id);
+        let need = null;
+        if (f) {
+            need = candidates.find(n => (n.stage || 'evento') === f) || null;
+        } else if (candidates.length) {
+            need = { quantity_needed: candidates.reduce((s, n) => s + (n.quantity_needed || 0), 0) };
+        }
         opt.textContent = (need && need.quantity_needed)
-            ? `${r.name} — ${need.checked_in || 0}/${need.quantity_needed}`
+            ? `${r.name} — ${checkedMap[r.id] || 0}/${need.quantity_needed}`
             : r.name;
         sel.appendChild(opt);
     }

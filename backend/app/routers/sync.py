@@ -282,6 +282,8 @@ async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID):
             "role_name": role.name,
             "quantity_needed": need.quantity_needed,
             "checked_in": ci,
+            # [ETAPAS] etapa del cupo: previa | avanzada | evento | desmontaje
+            "stage": need.stage or "evento",
         })
     return out
 
