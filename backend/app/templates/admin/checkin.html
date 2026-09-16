@@ -66,12 +66,11 @@
         </div>
     </div>
 
-    <!-- Alerta persistente de progreso de check-in (aparece al llegar al 90%) -->
+    <!-- Alerta persistente de check-in: 90% del personal REQUERIDO (no se puede cerrar) -->
     <div id="checkin-progress-alert" class="progress-alert hidden">
         <span id="checkin-alert-text" class="font-semibold"></span>
         <div class="flex items-center gap-2">
             <button id="btn-alert-mute" onclick="_toggleAlertMute()" class="pa-btn" title="Silenciar/activar sonido">🔊</button>
-            <button id="btn-alert-close" onclick="_dismissProgressAlert()" class="pa-btn" title="Ocultar (reaparece al volver a cruzar el 90%)">✕</button>
         </div>
     </div>
 
@@ -604,14 +603,13 @@ function countRelevantForCheckin(assignments) {
 // ============================================================
 //  ALERTA DE PROGRESO (>=90%) — banner persistente en pantalla
 // ============================================================
-// Se activa al entrar en la "zona del 90%" (el último 10% del personal,
-// o cuando falta 1) y permanece
-// visible (se actualiza en vivo) para que el staff sepa en qué cantidad
-// va. Se recalcula junto con updateStats() → cubre check-in local,
+// Se activa al entrar en la "zona del 90%" del PERSONAL REQUERIDO
+// (staff_needs / quantity_needed, no los asignados) y permanece visible
+// (no se puede descartar) para que el staff sepa en qué cantidad va.
+// Se recalcula junto con updateStats() → cubre check-in local,
 // polling y WebSocket. Respeta el filtro de etapa activo.
 const CHECKIN_ALERT_THRESHOLD = 0.9;
 const CHECKIN_ALERT_MUTE_KEY = 'checkin_alert_muted';
-let _alertDismissed = false;    // true tras pulsar ✕; se rearma al bajar del 90%
 let _alertLastLevel = null;     // 'below' | 'warn' | 'near' | 'complete' (transiciones)
 
 function _updateProgressAlert() {
@@ -619,10 +617,18 @@ function _updateProgressAlert() {
     const txt = document.getElementById('checkin-alert-text');
     if (!banner || !txt) return;
 
-    // Mismo criterio que updateStats(): confirmed + checked_in, por etapa visible
+    // Denominador = PERSONAL REQUERIDO (quantity_needed de staff_needs) de la
+    // etapa visible, NO los operadores asignados/confirmados. Ej.: si la previa
+    // requiere 10 pero hay 20 programados, la alerta salta al 9.º check-in
+    // (9/10 = 90%). Sin plan de personal definido → fallback a confirmed + checked_in.
     const list = _visibleAssignments();
-    const total = list.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
     const checked = list.filter(a => a.status === 'checked_in').length;
+    const fNeed = _stageFilter();
+    const visibleNeeds = (staffNeeds || []).filter(n => !fNeed || (n.stage || 'evento') === fNeed);
+    let total = visibleNeeds.reduce((s, n) => s + (n.quantity_needed || 0), 0);
+    if (!(total > 0)) {
+        total = list.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+    }
     const pct = total > 0 ? checked / total : 0;
 
     // "Zona del 90%": el último 10% del personal (mínimo 1 persona). Así la
@@ -639,7 +645,6 @@ function _updateProgressAlert() {
 
     if (level === 'below') {
         banner.classList.add('hidden');
-        _alertDismissed = false;  // rearmar: reaparecerá al cruzar el 90% de nuevo
         _alertLastLevel = level;
         return;
     }
@@ -649,16 +654,19 @@ function _updateProgressAlert() {
     const stageTag = f ? ' — ' + (STAGE_LABELS[f] || f) : '';
 
     if (level === 'complete') {
-        txt.textContent = `✅ PERSONAL COMPLETO${stageTag} — ${checked}/${total}`;
+        const over = checked > total ? ' (sobrecupo)' : '';
+        txt.textContent = `✅ PERSONAL COMPLETO${stageTag} — ${checked}/${total}${over}`;
     } else {
         const faltan = missing === 1 ? 'falta 1' : `faltan ${missing}`;
-        txt.textContent = `🚨 ${Math.round(pct * 100)}% del personal con check-in${stageTag} — ${checked}/${total} · ${faltan}`;
+        txt.textContent = `🚨 ${Math.round(pct * 100)}% del personal requerido con check-in${stageTag} — ${checked}/${total} · ${faltan}`;
     }
 
     // Color del banner (clases pa-warn / pa-near / pa-complete)
+    // La alerta NO se puede ocultar: permanece mientras se esté en la zona
+    // del 90% o completo (solo el sonido se puede silenciar).
+    banner.classList.remove('hidden');
     banner.classList.remove('pa-warn', 'pa-near', 'pa-complete');
     banner.classList.add('pa-' + level);
-    if (!_alertDismissed) banner.classList.remove('hidden');
 
     // Icono de mute según preferencia guardada
     const muteBtn = document.getElementById('btn-alert-mute');
@@ -696,13 +704,6 @@ function _playProgressBeep(kind) {
         if (kind === 'complete') { mk(880, 0, 0.15); mk(1320, 0.18, 0.20); }
         else { mk(880, 0, 0.15); }
     } catch (e) { /* audio no disponible (autoplay/permiso) — solo visual */ }
-}
-
-// ✕: oculta el banner hasta que el progreso baje del 90% y vuelva a cruzarlo
-function _dismissProgressAlert() {
-    _alertDismissed = true;
-    const banner = document.getElementById('checkin-progress-alert');
-    if (banner) banner.classList.add('hidden');
 }
 
 // 🔊/🔇: alterna el sonido de la alerta (persiste en localStorage)
