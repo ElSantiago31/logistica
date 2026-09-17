@@ -81,7 +81,7 @@
             class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-amber-400">
             <option value="">Todas</option>
             <option value="previa">Previa</option>
-            <option value="avanzada">Montaje avanzada</option>
+            <option value="avanzada">Avanzada</option>
             <option value="evento">Evento</option>
             <option value="desmontaje">Desmontaje</option>
         </select>
@@ -558,7 +558,7 @@ async function loadEventData() {
 }
 
 // --- Etapas: helpers de filtro ---
-const STAGE_LABELS = { previa: 'Previa', avanzada: 'Montaje avanzada', evento: 'Evento', desmontaje: 'Desmontaje' };
+const STAGE_LABELS = { previa: 'Previa', avanzada: 'Avanzada', evento: 'Evento', desmontaje: 'Desmontaje' };
 function _stageFilter() {
     const sel = document.getElementById('stage-filter');
     return sel ? sel.value : '';
