@@ -38,7 +38,7 @@ from pathlib import Path
 from datetime import datetime
 
 import openpyxl
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import PatternFill
 from openpyxl.drawing.image import Image as XlImage
 from openpyxl.drawing.spreadsheet_drawing import (
     OneCellAnchor,
@@ -79,7 +79,7 @@ COL_ROL = 8          # H  — ROL del operador en el evento
 COL_COORDINADOR = 9  # I
 COL_CHAQ = 10        # J
 COL_GORRA = 11       # K
-COL_VALOR = 12       # L - texto "X2 DOBLE TURNO" (doble turno)
+COL_VALOR = 12       # L - valor del turno (doble turno se marca con relleno azul)
 COL_FIRMA = 13       # M — columna donde van las firmas embebidas
 # L=VALOR, N=No DSE → se dejan vacíos (no tenemos el dato)
 
@@ -409,21 +409,16 @@ def _fill_operators(ws, operators: list[dict], with_signatures: bool = False):
         ws.cell(row=row, column=COL_CHAQ, value=op.get("jacket_number", ""))
         ws.cell(row=row, column=COL_GORRA, value=op.get("cap_number", ""))
 
-        # --- Columna L (VALOR): tarifa de ESTE turno + marca de doble turno ---
+        # --- Columna L (VALOR): tarifa de ESTE turno ---
         # Cada fila de la planilla = un turno (una asignación). "rate" es lo
         # que se paga por ese turno (rate_applied de la asignación o
         # rate_per_shift del rol, definido al crear el evento, ej. $100.000).
-        # El operador con doble turno aparece en 2 filas: ambas llevan la
-        # marca X2 DOBLE TURNO + el valor de ese turno (cobra 2 pagos).
+        # El operador con doble turno aparece en 2 filas (cobra 2 pagos):
+        # la doble jornada se indica SOLO con la casilla marcada (fila
+        # pintada de azul, DOUBLE_FILL), sin texto adicional.
         _rate = op.get("rate")
         _valor = f"${_rate:,.0f}".replace(",", ".") if _rate else ""
-        if op.get("double_shift"):
-            _valor_cell = ws.cell(
-                row=row, column=COL_VALOR,
-                value=f"X2 DOBLE TURNO {_valor}".strip(),
-            )
-            _valor_cell.font = Font(bold=True, color="1D4ED8")
-        elif _valor:
+        if _valor:
             ws.cell(row=row, column=COL_VALOR, value=_valor)
 
         # --- Embeber firma (opcional) en la columna M ---
