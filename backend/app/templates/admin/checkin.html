@@ -1172,6 +1172,24 @@ async function doCheckIn() {
                     const checked = eventAssignments.filter(a => a.status === 'checked_in').length;
                     updateStats(countRelevantForCheckin(eventAssignments), checked);
                     document.getElementById('btn-save-uniform').classList.toggle('hidden', !_canManageUniform());
+                    // Persistir la indumentaria diligenciada (best-effort): el 409
+                    // de carrera concurrente no guarda uniform en el backend, así
+                    // que se envía por el endpoint dedicado sin bloquear al usuario.
+                    if (canUniform && (shirt || jacket || cap)) {
+                        try {
+                            await Auth.apiFetch(`/api/sync/assignments/${currentOperator.id}/uniform`, {
+                                method: 'PATCH',
+                                headers: authHeaders(),
+                                body: JSON.stringify({
+                                    shirt_number: shirt || null,
+                                    jacket_number: jacket || null,
+                                    cap_number: cap || null
+                                })
+                            });
+                        } catch (e) {
+                            console.warn('Ya registrado: no se pudo persistir uniform:', e);
+                        }
+                    }
                 }
             } else {
                 const errBody = await resp.text().catch(() => '');

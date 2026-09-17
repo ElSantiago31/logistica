@@ -769,25 +769,51 @@ async def check_in(
         # clickear devuelve 409 de nuevo. Reconciliamos forzando checked_in.
         if assignment_id:
             assignment = await db.get(EventAssignment, assignment_id)
-            if assignment and assignment.status != "checked_in":
-                assignment.status = "checked_in"
-                # Resolver coordinador (misma lógica del flujo normal)
-                if coordinator:
-                    assignment.admitted_by = coordinator
-                    if not assignment.programmed_by:
-                        assignment.programmed_by = coordinator
-                elif not assignment.admitted_by:
-                    assignment.admitted_by = assignment.programmed_by
-                reconcile_note = await _apply_role_change(db, assignment, role_id)
-                if reconcile_note:
-                    parts = [p for p in (existing_log.notes or "").split("|") if p]
-                    parts.append(reconcile_note)
-                    existing_log.notes = "|".join(parts)
-                try:
-                    await db.commit()
-                except Exception as exc:
-                    await db.rollback()
-                    logger.error("Error reconciliando check-in: %s", exc)
+            if assignment:
+                needs_commit = False
+                if assignment.status != "checked_in":
+                    assignment.status = "checked_in"
+                    needs_commit = True
+                    # Resolver coordinador (misma lógica del flujo normal)
+                    if coordinator:
+                        assignment.admitted_by = coordinator
+                        if not assignment.programmed_by:
+                            assignment.programmed_by = coordinator
+                    elif not assignment.admitted_by:
+                        assignment.admitted_by = assignment.programmed_by
+                    reconcile_note = await _apply_role_change(db, assignment, role_id)
+                    if reconcile_note:
+                        parts = [p for p in (existing_log.notes or "").split("|") if p]
+                        parts.append(reconcile_note)
+                        existing_log.notes = "|".join(parts)
+                # Guardar también la indumentaria diligenciada que viene en el
+                # payload del check-in (mismo criterio del flujo normal): aplica
+                # tanto al reconcile (status != checked_in) como cuando ya estaba
+                # registrado y el formulario se llenó de nuevo. Campos null no
+                # sobrescriben valores existentes.
+                if shirt_number is not None or jacket_number is not None or cap_number is not None:
+                    uniform_conflict = await _check_uniform_conflicts(
+                        db, event_id, assignment_id,
+                        shirt_number, jacket_number, cap_number,
+                    )
+                    if uniform_conflict:
+                        await db.rollback()
+                        raise HTTPException(409, uniform_conflict)
+                    if shirt_number is not None and assignment.shirt_number != (shirt_number or None):
+                        assignment.shirt_number = shirt_number or None
+                        needs_commit = True
+                    if jacket_number is not None and assignment.jacket_number != (jacket_number or None):
+                        assignment.jacket_number = jacket_number or None
+                        needs_commit = True
+                    if cap_number is not None and assignment.cap_number != (cap_number or None):
+                        assignment.cap_number = cap_number or None
+                        needs_commit = True
+                if needs_commit:
+                    try:
+                        await db.commit()
+                    except Exception as exc:
+                        await db.rollback()
+                        logger.error("Error reconciliando check-in: %s", exc)
         return {"status": "checked_in", "log_id": str(existing_log.id), "reconciled": True}
 
     # Validar conflictos de uniform ANTES de guardar
