@@ -12,6 +12,8 @@
         font-size: 0.65rem; padding: 2px 10px; border-radius: 999px;
         font-weight: 600; display: inline-block;
     }
+    /* Fix: .hidden (Tailwind) debe ganar sobre .status-pill aunque cargue antes */
+    .status-pill.hidden { display: none; }
     .status-pending { background: #fef3c7; color: #92400e; }
     .status-signed { background: #dcfce7; color: #166534; }
     .status-paid   { background: #dbeafe; color: #1e40af; }
@@ -622,6 +624,17 @@ function _initRealtime() {
     _wsClient.connect();
     window.addEventListener('beforeunload', () => { if (_wsClient) _wsClient.disconnect(); });
 }
+
+// Badge de red real (📴 Offline): visible solo cuando navigator.onLine === false.
+// Antes quedaba siempre visible: .status-pill pisaba .hidden de Tailwind y
+// nadie alternaba la clase.
+function _updateNetBadge() {
+    const off = document.getElementById('offline-badge');
+    if (off) off.classList.toggle('hidden', navigator.onLine);
+}
+window.addEventListener('online', _updateNetBadge);
+window.addEventListener('offline', _updateNetBadge);
+_updateNetBadge();
 
 function _onWsMessage(msg) {
     if (!msg || !msg.type) return;
