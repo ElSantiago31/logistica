@@ -30,6 +30,7 @@ from app.routers import content as content_router
 from app.routers import pqrsf as pqrsf_router
 from app.routers import seo as seo_router
 from app.routers import referrals as referrals_router
+from app.routers import monitoring as monitoring_router
 from app.websockets import router as ws_router
 
 
@@ -73,6 +74,7 @@ app.include_router(incidents_router.router)
 app.include_router(content_router.router)
 app.include_router(pqrsf_router.router)
 app.include_router(seo_router.router)
+app.include_router(monitoring_router.router)
 app.include_router(referrals_router.router)
 app.include_router(referrals_router.page_router)
 app.include_router(ws_router.router)

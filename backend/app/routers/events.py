@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import permissions
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.users import User
@@ -46,7 +47,7 @@ async def list_events(
     user=Depends(get_current_user),
 ):
     """List events with optional status filter."""
-    if user.user_type not in ("superadmin", "admin"):
+    if not permissions.can_view_monitoring(user):
         raise HTTPException(403, "Sin permisos")
     items, total = await svc.list_events(db, status=status, limit=limit, offset=offset)
     return EventListResponse(items=items, total=total)
@@ -59,7 +60,7 @@ async def get_event(
     user=Depends(get_current_user),
 ):
     """Get event detail."""
-    if user.user_type not in ("superadmin", "admin"):
+    if not permissions.can_view_monitoring(user):
         raise HTTPException(403, "Sin permisos")
     result = await svc.get_event(db, event_id)
     if not result:

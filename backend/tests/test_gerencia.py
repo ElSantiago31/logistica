@@ -121,3 +121,146 @@ async def test_admin_cannot_create_gerencia(client: AsyncClient, db: AsyncSessio
     })
     created = [a for a in resp.json() if a["document_number"] == "99011"]
     assert created and created[0]["user_type"] == "checkin"
+
+
+# =====================================================================
+# FASE 2 — API de monitoreo (/api/monitoring/...)
+# =====================================================================
+from datetime import datetime, timezone
+
+from app.models.events import Event, EventStaffNeed, EventAssignment, EventCoordinatorQuota
+from app.models.roles import Role
+from app.models.operators import Operator
+
+
+@pytest.fixture
+async def monitoring_env(db: AsyncSession, client: AsyncClient):
+    """Evento publicado con 1 need, 3 asignaciones (2 checked_in, 1 confirmed)."""
+    event = Event(
+        id=uuid.uuid4(),
+        name="Evento Gerencia 360",
+        start_date=datetime(2026, 9, 10, 8, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 9, 10, 18, 0, 0, tzinfo=timezone.utc),
+        location="Plaza Mayor",
+        status="published",
+        client_name="Cliente SAC",
+    )
+    db.add(event)
+    await db.flush()
+
+    role = Role(name="Logistica Gerencia", slug="log-ger", hierarchy_level=5)
+    db.add(role)
+    await db.flush()
+
+    db.add(EventStaffNeed(
+        event_id=event.id, role_id=role.id,
+        quantity_needed=3, quantity_confirmed=3, stage="evento",
+    ))
+    db.add(EventCoordinatorQuota(
+        event_id=event.id, coordinator="JUAN", quota=10, stage="evento",
+    ))
+
+    for i, st in enumerate(["checked_in", "checked_in", "confirmed"]):
+        u = User(
+            id=uuid.uuid4(), email=None,
+            password_hash=hash_password("password"),
+            first_name="Op", last_name=f"G{i}",
+            user_type="operator", document_type="CC",
+            document_number=f"9910{i}", is_verified=True, is_approved=True,
+        )
+        db.add(u)
+        await db.flush()
+        op = Operator(user_id=u.id, city="Bogota")
+        db.add(op)
+        await db.flush()
+        db.add(EventAssignment(
+            event_id=event.id, operator_id=op.id, role_id=role.id,
+            status=st, programmed_by="JUAN",
+            admitted_by="JUAN" if st == "checked_in" else None,
+        ))
+    await db.commit()
+
+    return {"event_id": str(event.id)}
+
+
+@pytest.mark.asyncio
+async def test_monitoring_overview_200(client: AsyncClient, monitoring_env, gerencia_env):
+    """Caso 1: gerencia ve el overview 360 con estructura completa."""
+    tok = await _login(client, "99002")  # gerencia del fixture de FASE 1
+    resp = await client.get(
+        f"/api/monitoring/events/{monitoring_env['event_id']}/overview",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert set(data) >= {"event", "totals", "by_role", "by_coordinator", "by_stage", "recent_checkins", "updated_at"}
+    t = data["totals"]
+    assert t["assigned"] == 3
+    assert t["confirmed"] == 1
+    assert t["checked_in"] == 2
+    assert t["pending_checkin"] == 1
+    assert t["checkin_pct"] == 200.0
+    assert data["event"]["client_name"] == "Cliente SAC"
+    assert len(data["by_role"]) == 1
+    assert data["by_role"][0]["needed"] == 3
+    assert data["by_stage"][0]["stage"] == "evento"
+
+
+@pytest.mark.asyncio
+async def test_monitoring_events_list_200(client: AsyncClient, monitoring_env, gerencia_env):
+    """Caso 2: gerencia lista TODOS los eventos vía /api/monitoring/events."""
+    tok = await _login(client, "99002")
+    resp = await client.get(
+        "/api/monitoring/events",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert resp.status_code == 200, resp.text
+    items = resp.json()
+    assert any(i["name"] == "Evento Gerencia 360" for i in items)
+    ev = next(i for i in items if i["name"] == "Evento Gerencia 360")
+    assert ev["confirmed"] == 1 and ev["checked_in"] == 2
+
+
+@pytest.mark.asyncio
+async def test_gerencia_cannot_write_events(client: AsyncClient, monitoring_env, gerencia_env):
+    """Caso 3: gerencia recibe 403 en POST/PUT/DELETE de eventos."""
+    tok = await _login(client, "99002")
+    headers = {"Authorization": f"Bearer {tok}"}
+    base = {
+        "name": "XXX", "location": "YYY",
+        "start_date": "2026-09-10T08:00:00Z", "end_date": "2026-09-10T18:00:00Z",
+    }
+    r1 = await client.post("/api/events/", json=base, headers=headers)
+    assert r1.status_code == 403, r1.text
+    r2 = await client.put(
+        f"/api/events/{monitoring_env['event_id']}", json=base, headers=headers,
+    )
+    assert r2.status_code == 403, r2.text
+    r3 = await client.request(
+        "DELETE", f"/api/events/{monitoring_env['event_id']}",
+        json={"password": "password"}, headers=headers,
+    )
+    assert r3.status_code == 403, r3.text
+
+
+@pytest.mark.asyncio
+async def test_operator_cannot_view_overview(client: AsyncClient, monitoring_env, db: AsyncSession):
+    """Caso 6: un operador SIN asignación al evento no ve el overview."""
+    u = User(
+        id=uuid.uuid4(), email=None,
+        password_hash=hash_password("password"),
+        first_name="Op", last_name="Fuera",
+        user_type="operator", document_type="CC",
+        document_number="99199", is_verified=True, is_approved=True,
+    )
+    db.add(u)
+    await db.flush()
+    db.add(Operator(user_id=u.id, city="Bogota"))
+    await db.commit()
+
+    tok = await _login(client, "99199")
+    resp = await client.get(
+        f"/api/monitoring/events/{monitoring_env['event_id']}/overview",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert resp.status_code == 403, resp.text
