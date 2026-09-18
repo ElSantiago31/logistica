@@ -125,7 +125,9 @@ async def event_overview(
         "rejected": by_status.get("rejected", 0),
         "standby": by_status.get("standby", 0),
         "pending_checkin": max(confirmed, 0),
-        "checkin_pct": round(checked_in / confirmed * 100, 1) if confirmed else 0,
+        # Denominador robusto: los checked_in no siempre pasan por "confirmed"
+        # (admisión directa del coordinador), asi que se suman ambos.
+        "checkin_pct": round(checked_in / (confirmed + checked_in) * 100, 1) if (confirmed + checked_in) else 0,
     }
 
     # --- Por rol: helper de sync + confirmados por rol (merge) ---

@@ -37,7 +37,7 @@
                     <circle id="ringCheckin" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#16a34a" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
                 </svg>
                 <p class="text-2xl font-bold text-gray-800 mt-2" id="txtCheckin">0%</p>
-                <p class="text-xs text-gray-500">Check-in global</p>
+                <p class="text-xs text-gray-500" title="Ingresados ÷ confirmados">Check-in global</p>
             </div>
             <div class="bg-white rounded-xl shadow p-4 text-center">
                 <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
@@ -53,7 +53,7 @@
                     <circle id="ringPending" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#ef4444" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
                 </svg>
                 <p class="text-2xl font-bold text-gray-800 mt-2" id="txtPending">0</p>
-                <p class="text-xs text-gray-500">Pendientes por check-in</p>
+                <p class="text-xs text-gray-500" title="Confirmados que aún no ingresan">Pendientes por check-in</p>
             </div>
             <div class="bg-white rounded-xl shadow p-4 text-center">
                 <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
@@ -61,8 +61,16 @@
                     <circle id="ringNoShow" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#7c3aed" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
                 </svg>
                 <p class="text-2xl font-bold text-gray-800 mt-2" id="txtNoShow">0</p>
-                <p class="text-xs text-gray-500">No-show / Rechazados</p>
+                <p class="text-xs text-gray-500" title="Confirmaron y no asistieron / declinaron invitación">No-show / Rechazados</p>
             </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4 mb-6 text-xs sm:text-sm text-blue-900 leading-relaxed">
+            <p class="font-bold mb-1">¿Cómo leer esta vista?</p>
+            <p><strong>Check-in global:</strong> % de operadores confirmados que ya ingresaron al evento.
+            <strong>Pendientes:</strong> confirmados que aún no hacen check-in.
+            <strong>No-show:</strong> operadores que <em>confirmaron asistencia pero no se presentaron</em> (marcados por el coordinador o desde WhatsApp).
+            <strong>Rechazado:</strong> declinaron la invitación. La suma con no-show indica confirmaciones perdidas.</p>
         </div>
 
         <!-- Tablas -->
@@ -80,7 +88,7 @@
                 <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por coordinador</h2>
                 <table class="w-full text-sm">
                     <thead><tr class="text-xs text-gray-500 uppercase">
-                        <th class="px-4 py-2 text-left">Coordinador</th><th class="px-2 py-2">Cuota</th><th class="px-2 py-2">Conf.</th><th class="px-2 py-2">In</th>
+                        <th class="px-4 py-2 text-left">Coordinador</th><th class="px-2 py-2">Cuota</th><th class="px-2 py-2">Prog.</th><th class="px-2 py-2">In</th><th class="px-2 py-2">Disp.</th>
                     </tr></thead>
                     <tbody id="byCoord" class="divide-y divide-gray-100"></tbody>
                 </table>
@@ -145,11 +153,11 @@
                 document.getElementById('updatedAt').textContent = 'Actualizado: ' + fmtTime(d.updated_at);
 
                 // Anillos
-                const t = d.totals;
+                const t = d.totals || {};
                 setRing('ringCheckin', t.checkin_pct);
                 document.getElementById('txtCheckin').textContent = t.checkin_pct + '%';
 
-                const needed = d.by_role.reduce((a, r) => a + r.needed, 0);
+                const needed = (d.by_role || []).reduce((a, r) => a + (r.needed || 0), 0);
                 setRing('ringConfirm', needed ? t.confirmed / needed * 100 : 0);
                 document.getElementById('txtConfirm').textContent = t.confirmed;
                 document.getElementById('txtNeeded').textContent = needed;
@@ -174,9 +182,10 @@
                     <tr>
                         <td class="px-4 py-2 font-semibold text-gray-800">${c.coordinator || c.name}</td>
                         <td class="px-2 py-2 text-center">${c.quota}</td>
-                        <td class="px-2 py-2 text-center text-amber-600 font-semibold">${c.confirmed}</td>
+                        <td class="px-2 py-2 text-center text-amber-600 font-semibold">${c.programmed}</td>
                         <td class="px-2 py-2 text-center text-green-600 font-semibold">${c.checked_in}</td>
-                    </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-3 text-gray-400 text-center">Sin cuotas</td></tr>';
+                        <td class="px-2 py-2 text-center ${c.full ? 'text-red-600 font-bold' : 'text-gray-600'}">${c.available}</td>
+                    </tr>`).join('') || '<tr><td colspan="5" class="px-4 py-3 text-gray-400 text-center">Sin cuotas</td></tr>';
 
                 // Por etapa
                 document.getElementById('byStage').innerHTML = (d.by_stage || []).map(s => `
@@ -197,6 +206,8 @@
     </li>`).join('') || '<li class="px-4 py-3 text-gray-400 text-center text-sm">Aún no hay check-ins</li>';
             } catch (e) {
                 console.error(e);
+                document.getElementById('evName').textContent = '⚠ Error al cargar datos';
+                document.getElementById('evMeta').textContent = 'Revisa tu conexión o sesión: ' + e.message;
             }
         }
 

@@ -199,7 +199,7 @@ async def test_monitoring_overview_200(client: AsyncClient, monitoring_env, gere
     assert t["confirmed"] == 1
     assert t["checked_in"] == 2
     assert t["pending_checkin"] == 1
-    assert t["checkin_pct"] == 200.0
+    assert t["checkin_pct"] == 66.7  # 2/(1+2): checked_in sobre confirmados+ingresados
     assert data["event"]["client_name"] == "Cliente SAC"
     assert len(data["by_role"]) == 1
     assert data["by_role"][0]["needed"] == 3

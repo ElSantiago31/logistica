@@ -81,7 +81,8 @@
                 if (!events.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
                 empty.classList.add('hidden');
                 tbody.innerHTML = events.map(ev => {
-                    const pct = ev.confirmed ? Math.round(ev.checked_in / ev.confirmed * 100) : 0;
+                    const denom = ev.confirmed + ev.checked_in;
+                    const pct = denom ? Math.round(ev.checked_in / denom * 100) : 0;
                     const [label, cls] = STATUS[ev.status] || [ev.status, 'bg-gray-100'];
                     return `<tr class="hover:bg-gray-50">
                         <td class="px-4 py-3 text-sm font-semibold text-gray-800">${ev.name}</td>
@@ -96,6 +97,8 @@
                 }).join('');
             } catch (e) {
                 console.error(e);
+                document.getElementById('eventsTable').innerHTML =
+                    '<tr><td colspan="6" class="px-4 py-6 text-center text-red-600 text-sm">⚠ Error al cargar eventos: ' + e.message + '</td></tr>';
             }
         }
         loadEvents();
