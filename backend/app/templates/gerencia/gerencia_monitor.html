@@ -14,6 +14,16 @@
 <body class="bg-gray-50 min-h-screen">
     <script src="/static/js/auth{{ js_suffix }}.js?v=20260811"></script>
 
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <img src="/static/frontend/logo.jpeg" alt="Logo" class="w-8 h-8 rounded-full object-cover">
+                <span class="font-bold text-gray-800">Gerencia</span>
+            </div>
+            <button onclick="doLogout()" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style="background:#785631">⏻ Cerrar Sesión</button>
+        </div>
+    </nav>
+
     <div class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
             <div>
@@ -115,6 +125,12 @@
                 location.href = '/admin/login';
             }
         })();
+
+        function doLogout() {
+            if (!confirm('¿Cerrar sesión?')) return;
+            if (window.Auth && window.Auth.logout) window.Auth.logout();
+            else { localStorage.clear(); location.href = '/admin/login'; }
+        }
 
         function setRing(id, pct) {
             const el = document.getElementById(id);
