@@ -5,7 +5,8 @@ Replaces the scattered inline checks like ``user.user_type not in (...)``.
 
 NOTE on terminology:
   - ``user_type`` is the SYSTEM role of a user account (who can log in):
-      ``superadmin``, ``admin``, ``checkin``, ``operator``, ``web_admin``.
+      ``superadmin``, ``admin``, ``checkin``, ``operator``, ``web_admin``,
+      ``gerencia`` (read-only 360 event view for company owners).
   - ``coordinator`` as a *concept* (event area leader, planilla grouping,
     EventCoordinatorQuota, /coordinador module) is NOT a user_type and is
     kept intact. It lives as data inside events, not as a login role.
@@ -25,18 +26,20 @@ CHECKIN = "checkin"
 INTENDENCIA = "intendencia"
 OPERATOR = "operator"
 WEB_ADMIN = "web_admin"
+GERENCIA = "gerencia"  # Solo lectura: vista 360 de eventos (dueños de la empresa)
 
-ALL_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, OPERATOR, WEB_ADMIN})
+ALL_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, OPERATOR, WEB_ADMIN, GERENCIA})
 
 # Management = users who run the back-office (dashboard, events, operators).
+# GERENCIA NO está aquí: es solo-lectura y no puede modificar nada.
 MANAGEMENT_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN})
 
 # All staff (non-operator) accounts that may appear in admin views.
-ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN})
+ALL_STAFF: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN, GERENCIA})
 
 # Roles allowed to be CREATED from /admin/superadmin (depending on caller).
 CREATABLE_BY_ADMIN: frozenset[str] = frozenset({CHECKIN, INTENDENCIA})
-CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN})
+CREATABLE_BY_SUPERADMIN: frozenset[str] = frozenset({SUPERADMIN, ADMIN, CHECKIN, INTENDENCIA, WEB_ADMIN, GERENCIA})
 
 
 # ------------------------------------------------------------------
@@ -65,6 +68,11 @@ def is_operator(user: User | None) -> bool:
 def is_web_admin(user: User | None) -> bool:
     """Web content editor. Can only manage site content (homepage, news, gallery)."""
     return _roles(user) == WEB_ADMIN
+
+
+def is_gerencia(user: User | None) -> bool:
+    """Dueño/gerencia: solo lectura. Vista 360 de eventos, sin escritura."""
+    return _roles(user) == GERENCIA
 
 
 # Roles allowed to manage site content (web admin panel /admin/contenido).
@@ -131,6 +139,15 @@ def can_create_admin(user: User | None) -> bool:
 def can_checkin(user: User | None) -> bool:
     """Perform event check-in (staff & operators with staff assignment)."""
     return _roles(user) in ALL_STAFF
+
+
+# Roles que pueden ver la vista 360 de monitoreo de eventos (solo lectura).
+MONITORING_ROLES: frozenset[str] = frozenset({SUPERADMIN, ADMIN, GERENCIA})
+
+
+def can_view_monitoring(user: User | None) -> bool:
+    """Ver la vista 360 de eventos (gerencia) — lectura, sin escritura."""
+    return _roles(user) in MONITORING_ROLES
 
 
 def can_manage_content(user: User | None) -> bool:

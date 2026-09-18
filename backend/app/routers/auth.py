@@ -536,8 +536,10 @@ async def list_admins(
     - Admin: sees everyone too (needed to manage checkin users), but the
       frontend hides edit/delete actions on admin/superadmin rows.
     """
+    from app import permissions
+
     result = await db.execute(
-        select(User).where(User.user_type.in_(["superadmin", "admin", "checkin", "intendencia", "web_admin"])).order_by(User.created_at.desc())
+        select(User).where(User.user_type.in_(sorted(permissions.ALL_STAFF))).order_by(User.created_at.desc())
     )
     admins = result.scalars().all()
     return [{"id": str(a.id), "email": a.email, "first_name": a.first_name, "last_name": a.last_name,

@@ -101,6 +101,8 @@
                     window.location.href = '/admin/contenido';
                 } else if (user.user_type === 'checkin') {
                     window.location.href = '/staff';
+                } else if (user.user_type === 'gerencia') {
+                    window.location.href = '/gerencia';
                 } else if (user.user_type === 'operator') {
                     window.location.href = '/enrolamiento/perfil';
                 }
@@ -165,6 +167,8 @@
                         redirectUrl = '/admin/contenido';
                     } else if (userType === 'checkin') {
                         redirectUrl = '/staff';
+                    } else if (userType === 'gerencia') {
+                        redirectUrl = '/gerencia';
                     } else if (userType === 'operator') {
                         redirectUrl = '/enrolamiento/perfil';
                     }
