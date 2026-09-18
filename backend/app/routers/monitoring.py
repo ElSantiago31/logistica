@@ -6,7 +6,7 @@ Solo lectura: nadie puede modificar nada desde aquí. Guard central:
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,9 +54,15 @@ def _require_monitoring(user: User) -> None:
 async def list_events_for_monitoring(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_active_user),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
 ):
-    """Lista ligera de TODOS los eventos con avance global de check-in."""
+    """Lista paginada de eventos con avance global de check-in."""
     _require_monitoring(user)
+
+    # Total de eventos para calcular páginas
+    total = (await db.execute(select(func.count()).select_from(Event))).scalar() or 0
+    total_pages = max((total + page_size - 1) // page_size, 1)
 
     confirmed_case = case(
         (EventAssignment.status == "confirmed", 1), else_=0,
@@ -73,21 +79,29 @@ async def list_events_for_monitoring(
         .outerjoin(EventAssignment, EventAssignment.event_id == Event.id)
         .group_by(Event.id)
         .order_by(Event.start_date.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
     rows = result.all()
 
-    return [
-        {
-            "id": str(ev.id),
-            "name": ev.name,
-            "status": ev.status,
-            "start_date": ev.start_date.isoformat() if ev.start_date else None,
-            "location": ev.location,
-            "confirmed": int(conf or 0),
-            "checked_in": int(chk or 0),
-        }
-        for ev, conf, chk in rows
-    ]
+    return {
+        "items": [
+            {
+                "id": str(ev.id),
+                "name": ev.name,
+                "status": ev.status,
+                "start_date": ev.start_date.isoformat() if ev.start_date else None,
+                "location": ev.location,
+                "confirmed": int(conf or 0),
+                "checked_in": int(chk or 0),
+            }
+            for ev, conf, chk in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 @router.get("/events/{event_id}/overview")

@@ -34,6 +34,16 @@
                 <tbody id="eventsTable" class="divide-y divide-gray-200"></tbody>
             </table>
             <div id="emptyState" class="hidden p-8 text-center text-gray-500">No hay eventos registrados</div>
+            <div id="pagination" class="hidden flex items-center justify-between px-4 py-3 border-t border-gray-200">
+                <p id="pageInfo" class="text-xs text-gray-500"></p>
+                <div class="flex items-center gap-1">
+                    <button id="btnFirst" onclick="goPage(1)" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-40">«</button>
+                    <button id="btnPrev" onclick="goPage(state.page - 1)" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40" style="background:#785631">‹ Anterior</button>
+                    <span id="pageNumbers" class="flex items-center gap-1"></span>
+                    <button id="btnNext" onclick="goPage(state.page + 1)" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40" style="background:#785631">Siguiente ›</button>
+                    <button id="btnLast" onclick="goPage(state.totalPages)" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-40">»</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -69,16 +79,48 @@
             </div>`;
         }
 
+        const state = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+
+        function goPage(p) {
+            if (p < 1 || p > state.totalPages || p === state.page) return;
+            state.page = p;
+            loadEvents();
+        }
+
+        function renderPagination() {
+            const pg = document.getElementById('pagination');
+            if (state.totalPages <= 1) { pg.classList.add('hidden'); pg.classList.remove('flex'); return; }
+            pg.classList.remove('hidden'); pg.classList.add('flex');
+            document.getElementById('pageInfo').textContent =
+                `${state.total} eventos · página ${state.page} de ${state.totalPages}`;
+            document.getElementById('btnFirst').disabled = state.page === 1;
+            document.getElementById('btnPrev').disabled = state.page === 1;
+            document.getElementById('btnNext').disabled = state.page === state.totalPages;
+            document.getElementById('btnLast').disabled = state.page === state.totalPages;
+            // Números de página: ventana de 5 alrededor de la actual
+            const nums = [];
+            let start = Math.max(1, state.page - 2);
+            let end = Math.min(state.totalPages, start + 4);
+            start = Math.max(1, end - 4);
+            for (let i = start; i <= end; i++) nums.push(i);
+            document.getElementById('pageNumbers').innerHTML = nums.map(n =>
+                `<button onclick="goPage(${n})" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${n === state.page ? 'text-white' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'}" ${n === state.page ? 'style="background:#785631"' : ''}>${n}</button>`
+            ).join('');
+        }
+
         async function loadEvents() {
             const token = localStorage.getItem('access_token');
             try {
-                const resp = await fetch('/api/monitoring/events', { headers: { 'Authorization': 'Bearer ' + token } });
+                const resp = await fetch(`/api/monitoring/events?page=${state.page}&page_size=${state.pageSize}`, { headers: { 'Authorization': 'Bearer ' + token } });
                 if (resp.status === 401) { location.href = '/admin/login'; return; }
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                const events = await resp.json();
+                const data = await resp.json();
+                state.total = data.total;
+                state.totalPages = data.total_pages;
+                const events = data.items;
                 const tbody = document.getElementById('eventsTable');
                 const empty = document.getElementById('emptyState');
-                if (!events.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+                if (!events.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); renderPagination(); return; }
                 empty.classList.add('hidden');
                 tbody.innerHTML = events.map(ev => {
                     const denom = ev.confirmed + ev.checked_in;
@@ -95,6 +137,7 @@
                         </td>
                     </tr>`;
                 }).join('');
+                renderPagination();
             } catch (e) {
                 console.error(e);
                 document.getElementById('eventsTable').innerHTML =

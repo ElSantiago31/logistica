@@ -215,10 +215,40 @@ async def test_monitoring_events_list_200(client: AsyncClient, monitoring_env, g
         headers={"Authorization": f"Bearer {tok}"},
     )
     assert resp.status_code == 200, resp.text
-    items = resp.json()
+    data = resp.json()
+    assert set(data) >= {"items", "total", "page", "page_size", "total_pages"}
+    items = data["items"]
+    assert data["page"] == 1 and data["total_pages"] >= 1
     assert any(i["name"] == "Evento Gerencia 360" for i in items)
     ev = next(i for i in items if i["name"] == "Evento Gerencia 360")
     assert ev["confirmed"] == 1 and ev["checked_in"] == 2
+
+
+@pytest.mark.asyncio
+async def test_monitoring_events_pagination(client: AsyncClient, db: AsyncSession, monitoring_env, gerencia_env):
+    """Paginación: page_size=1 divide los eventos en varias páginas."""
+    # Segundo evento para tener >1 página
+    db.add(Event(
+        id=uuid.uuid4(), name="Evento 2",
+        start_date=datetime(2026, 9, 11, 8, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 9, 11, 18, 0, 0, tzinfo=timezone.utc),
+        location="Otro Lugar", status="published",
+    ))
+    await db.commit()
+
+    tok = await _login(client, "99002")
+    headers = {"Authorization": f"Bearer {tok}"}
+    r1 = await client.get("/api/monitoring/events?page=1&page_size=1", headers=headers)
+    assert r1.status_code == 200, r1.text
+    d1 = r1.json()
+    assert len(d1["items"]) == 1
+    assert d1["total"] >= 2 and d1["total_pages"] == d1["total"]
+    r2 = await client.get(f"/api/monitoring/events?page={d1['total_pages']}&page_size=1", headers=headers)
+    assert r2.status_code == 200, r2.text
+    assert len(r2.json()["items"]) == 1
+    # Fuera de rango: página vacía, no error
+    r3 = await client.get(f"/api/monitoring/events?page={d1['total_pages'] + 10}&page_size=1", headers=headers)
+    assert r3.status_code == 200 and r3.json()["items"] == []
 
 
 @pytest.mark.asyncio
