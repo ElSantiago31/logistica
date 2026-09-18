@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo 360 - Gerencia</title>
+    <link rel="stylesheet" href="/static/frontend/tailwind.css?v=20260916">
+    <style>
+        .ring-bg { stroke: #e5e7eb; }
+        .ring-fg { transition: stroke-dashoffset .6s ease; stroke-linecap: round; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <script src="/static/js/auth{{ js_suffix }}.js?v=20260811"></script>
+
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+            <div>
+                <a href="/gerencia" class="text-sm text-gray-500 hover:underline">← Eventos</a>
+                <h1 id="evName" class="text-xl sm:text-2xl font-bold text-gray-800 mt-1">Cargando…</h1>
+                <p id="evMeta" class="text-sm text-gray-500 mt-1"></p>
+            </div>
+            <div class="text-right">
+                <span id="liveBadge" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                    <span class="w-2 h-2 bg-green-600 rounded-full animate-pulse"></span> EN VIVO
+                </span>
+                <p id="updatedAt" class="text-xs text-gray-400 mt-2"></p>
+            </div>
+        </div>
+
+        <!-- Anillos SVG -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
+                    <circle id="ringCheckin" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#16a34a" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+                </svg>
+                <p class="text-2xl font-bold text-gray-800 mt-2" id="txtCheckin">0%</p>
+                <p class="text-xs text-gray-500">Check-in global</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
+                    <circle id="ringConfirm" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#f59e0b" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+                </svg>
+                <p class="text-2xl font-bold text-gray-800 mt-2"><span id="txtConfirm">0</span><span class="text-sm text-gray-400">/<span id="txtNeeded">0</span></span></p>
+                <p class="text-xs text-gray-500">Confirmados / Requeridos</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
+                    <circle id="ringPending" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#ef4444" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+                </svg>
+                <p class="text-2xl font-bold text-gray-800 mt-2" id="txtPending">0</p>
+                <p class="text-xs text-gray-500">Pendientes por check-in</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
+                    <circle id="ringNoShow" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#7c3aed" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+                </svg>
+                <p class="text-2xl font-bold text-gray-800 mt-2" id="txtNoShow">0</p>
+                <p class="text-xs text-gray-500">No-show / Rechazados</p>
+            </div>
+        </div>
+
+        <!-- Tablas -->
+        <div class="grid md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por rol</h2>
+                <table class="w-full text-sm">
+                    <thead><tr class="text-xs text-gray-500 uppercase">
+                        <th class="px-4 py-2 text-left">Rol</th><th class="px-2 py-2">Req.</th><th class="px-2 py-2">Conf.</th><th class="px-2 py-2">In</th>
+                    </tr></thead>
+                    <tbody id="byRole" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por coordinador</h2>
+                <table class="w-full text-sm">
+                    <thead><tr class="text-xs text-gray-500 uppercase">
+                        <th class="px-4 py-2 text-left">Coordinador</th><th class="px-2 py-2">Cuota</th><th class="px-2 py-2">Conf.</th><th class="px-2 py-2">In</th>
+                    </tr></thead>
+                    <tbody id="byCoord" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por etapa</h2>
+                <table class="w-full text-sm">
+                    <thead><tr class="text-xs text-gray-500 uppercase">
+                        <th class="px-4 py-2 text-left">Etapa</th><th class="px-2 py-2">Asignados</th><th class="px-2 py-2">Check-ins</th>
+                    </tr></thead>
+                    <tbody id="byStage" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Últimos check-ins</h2>
+                <ul id="feed" class="divide-y divide-gray-100 max-h-80 overflow-y-auto"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const EVENT_ID = "{{ event_id }}";
+        const CIRC = 2 * Math.PI * 52; // 326.7
+
+        (function () {
+            const t = localStorage.getItem('access_token');
+            const u = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!t || !['gerencia', 'superadmin', 'admin'].includes(u.user_type)) {
+                location.href = '/admin/login';
+            }
+        })();
+
+        function setRing(id, pct) {
+            const el = document.getElementById(id);
+            el.setAttribute('stroke-dashoffset', CIRC * (1 - Math.min(pct, 100) / 100));
+        }
+
+        function fmtTime(iso) {
+            if (!iso) return '—';
+            return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        async function refresh() {
+            const token = localStorage.getItem('access_token');
+            try {
+                const resp = await fetch(`/api/monitoring/events/${EVENT_ID}/overview`, {
+                    headers: { 'Authorization': 'Bearer ' + token },
+                });
+                if (resp.status === 401) { location.href = '/admin/login'; return; }
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const d = await resp.json();
+
+                // Encabezado
+                document.getElementById('evName').textContent = d.event.name;
+                document.getElementById('evMeta').textContent = [
+                    d.event.client_name, d.event.location,
+                    d.event.start_date ? new Date(d.event.start_date).toLocaleDateString('es-CO') : null,
+                ].filter(Boolean).join(' · ');
+                document.getElementById('updatedAt').textContent = 'Actualizado: ' + fmtTime(d.updated_at);
+
+                // Anillos
+                const t = d.totals;
+                setRing('ringCheckin', t.checkin_pct);
+                document.getElementById('txtCheckin').textContent = t.checkin_pct + '%';
+
+                const needed = d.by_role.reduce((a, r) => a + r.needed, 0);
+                setRing('ringConfirm', needed ? t.confirmed / needed * 100 : 0);
+                document.getElementById('txtConfirm').textContent = t.confirmed;
+                document.getElementById('txtNeeded').textContent = needed;
+
+                setRing('ringPending', t.assigned ? t.pending_checkin / t.assigned * 100 : 0);
+                document.getElementById('txtPending').textContent = t.pending_checkin;
+
+                setRing('ringNoShow', t.assigned ? (t.no_show + t.rejected) / t.assigned * 100 : 0);
+                document.getElementById('txtNoShow').textContent = t.no_show + t.rejected;
+
+                // Por rol
+                document.getElementById('byRole').innerHTML = (d.by_role || []).map(r => `
+                    <tr>
+                        <td class="px-4 py-2 font-semibold text-gray-800">${r.role_name}<span class="ml-2 text-xs text-gray-400">${r.stage}</span></td>
+                        <td class="px-2 py-2 text-center">${r.needed}</td>
+                        <td class="px-2 py-2 text-center text-amber-600 font-semibold">${r.confirmed}</td>
+                        <td class="px-2 py-2 text-center text-green-600 font-semibold">${r.checked_in}</td>
+                    </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-3 text-gray-400 text-center">Sin roles</td></tr>';
+
+                // Por coordinador
+                document.getElementById('byCoord').innerHTML = (d.by_coordinator || []).map(c => `
+                    <tr>
+                        <td class="px-4 py-2 font-semibold text-gray-800">${c.coordinator || c.name}</td>
+                        <td class="px-2 py-2 text-center">${c.quota}</td>
+                        <td class="px-2 py-2 text-center text-amber-600 font-semibold">${c.confirmed}</td>
+                        <td class="px-2 py-2 text-center text-green-600 font-semibold">${c.checked_in}</td>
+                    </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-3 text-gray-400 text-center">Sin cuotas</td></tr>';
+
+                // Por etapa
+                document.getElementById('byStage').innerHTML = (d.by_stage || []).map(s => `
+                    <tr>
+                        <td class="px-4 py-2 font-semibold text-gray-800 capitalize">${s.stage}</td>
+                        <td class="px-2 py-2 text-center">${s.assigned}</td>
+                        <td class="px-2 py-2 text-center text-green-600 font-semibold">${s.checked_in}</td>
+                    </tr>`).join('') || '<tr><td colspan="3" class="px-4 py-3 text-gray-400 text-center">Sin etapas</td></tr>';
+
+                // Feed
+                document.getElementById('feed').innerHTML = (d.recent_checkins || []).map(c => `
+                    <li class="px-4 py-2 flex justify-between items-center">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">${c.name}</p>
+                            <p class="text-xs text-gray-400">${c.role_name || '—'} · ${c.by ? 'por ' + c.by : c.method || ''}</p>
+                        </div>
+                        <span class="text-xs text-gray-500">${fmtTime(c.time)}</span>
+    </li>`).join('') || '<li class="px-4 py-3 text-gray-400 text-center text-sm">Aún no hay check-ins</li>';
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 10000); // EN VIVO: cada 10 s
+    </script>
+</body>
+</html>

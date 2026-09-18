@@ -6,7 +6,8 @@ Solo lectura: nadie puede modificar nada desde aquí. Guard central:
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -25,6 +26,23 @@ from app.models.users import User
 from app.routers.sync import _get_event_staff_needs, _get_coordinator_quotas
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
+
+page_router = APIRouter(tags=["monitoring-pages"])
+templates = Jinja2Templates(directory="app/templates")
+
+
+@page_router.get("/gerencia", include_in_schema=False)
+async def gerencia_events_page(request: Request):
+    """Lista de eventos con avance de check-in (rol gerencia)."""
+    return templates.TemplateResponse("gerencia/gerencia_events.html", {"request": request})
+
+
+@page_router.get("/gerencia/events/{event_id}", include_in_schema=False)
+async def gerencia_monitor_page(request: Request, event_id: str):
+    """Vista 360 en tiempo real de un evento (rol gerencia)."""
+    return templates.TemplateResponse("gerencia/gerencia_monitor.html", {
+        "request": request, "event_id": event_id,
+    })
 
 
 def _require_monitoring(user: User) -> None:

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/jpeg" href="/static/frontend/logo.jpeg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eventos - Gerencia 360</title>
+    <link rel="stylesheet" href="/static/frontend/tailwind.css?v=20260916">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <script src="/static/js/auth{{ js_suffix }}.js?v=20260811"></script>
+
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+            <div>
+                <h1 class="text-xl sm:text-2xl font-bold text-gray-800">Eventos — Vista Gerencia (solo lectura)</h1>
+                <p class="text-sm text-gray-500 mt-1">Monitoreo en tiempo real del avance de check-in</p>
+            </div>
+            <button onclick="loadEvents()" class="px-4 py-2 rounded-lg text-sm font-semibold text-white" style="background:#785631">↻ Actualizar</button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Evento</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ubicación</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avance check-in</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
+                    </tr>
+                </thead>
+                <tbody id="eventsTable" class="divide-y divide-gray-200"></tbody>
+            </table>
+            <div id="emptyState" class="hidden p-8 text-center text-gray-500">No hay eventos registrados</div>
+        </div>
+    </div>
+
+    <script>
+        // Guard client-side: solo gerencia/superadmin/admin (el backend valida el token)
+        (function () {
+            const t = localStorage.getItem('access_token');
+            const u = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!t || !['gerencia', 'superadmin', 'admin'].includes(u.user_type)) {
+                location.href = '/admin/login';
+            }
+        })();
+
+        const STATUS = {
+            draft: ['Borrador', 'bg-gray-100 text-gray-800'],
+            published: ['Publicado', 'bg-blue-100 text-blue-800'],
+            in_progress: ['En progreso', 'bg-amber-100 text-amber-800'],
+            completed: ['Completado', 'bg-green-100 text-green-800'],
+            cancelled: ['Cancelado', 'bg-red-100 text-red-800'],
+        };
+
+        function fmtDate(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        function bar(pct) {
+            const cls = pct >= 90 ? 'bg-green-600' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+            return `<div class="flex items-center gap-2">
+                <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden"><div class="${cls} h-full" style="width:${Math.min(pct, 100)}%"></div></div>
+                <span class="text-xs font-semibold text-gray-700">${pct}%</span>
+            </div>`;
+        }
+
+        async function loadEvents() {
+            const token = localStorage.getItem('access_token');
+            try {
+                const resp = await fetch('/api/monitoring/events', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (resp.status === 401) { location.href = '/admin/login'; return; }
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const events = await resp.json();
+                const tbody = document.getElementById('eventsTable');
+                const empty = document.getElementById('emptyState');
+                if (!events.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+                empty.classList.add('hidden');
+                tbody.innerHTML = events.map(ev => {
+                    const pct = ev.confirmed ? Math.round(ev.checked_in / ev.confirmed * 100) : 0;
+                    const [label, cls] = STATUS[ev.status] || [ev.status, 'bg-gray-100'];
+                    return `<tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-800">${ev.name}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${fmtDate(ev.start_date)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${ev.location || '—'}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-semibold ${cls}">${label}</span></td>
+                        <td class="px-4 py-3">${bar(pct)}<span class="text-xs text-gray-400">${ev.checked_in}/${ev.confirmed}</span></td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/gerencia/events/${ev.id}" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style="background:#785631">Ver 360°</a>
+                        </td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        loadEvents();
+    </script>
+</body>
+</html>
