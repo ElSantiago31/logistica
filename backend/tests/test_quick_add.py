@@ -2,7 +2,8 @@
 """Tests de la Incorporación Rápida (operador "solo evento" / ghost).
 
 Reglas (ver ``services/quick_add.py`` y ``routers/events.py``):
-- ``admin``/``superadmin`` pueden usar POST /{event_id}/quick-add.
+- ``admin``/``superadmin``/``checkin`` (rol Check-in e Indumentaria) pueden
+  usar POST /{event_id}/quick-add desde el panel de staff.
 - Documento nuevo → crea usuario fantasma (is_active=False, email NULL,
   operator.event_only=True) y asignación status=confirmed (mode="ghost").
 - Documento de operador REAL → reutiliza existente (mode="existing").
@@ -161,3 +162,21 @@ async def test_quick_add_requires_admin(client, qa_env):
         json=_payload("999004"),
     )
     assert res.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_quick_add_by_checkin_role(client, qa_env, db):
+    """El rol checkin (Check-in e Indumentaria) también puede incorporar rápido."""
+    await _mk_user(db, "80003", "checkin")
+    await db.commit()
+    checkin_token = await _login(client, "80003")
+
+    res = await client.post(
+        f"/api/events/{qa_env['event_id']}/quick-add",
+        json=_payload("999005"),
+        headers={"Authorization": f"Bearer {checkin_token}"},
+    )
+    assert res.status_code == 201, res.text
+    d = res.json()
+    assert d["mode"] == "ghost"
+    assert d["status"] == "confirmed"

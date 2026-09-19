@@ -435,7 +435,10 @@ async def quick_add(
     existente (mode="existing"). El ghost se purga automáticamente al
     quedar sin asignaciones activas.
     """
-    if user.user_type not in ("superadmin", "admin", "coordinator"):
+    # Roles que pueden incorporar personal de última hora: management,
+    # coordinadores y el staff de Check-in e Indumentaria (intendencia
+    # quedó fusionada en check-in). Ver permissions.py.
+    if user.user_type not in ("superadmin", "admin", "coordinator", "checkin", "intendencia"):
         raise HTTPException(403, "Sin permisos")
     event = await svc.get_event(db, event_id)
     if not event:
