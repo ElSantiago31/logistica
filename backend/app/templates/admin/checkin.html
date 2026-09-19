@@ -364,18 +364,27 @@ function authHeaders() {
 
 // ⚡ Incorporación Rápida / ⚠️ Incidencias (DENTRO del check-in):
 // quick-add para superadmin/admin/checkin/intendencia (mismos roles que
-// acepta el backend en POST /api/events/{id}/quick-add); incidencias
-// solo para management, igual que en el panel de staff.
-(function() {
-    const u = JSON.parse(localStorage.getItem('user') || '{}');
-    const canQuickAdd = ['superadmin', 'admin', 'checkin', 'intendencia'].includes(u.user_type);
-    const canIncidencias = ['superadmin', 'admin'].includes(u.user_type);
+// acepta el backend en POST /api/events/{id}/quick-add). ⚠️ Incidencias
+// TAMBIÉN para el rol Check-in (e Indumentaria): es el staff en puerta
+// y quien reporta novedades/vetos en tiempo real. Los usuarios
+// 'operator' con asignación staff llegan con user_type='operator', así
+// que se re-evalúa al recibir staff_role del backend (loadEventData).
+function _updateQaButtons() {
+    let ut = '';
+    try { ut = (JSON.parse(localStorage.getItem('user') || '{}').user_type || ''); } catch (_) {}
+    // intendencia quedó fusionada en check-in
+    const staff = staffRole === 'intendencia' ? 'checkin' : (staffRole || '');
+    const isCheckinStaff = staff === 'checkin';
+    const canQuickAdd = ['superadmin', 'admin', 'checkin', 'intendencia'].includes(ut) || isCheckinStaff;
+    const canIncidencias = ['superadmin', 'admin', 'checkin', 'intendencia'].includes(ut) || isCheckinStaff;
     const row = document.getElementById('qa-actions-row');
-    if (!row || (!canQuickAdd && !canIncidencias)) return;
+    if (!row) return;
+    if (!canQuickAdd && !canIncidencias) { row.classList.add('hidden'); return; }
     row.classList.remove('hidden');
     document.getElementById('btn-quick-add').style.display = canQuickAdd ? '' : 'none';
     document.getElementById('btn-incidencias').style.display = canIncidencias ? '' : 'none';
-})();
+}
+_updateQaButtons();
 
 // ============================================================
 // ⚡ INCORPORACIÓN RÁPIDA (persona de última hora, "solo evento")
@@ -619,6 +628,7 @@ async function loadEventData() {
                 staffNeeds = data.staff_needs || [];                // roles requeridos
                 staffRole = data.staff_role || null;
                 canManageUniformBackend = data.can_manage_uniform;
+                _updateQaButtons();  // operador 'operator' con staff_role=checkin ve ⚡/⚠️
                 renderQuotaCards(coordinatorQuotas);
                 populateCoordinatorSelect();  // Llenar selector con coordinadores
                 populateRoleSelect();         // FASE 2: selector de rol
