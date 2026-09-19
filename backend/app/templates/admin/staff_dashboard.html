@@ -33,35 +33,6 @@
     </div>
 </div>
 
-<!-- Quick Add Modal (⚡ Incorporación Rápida) -->
-<div id="quickAddModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50">
-    <div class="bg-white rounded-t-lg sm:rounded-lg p-4 sm:p-6 w-full sm:max-w-lg">
-        <div class="flex justify-between items-center mb-2">
-            <h3 class="text-base sm:text-lg font-semibold">⚡ Incorporación Rápida</h3>
-            <button onclick="closeQuickAddModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
-        </div>
-        <p class="text-xs text-gray-500 mb-4" id="qaEventName"></p>
-        <div class="grid grid-cols-2 gap-3 mb-4">
-            <input type="text" id="qaPrimerNombre" placeholder="Primer nombre *" class="border rounded-lg px-3 py-2 text-sm">
-            <input type="text" id="qaSegundoNombre" placeholder="Segundo nombre" class="border rounded-lg px-3 py-2 text-sm">
-            <input type="text" id="qaPrimerApellido" placeholder="Primer apellido *" class="border rounded-lg px-3 py-2 text-sm">
-            <input type="text" id="qaSegundoApellido" placeholder="Segundo apellido" class="border rounded-lg px-3 py-2 text-sm">
-            <select id="qaDocType" class="border rounded-lg px-3 py-2 text-sm">
-                <option value="CC">Cédula (CC)</option>
-                <option value="CE">C. Extranjería (CE)</option>
-                <option value="TI">Tarjeta Id. (TI)</option>
-                <option value="PP">Pasaporte (PP)</option>
-                <option value="PPT">Permiso Protección Temporal (PPT)</option>
-            </select>
-            <input type="text" id="qaDocNumber" placeholder="Número de documento *" class="border rounded-lg px-3 py-2 text-sm">
-        </div>
-        <div class="flex justify-end gap-2">
-            <button onclick="closeQuickAddModal()" class="px-4 py-2 border rounded-lg text-sm">Cancelar</button>
-            <button id="btnQuickAdd" onclick="submitQuickAdd()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 text-sm">⚡ Agregar al evento</button>
-        </div>
-    </div>
-</div>
-
 <script>
 (function(){
     const t = localStorage.getItem('access_token');
@@ -86,9 +57,6 @@
     badge.className = 'text-xs px-2 py-0.5 rounded-full font-semibold text-white ' + r.bg;
     loadEvents();
 })();
-
-const _eventsById = {};
-let _qaEventId = null;
 
 function authH() { return {'Authorization': 'Bearer ' + localStorage.getItem('access_token')}; }
 
@@ -115,16 +83,10 @@ async function loadEvents() {
             const st = statusMap[e.status] || e.status;
             const sc = statusCls[e.status] || '';
             const btns = [];
-            _eventsById[e.id] = e.name;
             // Intendencia quedó fusionada en Check-in (que incluye gestión de
             // indumentaria). Cualquier rol de staff accede por el mismo botón.
             if (['checkin', 'intendencia', 'superadmin'].includes(e.staff_role)) {
                 btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in e Indumentaria</a>`);
-            }
-            // ⚡ Incorporación Rápida: disponible para el rol Check-in (e
-            // Indumentaria) y admins, junto al botón de Check-in.
-            if (['checkin', 'intendencia', 'superadmin'].includes(e.staff_role) || u.user_type === 'superadmin' || u.user_type === 'admin') {
-                btns.push(`<button onclick="showQuickAddModal('${e.id}')" class="inline-block bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700">⚡ Incorporación Rápida</button>`);
             }
             // Incidencias y vetos: superadmin o coordinador (con cupo en el evento).
             if (u.user_type === 'superadmin' || u.user_type === 'admin') {
@@ -144,67 +106,6 @@ async function loadEvents() {
         }).join('');
     } catch (e) {
         container.innerHTML = '<p class="text-center text-red-500 py-8">Error de conexión</p>';
-    }
-}
-
-// ============================================================
-// ⚡ INCORPORACIÓN RÁPIDA (mismo flujo que event_detail)
-// ============================================================
-function showToast(msg, isErr) {
-    let t = document.getElementById('qaToast');
-    if (!t) {
-        t = document.createElement('div');
-        t.id = 'qaToast';
-        t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm text-white shadow-lg z-[60] transition-opacity';
-        document.body.appendChild(t);
-    }
-    t.textContent = msg;
-    t.style.background = isErr ? '#dc2626' : '#16a34a';
-    t.style.opacity = '1';
-    clearTimeout(t._h);
-    t._h = setTimeout(() => { t.style.opacity = '0'; }, 3000);
-}
-
-function showQuickAddModal(eventId) {
-    _qaEventId = eventId;
-    ['qaPrimerNombre', 'qaSegundoNombre', 'qaPrimerApellido', 'qaSegundoApellido', 'qaDocNumber'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('qaDocType').value = 'CC';
-    document.getElementById('qaEventName').textContent = _eventsById[eventId] ? 'Evento: ' + _eventsById[eventId] : '';
-    document.getElementById('quickAddModal').classList.remove('hidden');
-    document.getElementById('qaPrimerNombre').focus();
-}
-
-function closeQuickAddModal() { document.getElementById('quickAddModal').classList.add('hidden'); }
-
-async function submitQuickAdd() {
-    const primer_nombre = document.getElementById('qaPrimerNombre').value.trim();
-    const primer_apellido = document.getElementById('qaPrimerApellido').value.trim();
-    const document_number = document.getElementById('qaDocNumber').value.trim();
-    if (!primer_nombre || !primer_apellido || !document_number) { showToast('Nombre, apellido y documento son obligatorios', true); return; }
-    const btn = document.getElementById('btnQuickAdd');
-    btn.disabled = true; btn.textContent = 'Agregando…';
-    try {
-        const res = await fetch(`/api/events/${_qaEventId}/quick-add`, {
-            method: 'POST',
-            headers: { ...authH(), 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                primer_nombre: primer_nombre,
-                segundo_nombre: document.getElementById('qaSegundoNombre').value.trim() || null,
-                primer_apellido: primer_apellido,
-                segundo_apellido: document.getElementById('qaSegundoApellido').value.trim() || null,
-                document_type: document.getElementById('qaDocType').value,
-                document_number: document_number,
-            })
-        });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok) { showToast(d.detail || 'Error al agregar', true); return; }
-        const modeTxt = d.mode === 'existing' ? '(operador ya registrado)' : '(solo evento)';
-        showToast(`✅ ${d.full_name} agregado y confirmado ${modeTxt}`);
-        closeQuickAddModal();
-    } catch (e) {
-        showToast('Error: ' + e.message, true);
-    } finally {
-        btn.disabled = false; btn.textContent = '⚡ Agregar al evento';
     }
 }
 </script>

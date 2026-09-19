@@ -127,6 +127,18 @@
             </button>
             <p class="text-[11px] text-gray-400 text-center mb-2" id="last-download"></p>
 
+            <!-- ⚡ Incorporación Rápida y ⚠️ Incidencias: DENTRO del check-in -->
+            <div id="qa-actions-row" class="grid grid-cols-2 gap-2 mb-2 hidden">
+                <button id="btn-quick-add" onclick="showQuickAddModal()"
+                    class="w-full py-1.5 rounded-lg text-xs font-medium text-white transition bg-teal-600 hover:bg-teal-700">
+                    ⚡ Incorporación Rápida
+                </button>
+                <a id="btn-incidencias" href="/admin/events/{{ event_id }}/incidencias"
+                    class="w-full py-1.5 rounded-lg text-xs font-medium text-white text-center transition bg-red-600 hover:bg-red-700">
+                    ⚠️ Incidencias
+                </a>
+            </div>
+
             <!-- Panel del operador: aparece DEBAJO del buscador -->
             <div id="operator-panel" class="hidden">
             <div class="bg-white rounded-xl border p-6">
@@ -290,6 +302,35 @@
             <p class="text-xs text-gray-400 text-center py-4" id="checkin-log-empty">Aún no hay ingresos registrados</p>
         </div>
     </div>
+
+    <!-- ⚡ Modal de Incorporación Rápida (persona de última hora, "solo evento") -->
+    <div id="quickAddModal" class="reassign-modal hidden">
+        <div class="box">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg font-semibold" style="color:#5d4224;">⚡ Incorporación Rápida</h3>
+                <button onclick="closeQuickAddModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4">Registra a una persona de última hora y queda confirmada en este evento.</p>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <input type="text" id="qaPrimerNombre" placeholder="Primer nombre *" class="border rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="qaSegundoNombre" placeholder="Segundo nombre" class="border rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="qaPrimerApellido" placeholder="Primer apellido *" class="border rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="qaSegundoApellido" placeholder="Segundo apellido" class="border rounded-lg px-3 py-2 text-sm">
+                <select id="qaDocType" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="CC">Cédula (CC)</option>
+                    <option value="CE">C. Extranjería (CE)</option>
+                    <option value="TI">Tarjeta Id. (TI)</option>
+                    <option value="PP">Pasaporte (PP)</option>
+                    <option value="PPT">Permiso Protección Temporal (PPT)</option>
+                </select>
+                <input type="text" id="qaDocNumber" placeholder="Número de documento *" class="border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeQuickAddModal()" class="px-4 py-2 border rounded-lg text-sm">Cancelar</button>
+                <button id="btnQuickAddSubmit" onclick="submitQuickAdd()" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 text-sm">⚡ Agregar al evento</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -320,6 +361,68 @@ function authHeaders() {
         return;
     }
 })();
+
+// ⚡ Incorporación Rápida / ⚠️ Incidencias (DENTRO del check-in):
+// quick-add para superadmin/admin/checkin/intendencia (mismos roles que
+// acepta el backend en POST /api/events/{id}/quick-add); incidencias
+// solo para management, igual que en el panel de staff.
+(function() {
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    const canQuickAdd = ['superadmin', 'admin', 'checkin', 'intendencia'].includes(u.user_type);
+    const canIncidencias = ['superadmin', 'admin'].includes(u.user_type);
+    const row = document.getElementById('qa-actions-row');
+    if (!row || (!canQuickAdd && !canIncidencias)) return;
+    row.classList.remove('hidden');
+    document.getElementById('btn-quick-add').style.display = canQuickAdd ? '' : 'none';
+    document.getElementById('btn-incidencias').style.display = canIncidencias ? '' : 'none';
+})();
+
+// ============================================================
+// ⚡ INCORPORACIÓN RÁPIDA (persona de última hora, "solo evento")
+// ============================================================
+function showQuickAddModal() {
+    ['qaPrimerNombre', 'qaSegundoNombre', 'qaPrimerApellido', 'qaSegundoApellido', 'qaDocNumber'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('qaDocType').value = 'CC';
+    document.getElementById('quickAddModal').classList.remove('hidden');
+    document.getElementById('qaPrimerNombre').focus();
+}
+function closeQuickAddModal() { document.getElementById('quickAddModal').classList.add('hidden'); }
+
+async function submitQuickAdd() {
+    const primer_nombre = document.getElementById('qaPrimerNombre').value.trim();
+    const primer_apellido = document.getElementById('qaPrimerApellido').value.trim();
+    const document_number = document.getElementById('qaDocNumber').value.trim();
+    if (!primer_nombre || !primer_apellido || !document_number) {
+        _showToast('Nombre, apellido y documento son obligatorios', 'error');
+        return;
+    }
+    const btn = document.getElementById('btnQuickAddSubmit');
+    btn.disabled = true; btn.textContent = 'Agregando…';
+    try {
+        const res = await Auth.apiFetch(`/api/events/${EVENT_ID}/quick-add`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                primer_nombre: primer_nombre,
+                segundo_nombre: document.getElementById('qaSegundoNombre').value.trim() || null,
+                primer_apellido: primer_apellido,
+                segundo_apellido: document.getElementById('qaSegundoApellido').value.trim() || null,
+                document_type: document.getElementById('qaDocType').value,
+                document_number: document_number,
+            })
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) { _showToast(d.detail || 'Error al agregar', 'error'); return; }
+        const modeTxt = d.mode === 'existing' ? '(operador ya registrado)' : '(solo evento)';
+        _showToast(`✅ ${d.full_name} agregado y confirmado ${modeTxt}`, 'success');
+        closeQuickAddModal();
+        loadEventData();  // recargar para que aparezca en el buscador
+    } catch (e) {
+        _showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = '⚡ Agregar al evento';
+    }
+}
 
 // Permiso: superadmin/admin/coordinator/checkin pueden editar indumentaria
 // (intendencia quedó fusionada en check-in).
