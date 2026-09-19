@@ -127,18 +127,6 @@
             </button>
             <p class="text-[11px] text-gray-400 text-center mb-2" id="last-download"></p>
 
-            <!-- ⚡ Incorporación Rápida y ⚠️ Incidencias: DENTRO del check-in -->
-            <div id="qa-actions-row" class="grid grid-cols-2 gap-2 mb-2 hidden">
-                <button id="btn-quick-add" onclick="showQuickAddModal()"
-                    class="w-full py-1.5 rounded-lg text-xs font-medium text-white transition bg-teal-600 hover:bg-teal-700">
-                    ⚡ Incorporación Rápida
-                </button>
-                <a id="btn-incidencias" href="/admin/events/{{ event_id }}/incidencias"
-                    class="w-full py-1.5 rounded-lg text-xs font-medium text-white text-center transition bg-red-600 hover:bg-red-700">
-                    ⚠️ Incidencias
-                </a>
-            </div>
-
             <!-- Panel del operador: aparece DEBAJO del buscador -->
             <div id="operator-panel" class="hidden">
             <div class="bg-white rounded-xl border p-6">
@@ -259,6 +247,18 @@
                 <div id="quotas-grid">
                     <p class="text-xs text-gray-400 col-span-full text-center py-2">Cargando cupos...</p>
                 </div>
+            </div>
+
+            <!-- ⚡ Incorporación Rápida y ⚠️ Incidencias: debajo de los cupos por coordinador -->
+            <div id="qa-actions-row" class="grid grid-cols-2 gap-2 mt-4 hidden">
+                <button id="btn-quick-add" onclick="showQuickAddModal()"
+                    class="w-full py-2 rounded-lg text-xs font-medium text-white transition bg-teal-600 hover:bg-teal-700">
+                    ⚡ Incorporación Rápida
+                </button>
+                <a id="btn-incidencias" href="/admin/events/{{ event_id }}/incidencias"
+                    class="w-full py-2 rounded-lg text-xs font-medium text-white text-center transition bg-red-600 hover:bg-red-700">
+                    ⚠️ Incidencias
+                </a>
             </div>
         </div>
     </div>
