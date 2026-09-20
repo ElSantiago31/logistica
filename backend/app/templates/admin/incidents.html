@@ -28,7 +28,9 @@
         [data-theme="dark"] .badge-observacion { background:rgba(55,65,81,0.2); color:#9ca3af; }
         [data-theme="dark"] .badge-otro { background:rgba(55,65,81,0.2); color:#9ca3af; }
         /* Descripción de novedades: colapsada a 2 líneas, expandible */
-        .desc-clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .desc-clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; word-break:break-word; }
+        /* Rompe palabras/cadenas largas sin espacios: evita que la columna se expanda a la derecha */
+        .wrap-anywhere { overflow-wrap:anywhere; word-break:break-word; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -530,7 +532,7 @@ function renderIncidents() {
             '</td>' +
             '<td class="px-4 py-3 text-sm"><span class="inline-block px-2 py-1 rounded text-xs font-semibold ' + badge + '">' + vetoIcon + label + '</span></td>' +
             '<td class="px-4 py-3 text-sm text-gray-600 align-top">' +
-            '<div id="desc-' + i.id + '" class="desc-clamp whitespace-pre-wrap break-words max-w-sm">' + esc(i.description || '') + '</div>' +
+            '<div id="desc-' + i.id + '" class="desc-clamp wrap-anywhere whitespace-pre-wrap break-words max-w-sm">' + esc(i.description || '') + '</div>' +
             '<button id="btn-' + i.id + '" onclick="toggleDesc(\'desc-' + i.id + '\', this)" class="hidden text-xs font-semibold mt-1 hover:underline" style="color:#8a6d4b;">Ver más</button>' +
         '</td>' +
             '<td class="px-4 py-3 text-sm text-gray-500">' + (i.recorder_name || '—') + '</td>' +
@@ -570,8 +572,8 @@ function renderBans() {
                 '<div class="text-xs text-gray-400">' + (b.operator_document || '') + '</div>' +
             '</td>' +
             '<td class="px-4 py-3 text-sm text-gray-600">' +
-                '<div class="max-w-xs break-words">' + b.reason + '</div>' +
-                (b.observations ? '<div class="text-xs text-gray-400 mt-1 max-w-xs break-words">' + b.observations + '</div>' : '') +
+                '<div class="max-w-xs break-words wrap-anywhere">' + b.reason + '</div>' +
+                (b.observations ? '<div class="text-xs text-gray-400 mt-1 max-w-xs break-words wrap-anywhere">' + b.observations + '</div>' : '') +
             '</td>' +
             '<td class="px-4 py-3 text-sm">' + statusBadge + extraInfo + '</td>' +
             '<td class="px-4 py-3 text-sm text-gray-500">' + (b.banner_name || '—') + '</td>' +
