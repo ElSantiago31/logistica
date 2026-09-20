@@ -1,5 +1,5 @@
 /// Service Worker — AyC Eventos PWA
-const CACHE_NAME = 'ayc-v1';
+const CACHE_NAME = 'ayc-v2';
 const STATIC_ASSETS = [
   '/',
   '/enrolamiento/login',
