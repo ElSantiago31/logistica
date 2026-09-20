@@ -188,6 +188,9 @@ function addStaffRow(roleId='',qty=1,rate='',edu='',stage=''){
 
 let allStaffUsers = [];
 let addedOperators = [];
+// Usuarios del sistema pre-seleccionados (persiste entre re-renders).
+// Un `cb.checked=true` se perdería cuando renderStaffLists() regenere el HTML.
+let selectedStaffIds = new Set();
 let lastSearchItems = [];
 let searchTimer = null;
 
@@ -209,11 +212,14 @@ async function loadCurrentStaffAssignments() {
             // Migración: staff legado con rol 'intendencia' se convierte a
             // 'checkin' para no perder accesos (el backend solo guarda checkin).
             const effectiveRole = 'checkin';
-            const listId = 'checkinList';
-            const cb = document.querySelector(`#${listId} input[value="${s.user_id}"]`);
-            if (cb) {
-                cb.checked = true;
+            const isSystemUser = allStaffUsers.some(u => u.id === s.user_id);
+            if (isSystemUser) {
+                // Registrar en el Set persistente: el atributo checked del
+                // checkbox se perdería cuando renderStaffLists() regenere el HTML.
+                selectedStaffIds.add(s.user_id);
             } else {
+                // Operador-staff (no es usuario del sistema): se mantiene en
+                // addedOperators, que sí sobrevive los re-renders.
                 const exists = addedOperators.find(a => a.user_id === s.user_id && a.staffRole === effectiveRole);
                 if (!exists) {
                     addedOperators.push({
@@ -229,6 +235,12 @@ async function loadCurrentStaffAssignments() {
     } catch (e) {}
 }
 
+// Sincroniza el Set persistente cuando el admin (des)marca un checkbox.
+function onStaffCbChange(cb) {
+    if (cb.checked) selectedStaffIds.add(cb.value);
+    else selectedStaffIds.delete(cb.value);
+}
+
 function renderStaffLists() {
     const render = (containerId, role) => {
         const container = document.getElementById(containerId);
@@ -242,7 +254,7 @@ function renderStaffLists() {
         }
         let html = users.map(u =>
             `<label class="flex items-center gap-2 text-sm hover:bg-gray-50 px-2 py-1 rounded">
-                <input type="checkbox" value="${u.id}" class="staff-cb rounded">
+                <input type="checkbox" value="${u.id}" class="staff-cb rounded" ${selectedStaffIds.has(u.id)?'checked':''} onchange="onStaffCbChange(this)">
                 <span>${u.first_name} ${u.last_name}</span>
                 <span class="text-xs text-gray-400">${u.document_number}</span>
             </label>`
@@ -266,7 +278,9 @@ function renderStaffLists() {
 async function saveStaffAssignments() {
     const token = getToken();
     const collect = (containerId, role) => {
-        const checked = Array.from(document.querySelectorAll(`#${containerId} input:checked`)).map(cb => cb.value);
+        // Usuarios del sistema: vienen del Set persistente (no del DOM, que
+        // puede haberse re-renderizado). Operadores: de addedOperators.
+        const checked = Array.from(selectedStaffIds);
         const added = addedOperators.filter(o => o.staffRole === role).map(o => o.user_id);
         return [...new Set([...checked, ...added])];
     };
