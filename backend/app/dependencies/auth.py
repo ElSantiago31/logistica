@@ -102,3 +102,9 @@ require_superadmin = require_roles("superadmin")
 require_superadmin_or_admin = require_roles("superadmin", "admin")
 require_any_role = require_roles("superadmin", "admin", "checkin", "intendencia", "operator")
 require_content_manager = require_roles("superadmin", "admin", "web_admin")
+
+# Módulo ⚠️ Incidencias (/api/incidents): el staff de puerta (rol checkin;
+# intendencia quedó fusionada en check-in) consulta y registra novedades/vetos
+# en tiempo real. Las acciones destructivas (eliminar novedad, reactivar veto)
+# siguen protegidas con require_superadmin_or_admin.
+require_incidents_staff = require_roles("superadmin", "admin", "checkin", "intendencia")

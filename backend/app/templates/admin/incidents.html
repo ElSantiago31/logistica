@@ -40,7 +40,7 @@
                 <p id="context-subtitle" class="text-sm text-gray-500 mt-1">Registro de novedades operativas y gestión de vetos</p>
             </div>
             <div class="flex gap-2">
-                <a href="/admin/events/" class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white border border-gray-300 shadow-sm hover:bg-gray-50 inline-flex items-center">← Eventos</a>
+                <a id="btn-back-events" href="/admin/events/" class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white border border-gray-300 shadow-sm hover:bg-gray-50 inline-flex items-center">← Eventos</a>
                 <button onclick="openIncidentModal()" class="px-4 py-2 rounded-lg text-sm font-semibold text-white shadow" style="background:#5d4224;">+ Nueva Novedad</button>
                 <button onclick="openBanModal()" class="px-4 py-2 rounded-lg text-sm font-semibold text-white shadow bg-red-600 hover:bg-red-700">🚫 Vetar Operador</button>
             </div>
@@ -99,7 +99,7 @@
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Tipo</th>
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Descripción</th>
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Registró</th>
-                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                                <th id="th-actions-inc" class="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="incidents-tbody" class="divide-y divide-gray-100">
@@ -149,7 +149,7 @@
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Motivo</th>
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Estado</th>
                                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Vetado por</th>
-                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                                <th id="th-actions-bans" class="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="bans-tbody" class="divide-y divide-gray-100">
@@ -256,6 +256,15 @@
 // Si está vacío, se accedió por la ruta legacy sin evento asociado.
 const EVENT_ID = '{{ event_id | default("", true) }}';
 
+// Management (superadmin/admin) ve las acciones destructivas (Eliminar novedad,
+// Reactivar veto). El staff de puerta (checkin/intendencia y operadores con
+// asignación staff) solo consulta y registra — el backend lo aplica igual.
+let IS_MANAGEMENT = false;
+try {
+    const _u = JSON.parse(localStorage.getItem('user') || '{}');
+    IS_MANAGEMENT = ['superadmin', 'admin'].includes(_u.user_type || '');
+} catch (_) {}
+
 let allIncidents = [];
 let allBans = [];
 let allEvents = [];
@@ -311,14 +320,34 @@ function applyEventScopedUI() {
     // Ocultar también la columna "Evento" de la tabla (es redundante).
     const th = document.getElementById('th-event');
     if (th) th.classList.add('hidden');
+
+    // El staff de puerta (no management) entra desde el check-in: el botón
+    // "← Eventos" apunta al panel de eventos (solo management), así que lo
+    // devolvemos al check-in del evento actual.
+    const backBtn = document.getElementById('btn-back-events');
+    if (backBtn && !IS_MANAGEMENT) {
+        backBtn.href = '/admin/events/' + EVENT_ID + '/checkin';
+        backBtn.textContent = '← Check-in';
+    }
+
+    // Sin permisos destructivos → ocultar columnas "Acciones".
+    if (!IS_MANAGEMENT) {
+        ['th-actions-inc', 'th-actions-bans'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
+    }
 }
 
 async function loadEventName() {
     try {
-        const ev = await apiFetch('/api/events/' + EVENT_ID);
+        // offline-data es accesible para todo el staff del evento (checkin /
+        // intendencia / operator-staff incluidos), a diferencia de
+        // GET /api/events/{id} que requiere rol de monitoreo.
+        const data = await apiFetch('/api/sync/events/' + EVENT_ID + '/offline-data');
         const subtitle = document.getElementById('context-subtitle');
-        if (subtitle && ev && ev.name) {
-            subtitle.innerHTML = 'Evento: <strong class="text-gray-700">' + ev.name + '</strong>';
+        if (subtitle && data && data.name) {
+            subtitle.innerHTML = 'Evento: <strong class="text-gray-700">' + data.name + '</strong>';
         }
     } catch (e) { console.error('loadEventName', e); }
 }
@@ -426,6 +455,10 @@ async function loadIncidents() {
 
 async function loadBans() {
     const params = new URLSearchParams();
+    if (EVENT_ID) {
+        // Modo scoped: solo vetos de operadores asignados a este evento.
+        params.set('event_id', EVENT_ID);
+    }
     const active = document.getElementById('filter-ban-active').value;
     if (active) params.set('is_active', active);
 
@@ -453,12 +486,15 @@ function renderIncidents() {
         );
     }
 
+    // Columnas visibles: 7 base (fecha, evento, operador, tipo, descripción,
+    // registró, acciones) menos las ocultas por scoped / permisos.
+    const isScoped = !!EVENT_ID;
+    const colspanInc = 7 - (isScoped ? 1 : 0) - (IS_MANAGEMENT ? 0 : 1);
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No hay novedades registradas</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + colspanInc + '" class="text-center py-8 text-gray-400">No hay novedades registradas</td></tr>';
         return;
     }
 
-    const isScoped = !!EVENT_ID;
     tbody.innerHTML = filtered.map(i => {
         const date = new Date(i.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
         const badge = 'badge-' + i.incident_type;
@@ -475,17 +511,20 @@ function renderIncidents() {
             '<td class="px-4 py-3 text-sm"><span class="inline-block px-2 py-1 rounded text-xs font-semibold ' + badge + '">' + vetoIcon + label + '</span></td>' +
             '<td class="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title="' + (i.description || '') + '">' + (i.description || '') + '</td>' +
             '<td class="px-4 py-3 text-sm text-gray-500">' + (i.recorder_name || '—') + '</td>' +
-            '<td class="px-4 py-3 text-right">' +
-                '<button onclick="deleteIncident(\'' + i.id + '\')" class="text-red-500 hover:text-red-700 text-xs font-semibold">Eliminar</button>' +
-            '</td>' +
+            (IS_MANAGEMENT ? (
+                '<td class="px-4 py-3 text-right">' +
+                    '<button onclick="deleteIncident(\'' + i.id + '\')" class="text-red-500 hover:text-red-700 text-xs font-semibold">Eliminar</button>' +
+                '</td>'
+            ) : '') +
         '</tr>';
     }).join('');
 }
 
 function renderBans() {
     const tbody = document.getElementById('bans-tbody');
+    const colspanBans = 6 - (IS_MANAGEMENT ? 0 : 1);
     if (allBans.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-400">No hay vetos registrados</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + colspanBans + '" class="text-center py-8 text-gray-400">No hay vetos registrados</td></tr>';
         return;
     }
 
@@ -511,9 +550,11 @@ function renderBans() {
             '</td>' +
             '<td class="px-4 py-3 text-sm">' + statusBadge + extraInfo + '</td>' +
             '<td class="px-4 py-3 text-sm text-gray-500">' + (b.banner_name || '—') + '</td>' +
-            '<td class="px-4 py-3 text-right">' +
-                (isActive ? '<button onclick="reactivateOperator(\'' + b.operator_id + '\')" class="text-green-600 hover:text-green-800 text-xs font-semibold">Reactivar</button>' : '') +
-            '</td>' +
+            (IS_MANAGEMENT ? (
+                '<td class="px-4 py-3 text-right">' +
+                    (isActive ? '<button onclick="reactivateOperator(\'' + b.operator_id + '\')" class="text-green-600 hover:text-green-800 text-xs font-semibold">Reactivar</button>' : '') +
+                '</td>'
+            ) : '') +
         '</tr>';
     }).join('');
 }

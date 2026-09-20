@@ -17,10 +17,10 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies.auth import require_superadmin_or_admin
+from app.dependencies.auth import get_current_active_user, require_incidents_staff, require_superadmin_or_admin
 from app.models.incidents import OperatorIncident, OperatorBan
 from app.models.operators import Operator
-from app.models.events import Event
+from app.models.events import Event, EventAssignment, EventStaffAssignment
 from app.models.users import User
 from app.schemas.incidents import (
     IncidentCreateRequest,
@@ -67,6 +67,44 @@ async def _resolve_user_name(db: AsyncSession, user_id: uuid.UUID | None) -> str
 
 
 # ---------------------------------------------------------------------------
+# Autorización del módulo
+# ---------------------------------------------------------------------------
+
+# Roles con acceso completo al módulo: management + staff de puerta
+# (rol Check-in; intendencia quedó fusionada en check-in).
+INCIDENTS_BASE_ROLES = ("superadmin", "admin", "checkin", "intendencia")
+
+
+async def _require_incidents_access(
+    db: AsyncSession, user: User, event_id: uuid.UUID | None
+) -> None:
+    """Autorización del módulo ⚠️ Incidencias.
+
+    - Roles base (management + checkin/intendencia): acceso completo.
+    - Operadores: solo si tienen EventStaffAssignment ACTIVA con staff_role
+      'checkin'/'intendencia' en el evento de la petición (acceso acotado,
+      mismo criterio que ``sync._resolve_staff_access``).
+
+    Acciones destructivas (eliminar novedad, reactivar veto) NO pasan por
+    aquí: quedan en ``require_superadmin_or_admin``.
+    """
+    if user.user_type in INCIDENTS_BASE_ROLES:
+        return
+    if user.user_type == "operator" and event_id is not None:
+        staff = await db.execute(
+            select(EventStaffAssignment.id).where(
+                EventStaffAssignment.event_id == event_id,
+                EventStaffAssignment.user_id == user.id,
+                EventStaffAssignment.staff_role.in_(("checkin", "intendencia")),
+                EventStaffAssignment.is_active == True,
+            )
+        )
+        if staff.first() is not None:
+            return
+    raise HTTPException(403, "Sin permisos para el módulo de incidencias")
+
+
+# ---------------------------------------------------------------------------
 # Incidents
 # ---------------------------------------------------------------------------
 
@@ -77,9 +115,10 @@ async def list_incidents(
     incident_type: str | None = Query(None),
     limit: int = Query(200, le=500),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin_or_admin),
+    user: User = Depends(get_current_active_user),
 ):
     """Lista novedades con filtros opcionales."""
+    await _require_incidents_access(db, user, event_id)
     stmt = (
         select(OperatorIncident, Event, Operator, User)
         .join(Event, Event.id == OperatorIncident.event_id)
@@ -120,9 +159,10 @@ async def list_incidents(
 async def create_incident(
     payload: IncidentCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin_or_admin),
+    user: User = Depends(get_current_active_user),
 ):
     """Crea una novedad."""
+    await _require_incidents_access(db, user, payload.event_id)
     # Validar existencia de evento y operador
     event = await db.get(Event, payload.event_id)
     if not event:
@@ -183,11 +223,16 @@ async def delete_incident(
 @router.get("/bans", response_model=list[BanResponse])
 async def list_bans(
     is_active: bool | None = Query(None),
+    event_id: uuid.UUID | None = Query(
+        None,
+        description="Filtrar vetos de operadores asignados a este evento (modo scoped)",
+    ),
     limit: int = Query(200, le=500),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin_or_admin),
+    user: User = Depends(get_current_active_user),
 ):
-    """Lista vetos (opcionalmente solo activos)."""
+    """Lista vetos (opcionalmente solo activos y/o de un evento)."""
+    await _require_incidents_access(db, user, event_id)
     stmt = (
         select(OperatorBan, Operator, User)
         .join(Operator, Operator.id == OperatorBan.operator_id)
@@ -197,6 +242,16 @@ async def list_bans(
     )
     if is_active is not None:
         stmt = stmt.where(OperatorBan.is_active == is_active)
+    if event_id is not None:
+        # Solo vetos de operadores asignados al evento (modo scoped del check-in).
+        stmt = stmt.where(
+            OperatorBan.operator_id.in_(
+                select(EventAssignment.operator_id).where(
+                    EventAssignment.event_id == event_id,
+                    EventAssignment.operator_id.isnot(None),
+                )
+            )
+        )
     result = await db.execute(stmt)
     rows = result.all()
     out = []
@@ -223,7 +278,7 @@ async def list_bans(
 async def ban_operator(
     payload: BanCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin_or_admin),
+    user: User = Depends(get_current_active_user),
 ):
     """Veta a un operador.
 
@@ -233,6 +288,7 @@ async def ban_operator(
       3. Crea una novedad tipo 'veto' en el evento (si event_id viene).
       4. Actualiza Operator.is_banned = True.
     """
+    await _require_incidents_access(db, user, payload.event_id)
     operator = await db.get(Operator, payload.operator_id)
     if not operator:
         raise HTTPException(404, "Operador no encontrado")
@@ -350,7 +406,7 @@ async def reactivate_operator(
 async def get_ban_status(
     operator_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_superadmin_or_admin),
+    user: User = Depends(require_incidents_staff),
 ):
     """Estado de veto de un operador."""
     operator = await db.get(Operator, operator_id)
