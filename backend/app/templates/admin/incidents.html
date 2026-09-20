@@ -563,7 +563,7 @@ function renderBans() {
         let extraInfo = '';
         if (!isActive && b.unbanned_at) {
             const unbanDate = new Date(b.unbanned_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
-            extraInfo = '<div class="text-xs text-gray-400 mt-1">Reactivado: ' + unbanDate + (b.unban_reason ? ' — ' + b.unban_reason : '') + '</div>';
+            extraInfo = '<div class="text-xs text-gray-400 mt-1 max-w-xs wrap-anywhere">Reactivado: ' + unbanDate + (b.unban_reason ? ' — ' + b.unban_reason : '') + '</div>';
         }
         return '<tr class="hover:bg-gray-50">' +
             '<td class="px-4 py-3 text-sm text-gray-600">' + date + '</td>' +
