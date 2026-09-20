@@ -240,6 +240,7 @@ async function loadEvent(){
         actions+=`<button onclick="changeEventStatus('cancelled')" class="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 text-xs sm:text-sm">Cancelar</button>`;
     }
     else if(ev.status==='in_progress'){
+        actions+=`<a href="/admin/events/${EVENT_ID}/edit" class="bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-700 text-xs sm:text-sm">✏️ Editar</a>`;
         actions+=`<button onclick="changeEventStatus('completed')" class="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 text-xs sm:text-sm">✓ Completar</button>`;
     }
     // completed: no actions

@@ -364,8 +364,8 @@ async function loadEvent(){
     const res=await fetch(`/api/events/${EVENT_ID}`,{headers:{'Authorization':'Bearer '+token}});
     if(!res.ok){showToast('Error cargando evento','bg-red-500');return}
     const ev=await res.json();
-    if(!['draft','published'].includes(ev.status)){
-        showToast('Solo se pueden editar eventos en borrador o publicados','bg-red-500');
+    if(!['draft','published','in_progress'].includes(ev.status)){
+        showToast('Solo se pueden editar eventos en borrador, publicados o en progreso','bg-red-500');
         setTimeout(()=>window.location.href='/admin/events/'+EVENT_ID,1500);
         return;
     }
