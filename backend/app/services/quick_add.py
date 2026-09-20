@@ -164,7 +164,7 @@ async def quick_add_operator(
         is_active=True,
         reminder_sent=False,
         admitted_by=(admin_display or "QUICK-ADD")[:200],
-        programmed_by=(admin_display or "QUICK-ADD")[:200],
+        programmed_by="Colab A&C",
     )
     db.add(assignment)
     await db.flush()
