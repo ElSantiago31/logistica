@@ -61,12 +61,34 @@ async def get_operators(
         hierarchy_level is in the provided set.
     """
     from sqlalchemy.orm import joinedload
-    from sqlalchemy import or_, func as sa_func
+    from sqlalchemy import or_, and_, func as sa_func
+
+    # Estado combinado para el directorio (pestañas Activos/Inactivos):
+    #   activo   → User.is_active=True y sin veto (Operator.is_banned=False)
+    #   inactivo → User.is_active=False o con veto (Operator.is_banned=True)
+    # Los fantasmas de Incorporación Rápida (event_only, sin email) se
+    # excluyen de inactivos: son registros internos del ciclo del evento.
+    banned_exists = select(Operator.id).where(
+        Operator.user_id == User.id,
+        Operator.is_banned == True,
+    ).exists()
+    ghost_exists = select(Operator.id).where(
+        Operator.user_id == User.id,
+        Operator.event_only == True,
+    ).exists()
+
+    if is_active:
+        state_filter = and_(User.is_active == True, ~banned_exists)
+    else:
+        state_filter = and_(
+            or_(User.is_active == False, banned_exists),
+            ~ghost_exists,
+        )
 
     # Base query for selecting
     query = select(User).where(
         User.user_type == "operator",
-        User.is_active == is_active
+        state_filter,
     ).options(
         selectinload(User.operator_profile).joinedload(Operator.eps),
         selectinload(User.operator_profile).joinedload(Operator.pension_fund),
@@ -75,7 +97,7 @@ async def get_operators(
     # Base count
     count_query = select(func.count()).select_from(User).where(
         User.user_type == "operator",
-        User.is_active == is_active
+        state_filter,
     )
 
     if is_approved is not None:

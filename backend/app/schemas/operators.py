@@ -48,7 +48,7 @@ class OperatorAdminUpdateRequest(OperatorUpdateRequest):
 # Detailed response
 class OperatorResponse(BaseModel):
     id: uuid.UUID
-    email: str
+    email: Optional[str] = None
     first_name: str
     last_name: str
     phone: Optional[str]
