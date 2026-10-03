@@ -30,6 +30,8 @@ from typing import Optional
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -339,6 +341,25 @@ def build_template() -> bytes:
     col_widths = [16, 16, 16, 16, 14, 16, 16, 22, 12, 22, 18, 28, 16, 28, 22, 22, 12]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    # Dropdown de validacion para ETAPA: restringe la celda a los valores
+    # validos (openpyxl DataValidation) y evita typos ('montaje') que
+    # caerian silenciosamente en 'evento' con solo un warning post-import.
+    stage_idx = next(i for i, c in enumerate(EXPECTED_COLUMNS, 1) if c["key"] == "stage")
+    stage_letter = get_column_letter(stage_idx)
+    dv_stage = DataValidation(
+        type="list",
+        formula1=f'"{",".join(EVENT_STAGES)}"',
+        allow_blank=True,
+        showErrorMessage=True,
+        errorTitle="Etapa no valida",
+        error="Valores validos: previa, avanzada, evento, desmontaje (vacio = evento).",
+        showInputMessage=True,
+        promptTitle="Etapa del operador",
+        prompt="Selecciona previa, avanzada, evento o desmontaje. Vacio = evento.",
+    )
+    ws.add_data_validation(dv_stage)
+    dv_stage.add(f"{stage_letter}2:{stage_letter}1001")
 
     # Congelar primera fila
     ws.freeze_panes = "A2"

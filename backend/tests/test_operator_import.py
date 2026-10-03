@@ -541,3 +541,38 @@ async def test_reimport_stage_updates_only_that_stage(client, db, admin_token, s
     assigns = {a.stage: a for a in result.scalars().all()}
     assert str(assigns["previa"].role_id) == str(role_univ.id)
     assert str(assigns["evento"].role_id) == str(role_log.id)
+
+
+def test_template_stage_dropdown_validation():
+    """La plantilla oficial trae dropdown (DataValidation) en la columna ETAPA.
+
+    Evita typos ('montaje') que caerian silenciosamente en 'evento' con
+    solo un warning post-import: el admin queda restringido en Excel a
+    los 4 valores validos.
+    """
+    from app.services.operator_import import build_template, EXPECTED_COLUMNS
+
+    raw = build_template()
+    wb = openpyxl.load_workbook(io.BytesIO(raw))
+    ws = wb.active
+
+    # Encabezado ETAPA presente
+    stage_idx = next(
+        i for i, c in enumerate(EXPECTED_COLUMNS, 1) if c["key"] == "stage"
+    )
+    assert ws.cell(row=1, column=stage_idx).value == "ETAPA"
+
+    # DataValidation tipo lista sobre la columna ETAPA
+    dvs = list(ws.data_validations.dataValidation)
+    assert dvs, "La plantilla debe incluir al menos una validacion de datos"
+    stage_letter = openpyxl.utils.get_column_letter(stage_idx)
+    stage_dv = next(
+        (dv for dv in dvs
+         if dv.type == "list" and str(dv.sqref).startswith(stage_letter)),
+        None,
+    )
+    assert stage_dv is not None, "Falta el dropdown en la columna ETAPA"
+    formula = stage_dv.formula1 or ""
+    for stage in ("previa", "avanzada", "evento", "desmontaje"):
+        assert stage in formula, f"'{stage}' debe estar en el dropdown de ETAPA"
+    assert stage_dv.allow_blank, "ETAPA vacia debe ser permitida (= evento)"
