@@ -1,0 +1,46 @@
+# ==== PEGAR EN LA VPS (terminal SSH, como root) ====
+# Fix del error 500 en "Incorporacion Rapida" (quick-add) del check-in:
+# operadores importados por Excel con tipo "CEDULA"/"PP" no eran
+# encontrados al buscar por (numero AND tipo) -> intento de crear ghost
+# duplicado -> UNIQUE violation -> 500. Ahora la busqueda es SOLO por
+# numero de documento y el tipo se normaliza ("CEDULA"->CC, "PP"->PA, etc).
+# Tambien: admitted_by se trunca a 100 chars y IntegrityError -> 409.
+# Sin migraciones de BD.
+
+cd /opt/logistica
+
+# 1. Bajar el codigo nuevo
+git pull origin master
+
+# 2. Reconstruir y reiniciar (restart solo NO sirve: no reconstruye la imagen)
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Verificar que el codigo nuevo esta dentro del contenedor:
+docker exec logistica_backend grep -c "Admitido mediante Incorporacion Rapida" app/services/quick_add.py
+# Debe imprimir >= 1.
+
+docker exec logistica_backend grep -c '"CEDULA": "CC"' app/services/operator_import.py
+# Debe imprimir >= 1.
+
+# 4. Probar el fix en caliente (crear un operador rapido con un documento
+#    ya importado desde el panel de staff del evento). Antes: error 500
+#    "duplicate key value violates unique constraint". Ahora: 201
+#    mode="existing" (o 409 si ya estaba asignado a ese evento).
+
+# 5. (Opcional) Corregir tipos historicos mal guardados en la BD:
+# docker exec logistica_backend python -c "
+# import asyncio
+# from app.database import get_engine
+# from sqlalchemy import text
+# async def run():
+#     e = get_engine()
+#     async with e.begin() as conn:
+#         n = await conn.execute(text(\"\"\"
+#             UPDATE users SET document_type = 'CC'
+#             WHERE document_type IN ('CEDULA','CEDULA DE CIUDADANIA','C.C.')
+#         \"\"\"))
+#         print('normalizados a CC:', n.rowcount)
+# asyncio.run(run())
+# "
+# NOTA: la app ya funciona sin este paso (la busqueda ignora el tipo),
+# solo es cosmetic/higiene para reportes.

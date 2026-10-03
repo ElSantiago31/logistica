@@ -172,10 +172,12 @@ def _normalize_doc_type(raw: str) -> str:
     mapping = {
         "CEDULA DE CIUDADANIA": "CC",
         "CEDULA CIUDADANIA": "CC",
+        "CEDULA": "CC",
         "C.C.": "CC",
         "CC": "CC",
         "CEDULA DE EXTRANJERIA": "CE",
         "CEDULA EXTRANJERIA": "CE",
+        "EXTRANJERIA": "CE",
         "C.E.": "CE",
         "CE": "CE",
         "TARJETA DE IDENTIDAD": "TI",
@@ -184,6 +186,8 @@ def _normalize_doc_type(raw: str) -> str:
         "TI": "TI",
         "PASAPORTE": "PA",
         "PA": "PA",
+        "PP": "PA",
+        "PPT": "PPT",
     }
     return mapping.get(s, s[:10] if s else "CC")
 
@@ -1110,13 +1114,13 @@ async def _create_operator_profile(db, user_id, eps_id, pf_id, clean, role_id) -
             emergency_contact_name, emergency_contact_phone,
             whatsapp, background_check_status, total_events, is_active,
             experience_roles, has_protocol_experience, event_size_experience,
-            is_banned
+            is_banned, rut_deadline_at
         ) VALUES (
             gen_random_uuid(), :user_id, :eps_id, :pf_id, :birth_date, :gender, :address,
             :emergency_name, :emergency_phone,
             :whatsapp, 'pending', 0, true,
             :experience_roles, true, '100',
-            false
+            false, now() + interval '15 days'
         )
         RETURNING id
     """), {

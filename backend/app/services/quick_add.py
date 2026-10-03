@@ -25,6 +25,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.events import DEFAULT_STAGE, EventAssignment, EventStaffNeed
@@ -44,8 +45,11 @@ async def quick_add_operator(
     """Crea (o reutiliza) un operador y lo asigna confirmado al evento.
 
     Reglas:
-      1. Documento ya registrado como operador real → asignar existente
-         (mode="existing"). NUNCA se crea un ghost sobre un documento real.
+      1. Documento ya registrado como operador real (con CUALQUIER tipo de
+         documento guardado, p. ej. "CEDULA" proveniente de importaciones
+         Excel o "PA") → asignar existente (mode="existing"). NUNCA se
+         crea un ghost sobre un documento real. La búsqueda es SOLO por
+         número: document_number es UNIQUE global en la BD.
       2. Documento ya registrado como ghost (event_only) de otro evento →
          reutilizar el ghost (mode="ghost").
       3. Documento nuevo → crear usuario fantasma + operador event_only
@@ -59,11 +63,13 @@ async def quick_add_operator(
     doc_number = payload.document_number.strip()
 
     # --- Buscar usuario existente por documento ---
+    # IMPORTANTE: buscar SOLO por número. El índice ix_users_document_number
+    # es UNIQUE global (migración inicial) y los tipos guardados no siempre
+    # son canónicos: importaciones Excel guardan "CEDULA" o "PA" mientras
+    # el formulario envía "CC"/"PP". Filtrar también por tipo hacía que no
+    # se encontrara al usuario y el INSERT del ghost violara el UNIQUE → 500.
     res = await db.execute(
-        select(User).where(
-            User.document_number == doc_number,
-            User.document_type == doc_type,
-        )
+        select(User).where(User.document_number == doc_number)
     )
     existing_user = res.scalar_one_or_none()
 
@@ -119,71 +125,84 @@ async def quick_add_operator(
         first_name = f"{first_name} {payload.segundo_nombre.strip()}"
 
     # --- Crear ghost si aplica ---
-    if operator is None:
-        if existing_user is None:
-            ghost_user = User(
-                email=None,
-                password_hash=hash_password(secrets.token_urlsafe(24)),
-                first_name=first_name[:100],
-                last_name=(last_name or "SIN APELLIDO")[:100],
-                phone=None,
-                document_type=doc_type,
-                document_number=doc_number,
-                user_type="operator",
-                role_id=role_id,
-                is_verified=False,
-                is_approved=False,
-                is_active=False,  # fantasma: no puede iniciar sesión
+    # IntegrityError → 409: protege contra doble-clic del staff y contra
+    # dos agregando el mismo documento simultáneamente (carrera TOCTOU).
+    try:
+        if operator is None:
+            if existing_user is None:
+                ghost_user = User(
+                    email=None,
+                    password_hash=hash_password(secrets.token_urlsafe(24)),
+                    first_name=first_name[:100],
+                    last_name=(last_name or "SIN APELLIDO")[:100],
+                    phone=None,
+                    document_type=doc_type,
+                    document_number=doc_number,
+                    user_type="operator",
+                    role_id=role_id,
+                    is_verified=False,
+                    is_approved=False,
+                    is_active=False,  # fantasma: no puede iniciar sesión
+                )
+                db.add(ghost_user)
+                await db.flush()
+                user = ghost_user
+            else:
+                # User sin perfil Operator (raro) → reutilizar user
+                user = existing_user
+
+            operator = Operator(
+                user_id=user.id,
+                event_only=True,  # ← marca de purga
             )
-            db.add(ghost_user)
+            db.add(operator)
             await db.flush()
-            user = ghost_user
         else:
-            # User sin perfil Operator (raro) → reutilizar user
             user = existing_user
 
-        operator = Operator(
-            user_id=user.id,
-            event_only=True,  # ← marca de purga
+        # --- Crear asignación confirmada ---
+        now = datetime.now(timezone.utc)
+        assignment = EventAssignment(
+            event_id=event_id,
+            operator_id=operator.id,
+            role_id=role_id,
+            rate_applied=rate,
+            status="confirmed",
+            stage=DEFAULT_STAGE,
+            confirmed_at=now,
+            is_active=True,
+            reminder_sent=False,
+            admitted_by=(admin_display or "QUICK-ADD")[:100],
+            programmed_by="Colab A&C",
         )
-        db.add(operator)
+        db.add(assignment)
         await db.flush()
-    else:
-        user = existing_user
 
-    # --- Crear asignación confirmada ---
-    now = datetime.now(timezone.utc)
-    assignment = EventAssignment(
-        event_id=event_id,
-        operator_id=operator.id,
-        role_id=role_id,
-        rate_applied=rate,
-        status="confirmed",
-        stage=DEFAULT_STAGE,
-        confirmed_at=now,
-        is_active=True,
-        reminder_sent=False,
-        admitted_by=(admin_display or "QUICK-ADD")[:200],
-        programmed_by="Colab A&C",
-    )
-    db.add(assignment)
-    await db.flush()
-
-    # --- Recalcular quantity_confirmed del staff_need usado ---
-    if need is not None and role_id is not None:
-        cnt = await db.execute(
-            select(EventAssignment.id).where(
-                EventAssignment.event_id == event_id,
-                EventAssignment.role_id == role_id,
-                EventAssignment.stage == DEFAULT_STAGE,
-                EventAssignment.status == "confirmed",
-                EventAssignment.is_active.is_(True),
+        # --- Recalcular quantity_confirmed del staff_need usado ---
+        if need is not None and role_id is not None:
+            cnt = await db.execute(
+                select(EventAssignment.id).where(
+                    EventAssignment.event_id == event_id,
+                    EventAssignment.role_id == role_id,
+                    EventAssignment.stage == DEFAULT_STAGE,
+                    EventAssignment.status == "confirmed",
+                    EventAssignment.is_active.is_(True),
+                )
             )
-        )
-        need.quantity_confirmed = len(cnt.all())
-        await db.flush()
+            need.quantity_confirmed = len(cnt.all())
+            await db.flush()
 
-    await db.commit()
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El documento ya fue registrado mientras se procesaba la "
+                "solicitud (posible doble clic). Verifique la lista e "
+                "intente de nuevo."
+            ),
+        )
     await db.refresh(assignment)
     await db.refresh(operator)
     await db.refresh(user)
