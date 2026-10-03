@@ -32,23 +32,15 @@
         <!-- Filtro por etapa -->
         <div id="stageFilter" class="flex flex-wrap gap-2 mb-4"></div>
 
-        <!-- Anillos SVG -->
-        <div class="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow p-4 text-center">
-                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
+        <!-- Anillo SVG -->
+        <div class="max-w-xs mx-auto mb-6">
+            <div class="bg-white rounded-xl shadow p-5 text-center">
+                <svg viewBox="0 0 120 120" class="w-32 h-32 mx-auto">
                     <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
                     <circle id="ringCheckin" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#16a34a" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
                 </svg>
-                <p class="text-2xl font-bold text-gray-800 mt-2"><span id="txtCheckin">0</span><span class="text-sm text-gray-400">/<span id="txtCheckinReq">0</span></span></p>
+                <p class="text-3xl font-bold text-gray-800 mt-2"><span id="txtCheckin">0</span><span class="text-sm text-gray-400">/<span id="txtCheckinReq">0</span></span></p>
                 <p class="text-xs text-gray-500">Check-in global</p>
-            </div>
-            <div class="bg-white rounded-xl shadow p-4 text-center">
-                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
-                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
-                    <circle id="ringNoShow" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#7c3aed" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
-                </svg>
-                <p class="text-2xl font-bold text-gray-800 mt-2" id="txtNoShow">0</p>
-                <p class="text-xs text-gray-500">No-show / Rechazados</p>
             </div>
         </div>
 
@@ -130,9 +122,6 @@
                 setRing('ringCheckin', t.checkin_pct);
                 document.getElementById('txtCheckin').textContent = t.checked_in;
                 document.getElementById('txtCheckinReq').textContent = required;
-
-                setRing('ringNoShow', t.assigned ? (t.no_show + t.rejected) / t.assigned * 100 : 0);
-                document.getElementById('txtNoShow').textContent = t.no_show + t.rejected;
 
                 // Anillos por rol (check-ins / requeridos del plan)
                 document.getElementById('roleRings').innerHTML = (d.by_role || []).map(r => {
