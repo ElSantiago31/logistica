@@ -16,7 +16,7 @@ from app.services.operators import (
     upload_operator_photo, block_operator, unblock_operator, search_blocked_documents
 )
 from app.services.photos import save_operator_photo_bytes, delete_operator_photos
-from app.services.documents import delete_rut_pdf, delete_id_document_photos
+from app.services.documents import delete_rut_pdf, delete_id_document_photos, save_rut_pdf_bytes
 from app.models.audit import AuditLog
 from app.dependencies.auth import get_current_active_user, require_superadmin_or_admin, require_superadmin
 
@@ -146,6 +146,11 @@ async def get_my_profile(
             "experience_roles": operator.experience_roles if operator else None,
             "photo_path": operator.photo_path if operator else None,
             "photo_thumbnail_path": operator.photo_thumbnail_path if operator else None,
+            # Estado del RUT (registro opcional con plazo de 15 días)
+            "rut_path": operator.rut_path if operator else None,
+            "has_rut": bool(operator.rut_path) if operator else False,
+            "rut_deadline_at": str(operator.rut_deadline_at) if operator and operator.rut_deadline_at else None,
+            "rut_days_remaining": operator.rut_days_remaining if operator else None,
         } if operator else {},
     }
 
@@ -204,6 +209,61 @@ async def update_my_profile(
 
     await db.commit()
     return {"message": "Perfil actualizado correctamente"}
+
+
+@router.post("/me/rut")
+async def upload_my_rut(
+    rut: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Self-service RUT upload from the operator's own profile.
+
+    Para operadores que se registraron sin RUT (ahora opcional): valida,
+    comprime y guarda el PDF; al subirlo se limpia el plazo
+    (rut_deadline_at) y se desbloquea la asignación a eventos.
+    """
+    from app.config import settings
+
+    if current_user.user_type != "operator":
+        raise HTTPException(status_code=403, detail="Solo los operadores pueden subir su RUT")
+
+    result = await db.execute(
+        select(Operator).where(Operator.user_id == current_user.id)
+    )
+    operator = result.scalar_one_or_none()
+    if not operator:
+        raise HTTPException(status_code=404, detail="Perfil de operador no encontrado")
+
+    # Validación básica (el servicio re-valida magic bytes + comprime)
+    rut.file.seek(0, 2)
+    file_size = rut.file.tell()
+    rut.file.seek(0)
+    if file_size > settings.RUT_MAX_SIZE_MB * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Archivo muy grande. Máximo {settings.RUT_MAX_SIZE_MB}MB.",
+        )
+    if rut.content_type not in ("application/pdf",):
+        raise HTTPException(status_code=400, detail="Formato inválido. El RUT debe ser un archivo PDF.")
+
+    try:
+        contents = await rut.read()
+        delete_rut_pdf(operator.rut_path)  # borrar archivo anterior si existía
+        operator.rut_path = save_rut_pdf_bytes(contents, current_user.id)
+        operator.rut_deadline_at = None  # RUT cargado: el plazo deja de aplicar
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando el RUT: {str(e)}")
+
+    return {
+        "message": "RUT actualizado correctamente",
+        "rut_path": operator.rut_path,
+        "has_rut": True,
+        "rut_days_remaining": None,
+    }
 
 
 # --- Pending approvals (superadmin/admin) ---

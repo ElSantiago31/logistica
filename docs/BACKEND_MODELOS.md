@@ -110,12 +110,18 @@ Todos los modelos heredan de esta clase. Proporciona:
 | `total_events` | Integer | default 0 | Total eventos participados |
 | `experience_roles` | Text | "JSON list of role IDs" | Roles con experiencia (JSON) |
 | `notes` | Text | — | Notas |
+| `rut_path` | String(500) | nullable | Ruta del RUT (PDF) cargado |
+| `rut_deadline_at` | DateTime(tz) | nullable | Plazo límite (15 días) para subir el RUT si se registró sin él |
 
 **Relaciones:**
 - `user` → `User` (uno a uno, inversa)
 - `eps` → `EPS` (muchos a uno)
 - `arl` → `ARL` (muchos a uno)
 - `event_assignments` → `EventAssignment[]` (uno a muchos)
+
+**Propiedades derivadas (RUT):**
+- `rut_blocked` → `True` si no hay `rut_path` Y `rut_deadline_at` ya venció (no asignable a nuevos eventos; asignaciones existentes y check-in siguen funcionando). Con `rut_deadline_at NULL` (legacy) es `False`.
+- `rut_days_remaining` → días restantes del plazo (0 si venció; `None` si hay RUT o no hay deadline).
 
 ---
 
@@ -400,6 +406,7 @@ Las migraciones se gestionan con Alembic en `backend/alembic/versions/`:
 | `4324281308a3_add_operator_experience_sizes.py` | Campos de experiencia y tallas |
 | `add_education_level.py` | Campo nivel educativo |
 | `add_experience_roles.py` | Campo roles con experiencia (JSON) |
+| `add_rut_deadline.py` | Columna `operators.rut_deadline_at` + backfill 15 días para operadores activos sin RUT |
 
 **Comando para crear migración:**
 ```bash

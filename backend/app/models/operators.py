@@ -1,9 +1,17 @@
 """Operator model - extended profile for operator users."""
+import math
 import uuid
-from sqlalchemy import Boolean, String, ForeignKey, Date, Text, text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, String, ForeignKey, Date, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
+
+
+def _as_utc_naive(dt: datetime) -> datetime:
+    """Normaliza a datetime naive en UTC (algunos drivers devuelven aware)."""
+    return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
 class Operator(BaseModel):
@@ -24,6 +32,11 @@ class Operator(BaseModel):
     rut_path: Mapped[str | None] = mapped_column(
         String(500), nullable=True,
         comment="Ruta del PDF del RUT comprimido (/static/rut/...)",
+    )
+    # Plazo para subir el RUT cuando el registro se hizo sin él (opcional).
+    rut_deadline_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Plazo (UTC) para subir el RUT tras registro sin él; NULL = RUT cargado o no aplica",
     )
     # Fotos de la cédula (frente y dorso) — obligatorias en registro, WebP comprimido
     id_document_front_path: Mapped[str | None] = mapped_column(
@@ -70,6 +83,23 @@ class Operator(BaseModel):
         Boolean, default=False, server_default=text("false"), nullable=False,
         comment="True: operador 'solo evento' (Incorporación Rápida). Usuario fantasma inactivo.",
     )
+
+    # --- RUT: estado derivado (fuente única de verdad para todo el sistema) ---
+
+    @property
+    def rut_blocked(self) -> bool:
+        """Sin RUT y con plazo vencido: no puede asignarse a nuevos eventos."""
+        if self.rut_path or not self.rut_deadline_at:
+            return False
+        return datetime.utcnow() > _as_utc_naive(self.rut_deadline_at)
+
+    @property
+    def rut_days_remaining(self) -> int | None:
+        """Días restantes del plazo del RUT (None si no hay plazo activo)."""
+        if self.rut_path or not self.rut_deadline_at:
+            return None
+        remaining = _as_utc_naive(self.rut_deadline_at) - datetime.utcnow()
+        return max(0, math.ceil(remaining.total_seconds() / 86400))
 
     # Relationships
     user = relationship("User", back_populates="operator_profile")

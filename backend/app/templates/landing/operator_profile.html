@@ -75,6 +75,18 @@
     </div>
   </div>
 
+  <div id="rut-card" class="hidden profile-card">
+    <h2 class="font-semibold text-gray-700 border-b pb-2 mb-4">📄 Mi RUT</h2>
+    <div id="rut-status-box" class="rounded-lg p-3 mb-3 text-sm"></div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <input type="file" id="rut-file" accept="application/pdf" class="hidden">
+      <button type="button" id="rut-upload-btn" onclick="document.getElementById('rut-file').click()" class="px-4 py-2 rounded-lg text-sm font-medium border transition" style="border-color:rgba(207,155,98,0.4);color:#cf9b62;background:rgba(207,155,98,0.08)">📄 Subir RUT (PDF)</button>
+      <a id="rut-view-link" href="#" target="_blank" class="hidden px-4 py-2 rounded-lg text-sm font-medium border transition" style="border-color:rgba(74,222,128,0.4);color:#4ade80;background:rgba(74,222,128,0.08)">Ver RUT cargado</a>
+      <p id="rut-status" class="text-xs mt-1 hidden w-full"></p>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">PDF únicamente. Máximo 5MB. Se comprime automáticamente.</p>
+  </div>
+
   <form id="profile-form" class="hidden space-y-6">
     <div class="profile-card space-y-4">
       <h2 class="font-semibold text-gray-700 border-b pb-2">📋 Datos Personales</h2>
@@ -347,6 +359,42 @@ document.getElementById('photo-file').addEventListener('change', async function(
   } catch(e) { status.textContent = '⚠️ Error de conexión'; status.className = 'text-xs mt-1 text-red-600'; }
 });
 
+// ── RUT: subida self-service y estado del plazo ──
+document.getElementById('rut-file').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { alert('El RUT debe ser un archivo PDF'); e.target.value=''; return; }
+  if (file.size > 5*1024*1024) { alert('Máximo 5MB'); e.target.value=''; return; }
+  const status = document.getElementById('rut-status');
+  status.textContent = 'Subiendo y comprimiendo RUT...'; status.classList.remove('hidden');
+  status.className = 'text-xs mt-1 w-full'; status.style.color = '#cf9b62';
+  const formData = new FormData(); formData.append('rut', file);
+  try {
+    const resp = await fetch('/api/operators/me/rut', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
+    if (resp.ok) { status.textContent = '✅ RUT actualizado correctamente'; status.style.color = '#4ade80'; e.target.value=''; loadProfile(); }
+    else { const err = await resp.json(); status.textContent = '⚠️ ' + (err.detail || 'Error'); status.style.color = '#e87c6f'; }
+  } catch(err) { status.textContent = '⚠️ Error de conexión'; status.style.color = '#e87c6f'; }
+});
+
+function renderRutStatus(o) {
+  const card = document.getElementById('rut-card');
+  const box = document.getElementById('rut-status-box');
+  const viewLink = document.getElementById('rut-view-link');
+  card.classList.remove('hidden');
+  if (o.has_rut) {
+    box.innerHTML = '✅ RUT cargado y verificado. Tu cuenta está al día.';
+    box.style.background = 'rgba(74,222,128,0.1)'; box.style.color = '#4ade80';
+    if (o.rut_path) { viewLink.href = o.rut_path; viewLink.classList.remove('hidden'); }
+  } else if (o.rut_days_remaining !== null && o.rut_days_remaining !== undefined && o.rut_days_remaining > 0) {
+    const d = o.rut_days_remaining;
+    box.innerHTML = '⏳ <strong>Registro incompleto:</strong> falta tu RUT. Tienes <strong>' + d + ' día' + (d===1?'':'s') + '</strong> para subirlo desde esta página. Pasado el plazo no podrás ser asignado a nuevos eventos hasta cargarlo.';
+    box.style.background = 'rgba(207,155,98,0.12)'; box.style.color = '#cf9b62';
+  } else {
+    box.innerHTML = '🚫 <strong>Plazo vencido:</strong> no cargaste tu RUT a tiempo. <strong>No puedes ser asignado a nuevos eventos</strong> hasta subirlo. Súbelo ahora mismo desde esta página para desbloquear tu cuenta.';
+    box.style.background = 'rgba(232,124,111,0.12)'; box.style.color = '#e87c6f';
+  }
+}
+
 async function loadProfile() {
   if (!token) { document.getElementById('not-logged').classList.remove('hidden'); return; }
   try {
@@ -366,6 +414,7 @@ async function loadProfile() {
     } else {
       avatarEl.innerHTML = '<span class="text-3xl font-bold text-gray-400">'+(f.first_name?f.first_name[0]:'')+(f.last_name?f.last_name[0]:'')+'</span>';
     }
+    renderRutStatus(o);
     document.getElementById('first_name').value = f.first_name || '';
     document.getElementById('last_name').value = f.last_name || '';
     document.getElementById('document_type').value = f.document_type || '';

@@ -38,6 +38,8 @@ from app.models.events import (
     Event, EventStaffNeed, EventAssignment, EventAuditLog, EventCoordinatorQuota,
     EVENT_STAGES, DEFAULT_STAGE,
 )
+from fastapi import HTTPException
+
 from app.models.operators import Operator
 from app.models.roles import Role
 from app.models.users import User
@@ -229,8 +231,29 @@ async def _count_used_by_coordinator(
     return 0
 
 
+async def _validate_role_ids(db: AsyncSession, role_ids: set[uuid.UUID]) -> None:
+    """Valida que todos los role_id existan en la tabla roles.
+
+    Evita un 500 (ForeignKeyViolation) cuando el frontend envia IDs de roles
+    de otra base de datos / cache del navegador: en su lugar responde 400.
+    """
+    if not role_ids:
+        return
+    rows = (await db.execute(
+        select(Role.id).where(Role.id.in_(list(role_ids)))
+    )).scalars().all()
+    missing = role_ids - set(rows)
+    if missing:
+        raise HTTPException(
+            400,
+            "Roles inválidos (no existen): actualice la página y seleccione "
+            "los roles de nuevo. IDs: " + ", ".join(sorted(str(m) for m in missing)),
+        )
+
+
 async def create_event(db: AsyncSession, data: EventCreate, user_id: uuid.UUID) -> Event:
     """Create event with staff needs."""
+    await _validate_role_ids(db, {n.role_id for n in data.staff_needs})
     event = Event(
         name=data.name,
         description=data.description,
@@ -363,6 +386,10 @@ async def update_event(db: AsyncSession, event_id: uuid.UUID, data: EventUpdate,
                 "education_level": sn.education_level,
                 "stage": sn.stage or DEFAULT_STAGE,
             })
+        # Validar roles ANTES de borrar los needs existentes (si falla,
+        # el evento conserva su plan de personal original).
+        await _validate_role_ids(db, {n['role_id'] for n in staff_needs_data})
+
         for sn in existing:
             await db.delete(sn)
         await db.flush()
@@ -708,6 +735,20 @@ async def assign_operators(
         )
         operator = op_result.scalar_one_or_none()
         if not operator:
+            continue
+
+        # RUT vencido: operador registrado sin RUT cuyo plazo de gracia
+        # (rut_deadline_at) ya expiró. No puede asignarse a NUEVOS eventos;
+        # las asignaciones existentes y el check-in siguen funcionando.
+        # Se desbloquea solo cuando sube el RUT desde su perfil (POST /me/rut).
+        if operator.rut_blocked:
+            unavailable.append({
+                "operator_id": str(operator.id),
+                "user_id": str(operator.user_id),
+                "conflict_event": None,
+                "conflict_event_id": None,
+                "reason": "RUT pendiente: el plazo para subirlo venció. El operador debe subirlo desde su perfil.",
+            })
             continue
 
         # Check not already assigned to THIS event AND stage

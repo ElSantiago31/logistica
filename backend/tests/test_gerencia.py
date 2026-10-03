@@ -199,7 +199,8 @@ async def test_monitoring_overview_200(client: AsyncClient, monitoring_env, gere
     assert t["confirmed"] == 1
     assert t["checked_in"] == 2
     assert t["pending_checkin"] == 1
-    assert t["checkin_pct"] == 66.7  # 2/(1+2): checked_in sobre confirmados+ingresados
+    assert t["required"] == 3  # personal requerido del plan (EventStaffNeed)
+    assert t["checkin_pct"] == 66.7  # 2/3: checked_in sobre personal REQUERIDO
     assert data["event"]["client_name"] == "Cliente SAC"
     assert len(data["by_role"]) == 1
     assert data["by_role"][0]["needed"] == 3
@@ -222,6 +223,7 @@ async def test_monitoring_events_list_200(client: AsyncClient, monitoring_env, g
     assert any(i["name"] == "Evento Gerencia 360" for i in items)
     ev = next(i for i in items if i["name"] == "Evento Gerencia 360")
     assert ev["confirmed"] == 1 and ev["checked_in"] == 2
+    assert ev["required"] == 3  # personal requerido del plan (EventStaffNeed)
 
 
 @pytest.mark.asyncio
@@ -271,6 +273,112 @@ async def test_gerencia_cannot_write_events(client: AsyncClient, monitoring_env,
         json={"password": "password"}, headers=headers,
     )
     assert r3.status_code == 403, r3.text
+
+
+@pytest.fixture
+async def stages_env(db: AsyncSession):
+    """Evento con 2 etapas (previa y evento) para probar el filtro ?stage=."""
+    event = Event(
+        id=uuid.uuid4(), name="Evento Etapas",
+        start_date=datetime(2026, 9, 12, 8, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 9, 12, 18, 0, 0, tzinfo=timezone.utc),
+        location="Corferias", status="published",
+    )
+    db.add(event)
+    await db.flush()
+
+    role = Role(name="Mesero Etapas", slug="mes-etp", hierarchy_level=5)
+    db.add(role)
+    await db.flush()
+
+    # Plan: 2 en previa, 3 en evento
+    db.add(EventStaffNeed(
+        event_id=event.id, role_id=role.id,
+        quantity_needed=2, quantity_confirmed=0, stage="previa",
+    ))
+    db.add(EventStaffNeed(
+        event_id=event.id, role_id=role.id,
+        quantity_needed=3, quantity_confirmed=0, stage="evento",
+    ))
+
+    # Asignaciones: 1 checked_in en previa, 1 checked_in + 1 confirmed en evento
+    from app.models.sync import AttendanceLog
+    for i, (st, stage_) in enumerate([
+        ("checked_in", "previa"),
+        ("checked_in", "evento"),
+        ("confirmed", "evento"),
+    ]):
+        u = User(
+            id=uuid.uuid4(), email=None,
+            password_hash=hash_password("password"),
+            first_name="Op", last_name=f"E{i}",
+            user_type="operator", document_type="CC",
+            document_number=f"9920{i}", is_verified=True, is_approved=True,
+        )
+        db.add(u)
+        await db.flush()
+        op = Operator(user_id=u.id, city="Bogota")
+        db.add(op)
+        await db.flush()
+        assignment = EventAssignment(
+            event_id=event.id, operator_id=op.id, role_id=role.id,
+            status=st, stage=stage_, programmed_by="JUAN",
+            admitted_by="JUAN" if st == "checked_in" else None,
+        )
+        db.add(assignment)
+        await db.flush()
+        if st == "checked_in":
+            # Log de asistencia para que el feed tenga registros filtrables
+            db.add(AttendanceLog(
+                event_id=event.id, operator_id=op.id,
+                assignment_id=assignment.id,
+                check_in_time=datetime(2026, 9, 12, 7, 30 + i, 0, tzinfo=timezone.utc),
+                check_in_method="manual", verified_by=u.id, is_offline=False,
+            ))
+    await db.commit()
+    return {"event_id": str(event.id)}
+
+
+@pytest.mark.asyncio
+async def test_overview_stage_filter(client: AsyncClient, stages_env, gerencia_env):
+    """El overview filtra totales/roles/feed a la etapa seleccionada."""
+    tok = await _login(client, "99002")
+    headers = {"Authorization": f"Bearer {tok}"}
+    ev_id = stages_env["event_id"]
+
+    # Sin filtro: todo el evento (5 requeridos, 2 checked_in)
+    r = await client.get(f"/api/monitoring/events/{ev_id}/overview", headers=headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert sorted(d["stages"]) == ["evento", "previa"]
+    assert d["totals"]["required"] == 5
+    assert d["totals"]["checked_in"] == 2
+    assert d["totals"]["assigned"] == 3
+    assert len(d["by_role"]) == 2  # un need por etapa
+
+    # Filtro previa: 2 requeridos, 1 checked_in, 1 asignado
+    r = await client.get(f"/api/monitoring/events/{ev_id}/overview?stage=previa", headers=headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["stage"] == "previa"
+    assert d["totals"]["required"] == 2
+    assert d["totals"]["checked_in"] == 1
+    assert d["totals"]["assigned"] == 1
+    assert d["totals"]["checkin_pct"] == 50.0  # 1/2 sobre requeridos
+    assert len(d["by_role"]) == 1
+    assert d["by_role"][0]["stage"] == "previa"
+    assert d["by_role"][0]["needed"] == 2
+    assert d["by_role"][0]["checked_in"] == 1
+    assert len(d["recent_checkins"]) == 1  # feed filtrado por etapa
+
+    # Filtro evento: 3 requeridos, 1 checked_in, 1 confirmado pendiente
+    r = await client.get(f"/api/monitoring/events/{ev_id}/overview?stage=evento", headers=headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["totals"]["required"] == 3
+    assert d["totals"]["checked_in"] == 1
+    assert d["totals"]["pending_checkin"] == 1
+    assert d["totals"]["checkin_pct"] == 33.3  # 1/3 sobre requeridos
 
 
 @pytest.mark.asyncio

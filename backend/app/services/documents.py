@@ -174,6 +174,24 @@ def save_rut_pdf(data_url: str, operator_user_id) -> str:
     return _build_url(rut_name)
 
 
+def save_rut_pdf_bytes(raw: bytes, operator_user_id) -> str:
+    """Save operator RUT PDF from raw bytes (self-service upload from profile).
+
+    Same validation + compression as save_rut_pdf, but takes bytes
+    (e.g. from an UploadFile) instead of a base64 data URL.
+    """
+    if not raw[:4] == _PDF_MAGIC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El archivo no es un PDF válido",
+        )
+    compressed = _compress_pdf(raw)
+    base_name = f"rut_{str(operator_user_id).replace('-', '')[:16]}"
+    rut_name = f"{base_name}.pdf"
+    _persist_file(rut_name, compressed)
+    return _build_url(rut_name)
+
+
 def delete_rut_pdf(rut_url: str | None) -> None:
     """Delete stored RUT file by its URL path. Safe to call with None."""
     if not rut_url:

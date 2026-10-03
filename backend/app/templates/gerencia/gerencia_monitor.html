@@ -29,6 +29,9 @@
             </div>
         </div>
 
+        <!-- Filtro por etapa -->
+        <div id="stageFilter" class="flex flex-wrap gap-2 mb-4"></div>
+
         <!-- Anillos SVG -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
             <div class="bg-white rounded-xl shadow p-4 text-center">
@@ -36,7 +39,7 @@
                     <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
                     <circle id="ringCheckin" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#16a34a" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
                 </svg>
-                <p class="text-2xl font-bold text-gray-800 mt-2" id="txtCheckin">0%</p>
+                <p class="text-2xl font-bold text-gray-800 mt-2"><span id="txtCheckin">0</span><span class="text-sm text-gray-400">/<span id="txtCheckinReq">0</span></span></p>
                 <p class="text-xs text-gray-500">Check-in global</p>
             </div>
             <div class="bg-white rounded-xl shadow p-4 text-center">
@@ -63,6 +66,12 @@
                 <p class="text-2xl font-bold text-gray-800 mt-2" id="txtNoShow">0</p>
                 <p class="text-xs text-gray-500">No-show / Rechazados</p>
             </div>
+        </div>
+
+        <!-- Anillos por rol -->
+        <div class="bg-white rounded-xl shadow p-4 mb-6">
+            <h2 class="text-sm font-bold text-gray-700 mb-3">Avance por rol <span class="text-xs text-gray-400 font-normal">(check-ins / requeridos)</span></h2>
+            <div id="roleRings" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
         </div>
 
         <!-- Tablas -->
@@ -126,10 +135,28 @@
             return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
+        let currentStage = null;
+
+        function setStage(s) {
+            currentStage = s;
+            refresh();
+        }
+
+        function renderStages(stages) {
+            const wrap = document.getElementById('stageFilter');
+            if (!stages || stages.length <= 1) { wrap.innerHTML = ''; return; }
+            const mk = (val, label, active) =>
+                `<button onclick="setStage(${val ? `'${val}'` : 'null'})" class="px-3 py-1.5 rounded-lg text-xs font-semibold capitalize ${active ? 'text-white' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'}" ${active ? 'style="background:#785631"' : ''}>${label}</button>`;
+            wrap.innerHTML = [
+                mk(null, 'todas las etapas', !currentStage),
+                ...stages.map(s => mk(s, s, currentStage === s)),
+            ].join('');
+        }
+
         async function refresh() {
             const token = localStorage.getItem('access_token');
             try {
-                const resp = await fetch(`/api/monitoring/events/${EVENT_ID}/overview`, {
+                const resp = await fetch(`/api/monitoring/events/${EVENT_ID}/overview${currentStage ? '?stage=' + currentStage : ''}`, {
                     headers: { 'Authorization': 'Bearer ' + token },
                 });
                 if (resp.status === 401) { location.href = '/admin/login'; return; }
@@ -144,12 +171,19 @@
                 ].filter(Boolean).join(' · ');
                 document.getElementById('updatedAt').textContent = 'Actualizado: ' + fmtTime(d.updated_at);
 
+                // Selector de etapa (los anillos y tablas responden a la etapa)
+                renderStages(d.stages);
+
                 // Anillos
                 const t = d.totals || {};
-                setRing('ringCheckin', t.checkin_pct);
-                document.getElementById('txtCheckin').textContent = t.checkin_pct + '%';
-
                 const needed = (d.by_role || []).reduce((a, r) => a + (r.needed || 0), 0);
+                // Personal REQUERIDO (plan de personal), no los invitados
+                const required = t.required || needed;
+
+                setRing('ringCheckin', t.checkin_pct);
+                document.getElementById('txtCheckin').textContent = t.checked_in;
+                document.getElementById('txtCheckinReq').textContent = required;
+
                 setRing('ringConfirm', needed ? t.confirmed / needed * 100 : 0);
                 document.getElementById('txtConfirm').textContent = t.confirmed;
                 document.getElementById('txtNeeded').textContent = needed;
@@ -159,6 +193,22 @@
 
                 setRing('ringNoShow', t.assigned ? (t.no_show + t.rejected) / t.assigned * 100 : 0);
                 document.getElementById('txtNoShow').textContent = t.no_show + t.rejected;
+
+                // Anillos por rol (check-ins / requeridos del plan)
+                document.getElementById('roleRings').innerHTML = (d.by_role || []).map(r => {
+                    const pct = r.needed ? Math.round(r.checked_in / r.needed * 100) : 0;
+                    const color = pct >= 90 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444';
+                    const off = CIRC * (1 - Math.min(pct, 100) / 100);
+                    return `<div class="bg-gray-50 rounded-xl p-3 text-center">
+                        <svg viewBox="0 0 120 120" class="w-16 h-16 mx-auto">
+                            <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
+                            <circle class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="${color}" stroke-dasharray="326.7" stroke-dashoffset="${off}" transform="rotate(-90 60 60)"/>
+                        </svg>
+                        <p class="text-base font-bold text-gray-800 mt-1">${r.checked_in}<span class="text-xs text-gray-400">/${r.needed}</span></p>
+                        <p class="text-xs text-gray-600 font-semibold truncate" title="${r.role_name}">${r.role_name}</p>
+                        <p class="text-[10px] text-gray-400">${r.confirmed} conf · ${r.stage}</p>
+                    </div>`;
+                }).join('') || '<p class="text-sm text-gray-400 col-span-full text-center py-3">Sin roles en el plan de personal</p>';
 
                 // Por rol
                 document.getElementById('byRole').innerHTML = (d.by_role || []).map(r => `

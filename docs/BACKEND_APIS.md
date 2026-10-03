@@ -139,6 +139,8 @@ Algunos endpoints usan `@limiter.limit("N/minute")` via slowapi:
 | `GET` | `/api/operators/profile` | Obtener mi perfil |
 | `PUT` | `/api/operators/profile` | Actualizar mi perfil |
 | `POST` | `/api/operators/photo/enrollment` | Subir foto durante enrolamiento |
+| `GET` | `/api/operators/me/profile` | Mi perfil completo (incluye estado RUT: `has_rut`, `rut_days_remaining`, `rut_deadline_at`) |
+| `POST` | `/api/operators/me/rut` | Subir RUT en PDF (self-service). Limpia `rut_deadline_at` y desbloquea la asignación a eventos |
 
 ### Endpoints Admin (coordinator/superadmin)
 

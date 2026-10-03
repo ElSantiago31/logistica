@@ -235,8 +235,11 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
     # Process and save the mandatory photo (validates + normalizes)
     photo_name, thumb_name = save_operator_photo(body.photo_data, user.id)
 
-    # Process and save the mandatory RUT PDF (validates + compresses)
-    rut_path = save_rut_pdf(body.rut_data, user.id)
+    # RUT opcional: si no viene, el operador tiene 15 días para subirlo
+    # desde su perfil (operators.rut_deadline_at); vencido el plazo no
+    # puede asignarse a nuevos eventos (ver Operator.rut_blocked).
+    rut_path = save_rut_pdf(body.rut_data, user.id) if body.rut_data else None
+    rut_deadline = None if rut_path else datetime.utcnow() + timedelta(days=15)
 
     # Cédula: fotos obligatorias frente y dorso (valida + comprime a WebP)
     id_doc_front_path = save_id_document_photo(body.id_document_front_data, user.id, "front")
@@ -264,6 +267,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
         ghost_operator.photo_path = photo_name
         ghost_operator.photo_thumbnail_path = thumb_name
         ghost_operator.rut_path = rut_path
+        ghost_operator.rut_deadline_at = rut_deadline
         ghost_operator.id_document_front_path = id_doc_front_path
         ghost_operator.id_document_back_path = id_doc_back_path
         ghost_operator.event_only = False  # deja de ser "solo evento"
@@ -292,6 +296,7 @@ async def register_operator(request: Request, body: OperatorRegisterRequest = No
             photo_path=photo_name,
             photo_thumbnail_path=thumb_name,
             rut_path=rut_path,
+            rut_deadline_at=rut_deadline,
             id_document_front_path=id_doc_front_path,
             id_document_back_path=id_doc_back_path,
         )

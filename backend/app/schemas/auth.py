@@ -86,8 +86,10 @@ class OperatorRegisterRequest(BaseModel):
     document_number: str = Field(..., min_length=5, max_length=20)
     # Foto obligatoria — Data URL (data:image/jpeg;base64,...) o base64 puro
     photo_data: str = Field(..., min_length=100, description="Foto del operador en base64 (data URL)")
-    # RUT obligatorio — Data URL (data:application/pdf;base64,...) o base64 puro
-    rut_data: str = Field(..., min_length=100, description="PDF del RUT en base64 (data URL)")
+    # RUT opcional — Data URL (data:application/pdf;base64,...) o base64 puro.
+    # Si no se envía, el operador tiene 15 días para subirlo desde su perfil
+    # (operators.rut_deadline_at); vencido el plazo no puede asignarse a eventos.
+    rut_data: Optional[str] = Field(None, min_length=100, description="PDF del RUT en base64 (data URL). Opcional: plazo de 15 días para subirlo.")
     # Cédula obligatoria — fotos frente y dorso (data URL de imagen)
     id_document_front_data: str = Field(..., min_length=100, description="Foto de la cédula (frente) en base64 (data URL)")
     id_document_back_data: str = Field(..., min_length=100, description="Foto de la cédula (dorso) en base64 (data URL)")

@@ -19,14 +19,15 @@ Es un rol de **monitoreo puro**: ningún endpoint de escritura acepta su token.
 | Ruta | Template | Función |
 |---|---|---|
 | `/gerencia` | `gerencia/gerencia_events.html` | Lista de todos los eventos con barra de avance de check-in |
-| `/gerencia/events/{id}` | `gerencia/gerencia_monitor.html` | Vista 360: anillos SVG (check-in %, confirmados/requeridos, pendientes, no-shows), tablas por rol / coordinador / etapa y feed de últimos check-ins. Auto-refresco cada 10 s |
+| `/gerencia/events/{id}` | `gerencia/gerencia_monitor.html` | Vista 360: anillos SVG globales (check-in %, confirmados/requeridos, pendientes, no-shows), **selector de etapa** (los anillos y tablas cambian según la etapa), **anillos por rol** (check-ins/requeridos de cada rol del plan) y tablas por rol / coordinador / etapa + feed de últimos check-ins. Auto-refresco cada 10 s |
 
 ## API (read-only)
 
 | Endpoint | Descripción |
 |---|---|
-| `GET /api/monitoring/events` | Lista ligera de todos los eventos con `confirmed` y `checked_in` |
-| `GET /api/monitoring/events/{id}/overview` | Resumen 360: `event`, `totals`, `by_role`, `by_coordinator`, `by_stage`, `recent_checkins`, `updated_at` |
+| `GET /api/monitoring/events` | Lista ligera de todos los eventos con `confirmed`, `checked_in` y `required` (personal requerido del plan) |
+| `GET /api/monitoring/events/{id}/overview` | Resumen 360: `event`, `stage` (etapa seleccionada), `stages` (etapas presentes), `totals` (incluye `required` y `checkin_pct = checked_in/required`), `by_role`, `by_coordinator`, `by_stage`, `recent_checkins`, `updated_at` |
+| `GET /api/monitoring/events/{id}/overview?stage=X` | Igual que el overview pero filtrado a la etapa `X` (`previa\|avanzada\|evento\|desmontaje`): totales, roles, coordinadores y feed responden a la etapa |
 | `GET /api/events` | Listado de eventos (aperturado también a monitoreo) |
 
 ### Guard central
@@ -44,7 +45,7 @@ Es un rol de **monitoreo puro**: ningún endpoint de escritura acepta su token.
 
 ## Tests
 
-`backend/tests/test_gerencia.py` cubre: login, prohibición de escritura en eventos, creación por superadmin, colapso de rol cuando un admin intenta crear gerencia, overview 360, lista de eventos de monitoreo y bloqueo a operadores sin asignación.
+`backend/tests/test_gerencia.py` cubre: login, prohibición de escritura en eventos, creación por superadmin, colapso de rol cuando un admin intenta crear gerencia, overview 360, lista de eventos de monitoreo, filtro por etapa (`?stage=`) y bloqueo a operadores sin asignación.
 
 ```bash
 cd backend && python -m pytest tests/test_gerencia.py -q

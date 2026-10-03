@@ -237,7 +237,7 @@ async def get_offline_data(
     }
 
 
-async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID):
+async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID, stage: str | None = None):
     """Retorna los roles requeridos del evento con conteo de check-in en vivo.
 
     Estructura por rol:
@@ -248,19 +248,22 @@ async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID):
     """
     from app.models.roles import Role
 
-    result = await db.execute(
+    needs_q = (
         select(EventStaffNeed, Role)
         .join(Role, Role.id == EventStaffNeed.role_id)
         .where(EventStaffNeed.event_id == event_id)
         .order_by(Role.name)
     )
+    if stage:
+        needs_q = needs_q.where(EventStaffNeed.stage == stage)
+    result = await db.execute(needs_q)
     needs = result.all()
 
     if not needs:
         return []
 
     # Conteo en vivo: checked_in agrupado por role_id
-    counts_result = await db.execute(
+    counts_q = (
         select(
             EventAssignment.role_id,
             func.count(EventAssignment.id).label("cnt"),
@@ -272,6 +275,9 @@ async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID):
         )
         .group_by(EventAssignment.role_id)
     )
+    if stage:
+        counts_q = counts_q.where(EventAssignment.stage == stage)
+    counts_result = await db.execute(counts_q)
     checked_in_counts = {row.role_id: row.cnt for row in counts_result.all()}
 
     out = []
@@ -288,7 +294,7 @@ async def _get_event_staff_needs(db: AsyncSession, event_id: uuid.UUID):
     return out
 
 
-async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
+async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID, stage: str | None = None):
     """Retorna cupos por coordinador con conteo en vivo.
 
     Estructura por coordinador:
@@ -300,15 +306,18 @@ async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
       full: bool (available <= 0)
     """
     # Cupos configurados
-    result = await db.execute(
+    quotas_q = (
         select(EventCoordinatorQuota)
         .where(EventCoordinatorQuota.event_id == event_id)
         .order_by(EventCoordinatorQuota.coordinator)
     )
+    if stage:
+        quotas_q = quotas_q.where(EventCoordinatorQuota.stage == stage)
+    result = await db.execute(quotas_q)
     quotas = result.scalars().all()
 
     # Conteo en vivo (checked_in por admitted_by)
-    counts_result = await db.execute(
+    counts_q = (
         select(
             EventAssignment.admitted_by,
             func.count(EventAssignment.id).label("cnt"),
@@ -320,10 +329,13 @@ async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
         )
         .group_by(EventAssignment.admitted_by)
     )
+    if stage:
+        counts_q = counts_q.where(EventAssignment.stage == stage)
+    counts_result = await db.execute(counts_q)
     checked_in_counts = {row.admitted_by: row.cnt for row in counts_result.all()}
 
     # Conteo programmed (todos los que programó, sin importar check-in)
-    prog_result = await db.execute(
+    prog_q = (
         select(
             EventAssignment.programmed_by,
             func.count(EventAssignment.id).label("cnt"),
@@ -334,6 +346,9 @@ async def _get_coordinator_quotas(db: AsyncSession, event_id: uuid.UUID):
         )
         .group_by(EventAssignment.programmed_by)
     )
+    if stage:
+        prog_q = prog_q.where(EventAssignment.stage == stage)
+    prog_result = await db.execute(prog_q)
     programmed_counts = {row.programmed_by: row.cnt for row in prog_result.all()}
 
     # --- Conteo de cesiones: operadores checked_in cuyo admitted_by !=
@@ -942,19 +957,22 @@ async def _suggest_available_coordinators(db: AsyncSession, event_id: uuid.UUID)
 @router.get("/events/{event_id}/coordinator-quotas")
 async def get_coordinator_quotas_endpoint(
     event_id: uuid.UUID,
+    stage: str = Query(None, description="Filtrar por etapa: previa|avanzada|evento|desmontaje"),
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
     """Endpoint público (autenticado) para obtener cupos + conteo en vivo.
 
     Usado por las tarjetas UI de check-in para mostrar el estado de cada
-    coordinador en tiempo real.
+    coordinador en tiempo real. Con ?stage= los cupos, programados y
+    check-ins responden a la etapa seleccionada.
     """
     await _resolve_staff_access(db, user, event_id)
 
-    quotas = await _get_coordinator_quotas(db, event_id)
+    quotas = await _get_coordinator_quotas(db, event_id, stage=stage)
     return {
         "event_id": str(event_id),
+        "stage": stage,
         "quotas": quotas,
         "updated_at": datetime.utcnow().isoformat(),
     }
