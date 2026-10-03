@@ -33,7 +33,7 @@
         <div id="stageFilter" class="flex flex-wrap gap-2 mb-4"></div>
 
         <!-- Anillos SVG -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
             <div class="bg-white rounded-xl shadow p-4 text-center">
                 <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
                     <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
@@ -41,22 +41,6 @@
                 </svg>
                 <p class="text-2xl font-bold text-gray-800 mt-2"><span id="txtCheckin">0</span><span class="text-sm text-gray-400">/<span id="txtCheckinReq">0</span></span></p>
                 <p class="text-xs text-gray-500">Check-in global</p>
-            </div>
-            <div class="bg-white rounded-xl shadow p-4 text-center">
-                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
-                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
-                    <circle id="ringConfirm" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#f59e0b" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
-                </svg>
-                <p class="text-2xl font-bold text-gray-800 mt-2"><span id="txtConfirm">0</span><span class="text-sm text-gray-400">/<span id="txtNeeded">0</span></span></p>
-                <p class="text-xs text-gray-500">Confirmados / Requeridos</p>
-            </div>
-            <div class="bg-white rounded-xl shadow p-4 text-center">
-                <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
-                    <circle class="ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="12"/>
-                    <circle id="ringPending" class="ring-fg" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke="#ef4444" stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
-                </svg>
-                <p class="text-2xl font-bold text-gray-800 mt-2" id="txtPending">0</p>
-                <p class="text-xs text-gray-500">Pendientes por check-in</p>
             </div>
             <div class="bg-white rounded-xl shadow p-4 text-center">
                 <svg viewBox="0 0 120 120" class="w-24 h-24 mx-auto">
@@ -74,43 +58,6 @@
             <div id="roleRings" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
         </div>
 
-        <!-- Tablas -->
-        <div class="grid md:grid-cols-2 gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por rol</h2>
-                <table class="w-full text-sm">
-                    <thead><tr class="text-xs text-gray-500 uppercase">
-                        <th class="px-4 py-2 text-left">Rol</th><th class="px-2 py-2">Req.</th><th class="px-2 py-2">Conf.</th><th class="px-2 py-2">In</th>
-                    </tr></thead>
-                    <tbody id="byRole" class="divide-y divide-gray-100"></tbody>
-                </table>
-            </div>
-            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por coordinador</h2>
-                <table class="w-full text-sm">
-                    <thead><tr class="text-xs text-gray-500 uppercase">
-                        <th class="px-4 py-2 text-left">Coordinador</th><th class="px-2 py-2">Cuota</th><th class="px-2 py-2">Prog.</th><th class="px-2 py-2">In</th><th class="px-2 py-2">Disp.</th>
-                    </tr></thead>
-                    <tbody id="byCoord" class="divide-y divide-gray-100"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="grid md:grid-cols-2 gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Por etapa</h2>
-                <table class="w-full text-sm">
-                    <thead><tr class="text-xs text-gray-500 uppercase">
-                        <th class="px-4 py-2 text-left">Etapa</th><th class="px-2 py-2">Asignados</th><th class="px-2 py-2">Check-ins</th>
-                    </tr></thead>
-                    <tbody id="byStage" class="divide-y divide-gray-100"></tbody>
-                </table>
-            </div>
-            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-                <h2 class="px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50">Últimos check-ins</h2>
-                <ul id="feed" class="divide-y divide-gray-100 max-h-80 overflow-y-auto"></ul>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -184,13 +131,6 @@
                 document.getElementById('txtCheckin').textContent = t.checked_in;
                 document.getElementById('txtCheckinReq').textContent = required;
 
-                setRing('ringConfirm', needed ? t.confirmed / needed * 100 : 0);
-                document.getElementById('txtConfirm').textContent = t.confirmed;
-                document.getElementById('txtNeeded').textContent = needed;
-
-                setRing('ringPending', t.assigned ? t.pending_checkin / t.assigned * 100 : 0);
-                document.getElementById('txtPending').textContent = t.pending_checkin;
-
                 setRing('ringNoShow', t.assigned ? (t.no_show + t.rejected) / t.assigned * 100 : 0);
                 document.getElementById('txtNoShow').textContent = t.no_show + t.rejected;
 
@@ -209,43 +149,6 @@
                         <p class="text-[10px] text-gray-400">${r.confirmed} conf · ${r.stage}</p>
                     </div>`;
                 }).join('') || '<p class="text-sm text-gray-400 col-span-full text-center py-3">Sin roles en el plan de personal</p>';
-
-                // Por rol
-                document.getElementById('byRole').innerHTML = (d.by_role || []).map(r => `
-                    <tr>
-                        <td class="px-4 py-2 font-semibold text-gray-800">${r.role_name}<span class="ml-2 text-xs text-gray-400">${r.stage}</span></td>
-                        <td class="px-2 py-2 text-center">${r.needed}</td>
-                        <td class="px-2 py-2 text-center text-amber-600 font-semibold">${r.confirmed}</td>
-                        <td class="px-2 py-2 text-center text-green-600 font-semibold">${r.checked_in}</td>
-                    </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-3 text-gray-400 text-center">Sin roles</td></tr>';
-
-                // Por coordinador
-                document.getElementById('byCoord').innerHTML = (d.by_coordinator || []).map(c => `
-                    <tr>
-                        <td class="px-4 py-2 font-semibold text-gray-800">${c.coordinator || c.name}</td>
-                        <td class="px-2 py-2 text-center">${c.quota}</td>
-                        <td class="px-2 py-2 text-center text-amber-600 font-semibold">${c.programmed}</td>
-                        <td class="px-2 py-2 text-center text-green-600 font-semibold">${c.checked_in}</td>
-                        <td class="px-2 py-2 text-center ${c.full ? 'text-red-600 font-bold' : 'text-gray-600'}">${c.available}</td>
-                    </tr>`).join('') || '<tr><td colspan="5" class="px-4 py-3 text-gray-400 text-center">Sin cuotas</td></tr>';
-
-                // Por etapa
-                document.getElementById('byStage').innerHTML = (d.by_stage || []).map(s => `
-                    <tr>
-                        <td class="px-4 py-2 font-semibold text-gray-800 capitalize">${s.stage}</td>
-                        <td class="px-2 py-2 text-center">${s.assigned}</td>
-                        <td class="px-2 py-2 text-center text-green-600 font-semibold">${s.checked_in}</td>
-                    </tr>`).join('') || '<tr><td colspan="3" class="px-4 py-3 text-gray-400 text-center">Sin etapas</td></tr>';
-
-                // Feed
-                document.getElementById('feed').innerHTML = (d.recent_checkins || []).map(c => `
-                    <li class="px-4 py-2 flex justify-between items-center">
-                        <div>
-                            <p class="text-sm font-semibold text-gray-800">${c.name}</p>
-                            <p class="text-xs text-gray-400">${c.role_name || '—'} · ${c.by ? 'por ' + c.by : c.method || ''}</p>
-                        </div>
-                        <span class="text-xs text-gray-500">${fmtTime(c.time)}</span>
-    </li>`).join('') || '<li class="px-4 py-3 text-gray-400 text-center text-sm">Aún no hay check-ins</li>';
             } catch (e) {
                 console.error(e);
                 document.getElementById('evName').textContent = '⚠ Error al cargar datos';
