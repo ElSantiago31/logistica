@@ -14,6 +14,11 @@
  *   - Aviso previo a los 13 min con botón "Seguir activo".
  *   - Sliding session: el refresh proactivo NO renueva si el
  *     usuario está inactivo, para que los 15 min realmente cierren.
+ *   - EXCEPCIÓN páginas offline-capable (window.OFFLINE_CAPABLE=true,
+ *     ej. check-in): NUNCA cierran sesión por inactividad y su token
+ *     SIEMPRE se refresca. El personal puede estar horas en un evento,
+ *     a veces sin señal: un logout forzaría re-login imposible offline
+ *     y perdería los check-ins pendientes de sincronizar.
  *
  * Uso (reemplaza fetch en las páginas):
  *   const res = await Auth.apiFetch('/api/sync/events/.../check-in', {
@@ -182,7 +187,11 @@
             // SLIDING SESSION: solo renovar si el usuario está activo.
             // Si lleva inactivo cerca del límite de idle, NO refrescamos:
             // dejaremos que expire su token y el idle timeout cierre sesión.
-            if (!isUserActive()) {
+            // EXCEPCIÓN offline-capable (check-in, nómina, intendencia):
+            // ahí NO hay idle logout, así que el token debe renovarse
+            // SIEMPRE que haya conexión, aunque el usuario esté inactivo
+            // (el dispositivo puede estar guardado horas en un evento).
+            if (!isUserActive() && !isOfflineCapablePage()) {
                 console.info('[auth] refresh proactivo omitido por inactividad (sliding session)');
                 return;
             }
@@ -312,6 +321,17 @@
     function checkIdle() {
         // No chequear si no hay sesión activa
         if (!getAccessToken()) return;
+
+        // 🔒 PÁGINAS OFFLINE-CAPABLE (check-in, nómina, intendencia):
+        // NUNCA cerrar sesión por inactividad aquí, NI online NI offline.
+        // El personal puede guardar el celular/PC unos minutos (u horas)
+        // durante un evento y al volver debe poder seguir haciendo
+        // check-in. Un logout con internet caído haría imposible el
+        // re-login y se PERDERÍAN los check-ins offline sin sincronizar.
+        if (isOfflineCapablePage()) {
+            if (warningVisible) hideIdleWarning();
+            return;
+        }
 
         const idleMs = Date.now() - getLastActivity();
 
