@@ -65,6 +65,7 @@ from app.schemas.content import (
     StageItemUpdate,
 )
 from app.services import content as content_service
+from app.services.email_sender import notify_contact_request
 from app.websockets.manager import manager
 
 router = APIRouter(prefix="/api/content", tags=["Site Content"])
@@ -104,6 +105,21 @@ async def submit_contact_form(
         event_type=payload.event_type,
         message=payload.message,
     )
+
+    # Notificar por email a los destinatarios configurados (CONTACT_NOTIFY_EMAILS).
+    # Fail-safe: notify_contact_request nunca propaga excepciones, pero se
+    # protege igualmente para no romper el flujo público del formulario.
+    try:
+        await notify_contact_request(
+            full_name=payload.full_name,
+            email=payload.email,
+            phone=payload.phone,
+            company=payload.company,
+            event_type=payload.event_type,
+            message=payload.message,
+        )
+    except Exception:
+        pass
 
     # Notificar en tiempo real al panel admin (si hay alguien conectado)
     try:

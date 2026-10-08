@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     PQRSF_REPLY_TO: str = "info@ayceventos.com.co"
 
+    # Notificación por email de solicitudes de contacto (formulario público del landing)
+    # Direcciones separadas por coma. Vacío por defecto (fail-safe): no se envía nada.
+    CONTACT_NOTIFY_EMAILS: str = ""
+
     # SEO — dominio canónico (sin www; nginx redirige www → no-www con 301)
     # y GA4 opcional. GA_MEASUREMENT_ID vacío = NO se emite el script gtag.js.
     SITE_URL: str = "https://ayceventos.com.co"
@@ -127,6 +131,21 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
+
+    @property
+    def contact_notify_list(self) -> List[str]:
+        """Destinatarios de notificación de solicitudes de contacto.
+
+        Parsea CONTACT_NOTIFY_EMAILS (separadas por coma). Devuelve [] si no
+        hay destinatarios configurados → el endpoint omite el envío silenciosamente.
+        """
+        if not self.CONTACT_NOTIFY_EMAILS:
+            return []
+        return [
+            email.strip()
+            for email in self.CONTACT_NOTIFY_EMAILS.split(",")
+            if email.strip()
+        ]
 
     @property
     def effective_database_url(self) -> str:

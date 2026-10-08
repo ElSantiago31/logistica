@@ -57,6 +57,108 @@ class TestPublicContent:
 
 
 # ---------------------------------------------------------------------------
+# Contact email notification (CONTACT_NOTIFY_EMAILS)
+# ---------------------------------------------------------------------------
+class TestContactEmailNotification:
+    """Notificación por email de cada solicitud de contacto."""
+
+    async def test_contact_sends_email_notification(self, client, monkeypatch):
+        """POST /api/content/contact envía email a cada destinatario configurado."""
+        from unittest.mock import AsyncMock
+
+        from app.dependencies.rate_limit import limiter
+        from app.services import email_sender
+
+        # Desactivar rate limit del endpoint (5/min) para tests repetidos
+        monkeypatch.setattr(limiter, "enabled", False)
+        recipients = (
+            "povedasantiago250@gmail.com,"
+            "sronaldsantiagopovedasarmiento@gmail.com"
+        )
+        monkeypatch.setattr(
+            email_sender.settings, "CONTACT_NOTIFY_EMAILS", recipients
+        )
+        mock_send = AsyncMock(return_value=True)
+        monkeypatch.setattr(email_sender, "send_email", mock_send)
+
+        payload = {
+            "full_name": "Juan Prueba Email",
+            "email": "juan@example.com",
+            "phone": "3001234567",
+            "company": "Acme SAS",
+            "event_type": "Boda",
+            "message": "Necesito cotización para 150 personas.",
+        }
+        resp = await client.post("/api/content/contact", json=payload)
+        assert resp.status_code == 201
+
+        # Un email por cada destinatario configurado
+        assert mock_send.await_count == 2
+        sent_to = [call.kwargs["to_email"] for call in mock_send.await_args_list]
+        assert sorted(sent_to) == sorted(recipients.split(","))
+
+        first = mock_send.await_args_list[0].kwargs
+        assert first["subject"].startswith(
+            "[Contacto] Nueva solicitud de Juan Prueba Email — Boda"
+        )
+        # Reply-To apunta al solicitante para respuesta directa
+        assert first["reply_to"] == "juan@example.com"
+        # El HTML incluye los datos del formulario
+        assert "juan@example.com" in first["html_body"]
+        assert "Necesito cotizaci" in first["html_body"]
+
+    async def test_contact_email_failure_does_not_break_submission(
+        self, client, monkeypatch
+    ):
+        """Un fallo SMTP NO debe romper el flujo público (sigue 201)."""
+        from app.dependencies.rate_limit import limiter
+        from app.services import email_sender
+
+        monkeypatch.setattr(limiter, "enabled", False)
+        monkeypatch.setattr(
+            email_sender.settings, "CONTACT_NOTIFY_EMAILS", "destino@test.com"
+        )
+
+        async def _boom(**kwargs):
+            raise RuntimeError("SMTP caído")
+
+        monkeypatch.setattr(email_sender, "send_email", _boom)
+
+        payload = {
+            "full_name": "Fallo SMTP",
+            "email": "fallo@example.com",
+            "message": "Mensaje que se guarda aunque el email falle.",
+        }
+        resp = await client.post("/api/content/contact", json=payload)
+        # Fail-safe: el endpoint público siempre responde 201
+        assert resp.status_code == 201
+        assert resp.json()["full_name"] == "Fallo SMTP"
+
+    async def test_contact_no_emails_configured_skips_send(
+        self, client, monkeypatch
+    ):
+        """Sin CONTACT_NOTIFY_EMAILS no se envía nada (ni error)."""
+        from unittest.mock import AsyncMock
+
+        from app.dependencies.rate_limit import limiter
+        from app.services import email_sender
+
+        monkeypatch.setattr(limiter, "enabled", False)
+        monkeypatch.setattr(email_sender.settings, "CONTACT_NOTIFY_EMAILS", "")
+        mock_send = AsyncMock()
+        monkeypatch.setattr(email_sender, "send_email", mock_send)
+
+        payload = {
+            "full_name": "Sin Config",
+            "email": "sin@example.com",
+            "message": "Mensaje sin destinatarios configurados.",
+        }
+        resp = await client.post("/api/content/contact", json=payload)
+        assert resp.status_code == 201
+        mock_send.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Admin endpoints (authentication required)
 # ---------------------------------------------------------------------------
 class TestAdminAuthGate:
