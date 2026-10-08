@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -32,6 +33,14 @@ from app.routers import seo as seo_router
 from app.routers import referrals as referrals_router
 from app.routers import monitoring as monitoring_router
 from app.websockets import router as ws_router
+
+# Logging: hacer visibles los logs de la app (app.*) en consola/Docker.
+# Sin esto, el root logger queda en WARNING y mensajes INFO como los de
+# email_sender ([EMAIL] Enviado OK) nunca aparecen en el servidor.
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
 
 
 @asynccontextmanager
