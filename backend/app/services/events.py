@@ -719,7 +719,7 @@ async def assign_operators(
         if staff_need and staff_need.rate_per_shift:
             rate = staff_need.rate_per_shift
 
-    # Get current event dates for overlap check
+    # Guard: el evento debe existir.
     current_event = await db.get(Event, event_id)
     if not current_event:
         return []
@@ -763,30 +763,10 @@ async def assign_operators(
         if existing.scalar_one_or_none():
             continue
 
-        # Check for overlapping events (double-booking)
-        overlap_result = await db.execute(
-            select(EventAssignment)
-            .join(Event, EventAssignment.event_id == Event.id)
-            .where(
-                EventAssignment.operator_id == operator.id,
-                EventAssignment.status.in_(["invited", "confirmed", "checked_in", "standby"]),
-                EventAssignment.event_id != event_id,
-                Event.status.in_(["draft", "published", "in_progress"]),
-                Event.start_date < current_event.end_date,
-                Event.end_date > current_event.start_date,
-            )
-        )
-        overlap = overlap_result.scalars().first()
-        if overlap:
-            # Get overlapping event name for error message
-            overlap_event = await db.get(Event, overlap.event_id)
-            unavailable.append({
-                "operator_id": str(operator.id),
-                "user_id": str(operator.user_id),
-                "conflict_event": overlap_event.name if overlap_event else "Evento desconocido",
-                "conflict_event_id": str(overlap.event_id),
-            })
-            continue
+        # NOTA: un operador PUEDE estar asignado a varios eventos con fechas
+        # solapadas (decisión de negocio 2026-10). El solapamiento ya no
+        # bloquea aquí; list_available_operators() lo reporta como aviso
+        # informativo (available=false) para el dashboard del coordinador.
         # F11 — Atribución por referido: si NO hay coordinador explícito
         # (R1) y el operador tiene referente, el referente se estampa para
         # ESTA asignación. Variables locales por iteración para no filtrar
