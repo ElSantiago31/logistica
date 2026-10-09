@@ -209,9 +209,14 @@ def _fmt_date(dt: datetime | None) -> str:
 # --- EMU (English Metric Units) para posicionamiento de imágenes ---
 # 1 píxel (a 96 DPI) = 9525 EMU. Se usa para anclar imágenes con precisión.
 _EMU_PER_PX = 9525
-# Alto de fila (en puntos) cuando la fila lleva una firma. Permite que la
-# firma sea legible y no quede comprimida.
-_SIGNATURE_ROW_HEIGHT_PT = 50
+# Alto de fila (en puntos) de las filas de datos (casillas de la planilla).
+# La plantilla traía 57.75pt; se sube a 63pt para que las casillas —incluida
+# la de FIRMA— queden más grandes al imprimir y sea fácil firmar.
+DATA_ROW_HEIGHT_PT = 63
+# Alto de fila (en puntos) cuando la fila lleva una firma embebida.
+# Igual al alto de datos para que la firma ocupe bien la casilla sin
+# encoger la fila.
+_SIGNATURE_ROW_HEIGHT_PT = 63
 
 
 def _decode_signature(signature_data: str | None) -> bytes | None:
@@ -511,6 +516,11 @@ def _render_pages(
         sheet_title = _sanitize_sheet_title(sheet_label, page_num=page_suffix)
 
         new_ws = _copy_sheet_with_images(template_wb, template_ws, sheet_title)
+        # Uniformar alto de las filas de datos (casillas más grandes para
+        # firmar). Se hace ANTES de rellenar para que las firmas embebidas
+        # se dimensionen con el alto final de la fila.
+        for r in range(FIRST_DATA_ROW, LAST_DATA_ROW + 1):
+            new_ws.row_dimensions[r].height = DATA_ROW_HEIGHT_PT
         _fill_header(
             new_ws,
             coordinator="",  # "Coordinador General" (D5) se deja vacío
@@ -537,8 +547,8 @@ def apply_print_setup(wb) -> None:
     - **Ajustar todas las columnas a 1 página de ancho** (fitToWidth=1),
       con alto ilimitado (fitToHeight=0) para que pagine por filas.
     - Márgenes: **superior 2.5 cm** (≈0.98", espacio para archivar en
-      carpeta dejando campo más grande para firmar) y **1 cm**
-      (≈0.39") en izquierdo/derecha/inferior.
+      carpeta dejando campo más grande para firmar), **inferior 0.5 cm**
+      (≈0.2") y **1 cm** (≈0.39") en izquierdo/derecha.
     - Centrado horizontal.
     - Área de impresión limitada a las columnas B:N (las que usa la plantilla).
 
@@ -556,11 +566,13 @@ def apply_print_setup(wb) -> None:
         ws.page_setup.fitToHeight = 0
         ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
         # Márgenes de impresión (en pulgadas):
-        #   top   = 0.98" ≈ 2.5 cm (antes 3.5 cm; se redujo 1 cm para que
-        #           los campos de firma queden más grandes)
-        #   resto = 0.39" ≈ 1 cm
+        #   top    = 0.98" ≈ 2.5 cm (antes 3.5 cm; se redujo 1 cm para que
+        #            los campos de firma queden más grandes)
+        #   bottom = 0.2" ≈ 0.5 cm (antes 1 cm; se redujo 0.5 cm para dar
+        #            más espacio a las casillas)
+        #   resto  = 0.39" ≈ 1 cm
         ws.page_margins = PageMargins(
-            left=0.39, right=0.39, top=0.98, bottom=0.39,
+            left=0.39, right=0.39, top=0.98, bottom=0.2,
             header=0.2, footer=0.2,
         )
         # Centrado horizontal en la página
