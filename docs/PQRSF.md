@@ -98,13 +98,14 @@ cd backend
 python -m pytest tests/test_pqrsf.py -v
 ```
 
-Cobertura (13 tests):
-- Creación de PQRSF (éxito y sin consent)
+Cobertura (18 tests):
+- Creación de PQRSF (éxito, sin consent, notificación al equipo y fail-safe SMTP)
 - Tracking por código (éxito y 404)
 - Listado admin
 - Actualización de estado y prioridad
 - Eliminación (éxito y 404)
 - Validaciones de schema
+- Fallback de configuración `pqrsf_notify_list` (propio, fallback a contacto, vacío)
 
 ## WebSocket
 
@@ -113,6 +114,15 @@ Cuando se crea una PQRSF, se publica en el canal `content` con tipo `new_pqrsf`.
 ## Email
 
 El endpoint `/api/pqrsf/{id}/respond` envía un correo al solicitante usando `email_sender.py` (SMTP configurado). Si falla, se guarda el error en `error_message` para diagnóstico.
+
+### Notificación interna de nuevas PQRSF
+
+Cuando un ciudadano envía el formulario público (`POST /api/pqrsf`), además del evento WebSocket al panel admin, se envía un email interno al equipo encargado (`notify_pqrsf_submission` en `email_sender.py`):
+
+- **Destinatarios**: variable `PQRSF_NOTIFY_EMAILS` (separados por coma). Si está vacía, hace fallback a `CONTACT_NOTIFY_EMAILS` (mismo equipo de solicitudes de contacto).
+- **Contenido**: código de seguimiento, tipo, asunto, datos del solicitante y mensaje completo.
+- **Reply-To**: apunta al email del solicitante, para poder responder directo desde el correo.
+- **Fail-safe**: si no hay destinatarios configurados se omite silenciosamente; si el SMTP falla, el error solo se loggea y el endpoint sigue respondiendo 201 (la PQRSF ya quedó guardada en BD).
 
 ## Seguridad y Rate Limiting
 

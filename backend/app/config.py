@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     # Notificación por email de solicitudes de contacto (formulario público del landing)
     # Direcciones separadas por coma. Vacío por defecto (fail-safe): no se envía nada.
     CONTACT_NOTIFY_EMAILS: str = ""
+    # Destinatarios de notificación de NUEVAS PQRSF (separadas por coma).
+    # Si queda vacío, se usa CONTACT_NOTIFY_EMAILS como fallback (mismo
+    # equipo que atiende las solicitudes de contacto atiende las PQRSF).
+    PQRSF_NOTIFY_EMAILS: str = ""
 
     # SEO — dominio canónico (sin www; nginx redirige www → no-www con 301)
     # y GA4 opcional. GA_MEASUREMENT_ID vacío = NO se emite el script gtag.js.
@@ -144,6 +148,23 @@ class Settings(BaseSettings):
         return [
             email.strip()
             for email in self.CONTACT_NOTIFY_EMAILS.split(",")
+            if email.strip()
+        ]
+
+    @property
+    def pqrsf_notify_list(self) -> List[str]:
+        """Destinatarios de notificación de nuevas PQRSF.
+
+        Parsea PQRSF_NOTIFY_EMAILS (separadas por coma). Si está vacío,
+        hace fallback a CONTACT_NOTIFY_EMAILS (mismo equipo de solicitudes).
+        Devuelve [] si no hay destinatarios → se omite el envío silenciosamente.
+        """
+        raw = self.PQRSF_NOTIFY_EMAILS or self.CONTACT_NOTIFY_EMAILS
+        if not raw:
+            return []
+        return [
+            email.strip()
+            for email in raw.split(",")
             if email.strip()
         ]
 

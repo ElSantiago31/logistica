@@ -219,6 +219,169 @@ async def notify_contact_request(
         logger.error("[CONTACT-NOTIFY] Error inesperado: %s", exc)
 
 
+_PQRSF_NOTIFY_TEMPLATE = Template("""\
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nueva PQRSF recibida</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background-color:#b8860b;padding:24px 32px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">AyC Logística y Producción de Eventos LTDA</h1>
+              <p style="margin:4px 0 0 0;color:#fef3c7;font-size:13px;">Nueva PQRSF recibida</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px 0;text-align:center;">
+                <span style="display:inline-block;background-color:#f3f4f6;color:#b8860b;font-weight:bold;font-size:18px;padding:8px 16px;border-radius:4px;letter-spacing:1px;">{{ tracking_code }}</span>
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;line-height:1.6;color:#374151;border:1px solid #e5e7eb;">
+                <tr>
+                  <td style="padding:10px 16px;background-color:#f9fafb;font-weight:bold;width:160px;border-bottom:1px solid #e5e7eb;">Tipo</td>
+                  <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;">{{ request_type }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;background-color:#f9fafb;font-weight:bold;border-bottom:1px solid #e5e7eb;">Asunto</td>
+                  <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;">{{ subject }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;background-color:#f9fafb;font-weight:bold;border-bottom:1px solid #e5e7eb;">Nombre</td>
+                  <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;">{{ full_name }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;background-color:#f9fafb;font-weight:bold;border-bottom:1px solid #e5e7eb;">Email</td>
+                  <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;">{{ email }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;background-color:#f9fafb;font-weight:bold;border-bottom:1px solid #e5e7eb;">Teléfono</td>
+                  <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;">{{ phone }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;background-color:#f9fafb;font-weight:bold;border-bottom:1px solid #e5e7eb;">Empresa</td>
+                  <td style="padding:10px 16px;border-bottom:1px solid #e5e7eb;">{{ company }}</td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 8px 0;font-size:14px;font-weight:bold;color:#1f2937;">Mensaje:</p>
+              <div style="font-size:15px;line-height:1.6;color:#374151;background-color:#f9fafb;border-left:4px solid #b8860b;padding:16px;">
+                {{ message_html }}
+              </div>
+              <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0;">
+              <p style="margin:0;font-size:13px;color:#6b7280;">
+                Puede responder directamente a este correo; el Reply-To apunta al email del solicitante.
+                Gestione la solicitud en el panel de administración (Contenido → PQRSF).
+              </p>
+              <p style="margin:8px 0 0 0;font-size:12px;color:#9ca3af;">
+                — Equipo AyC Eventos · Este es un correo automatizado.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+""")
+
+
+def render_pqrsf_notification_email(
+    *,
+    tracking_code: str,
+    request_type: str,
+    subject: str,
+    full_name: str,
+    email: str,
+    phone: Optional[str],
+    company: Optional[str],
+    message: str,
+) -> str:
+    """Renderiza el HTML del email interno de notificación de nueva PQRSF.
+
+    Todos los campos se escapan y el mensaje convierte saltos de línea a <br>.
+    """
+    message_html = escape(message).replace("\n", "<br>\n")
+    return _PQRSF_NOTIFY_TEMPLATE.render(
+        tracking_code=escape(tracking_code),
+        request_type=escape(request_type),
+        subject=escape(subject),
+        full_name=escape(full_name),
+        email=escape(email),
+        phone=escape(phone or "No indicado"),
+        company=escape(company or "No indicada"),
+        message_html=message_html,
+    )
+
+
+async def notify_pqrsf_submission(
+    *,
+    tracking_code: str,
+    request_type: str,
+    subject: str,
+    full_name: str,
+    email: str,
+    phone: Optional[str],
+    company: Optional[str],
+    message: str,
+) -> None:
+    """Envía la notificación interna de una nueva PQRSF.
+
+    Envía a cada destinatario de settings.pqrsf_notify_list un email con todos
+    los datos del solicitante y su código de seguimiento. Reply-To = email del
+    solicitante para poder responder directo.
+
+    Fail-safe: nunca propaga excepciones — un error SMTP no debe romper el
+    flujo público del formulario (el endpoint siempre responde 201).
+    """
+    recipients = settings.pqrsf_notify_list
+    if not recipients:
+        logger.debug(
+            "[PQRSF-NOTIFY] PQRSF_NOTIFY_EMAILS (y fallback CONTACT_NOTIFY_EMAILS) "
+            "vacíos: se omite la notificación."
+        )
+        return
+
+    subject_line = f"[PQRSF] {request_type} — {subject} ({tracking_code})"
+    html_body = render_pqrsf_notification_email(
+        tracking_code=tracking_code,
+        request_type=request_type,
+        subject=subject,
+        full_name=full_name,
+        email=email,
+        phone=phone,
+        company=company,
+        message=message,
+    )
+
+    try:
+        for to_email in recipients:
+            try:
+                await send_email(
+                    to_email=to_email,
+                    subject=subject_line,
+                    html_body=html_body,
+                    reply_to=email,
+                )
+            except Exception as exc:
+                # Un destinatario fallido no impide los demás
+                logger.error(
+                    "[PQRSF-NOTIFY] Error enviando a %s: %s", to_email, exc
+                )
+        logger.info(
+            "[PQRSF-NOTIFY] Notificación de PQRSF %s procesada (%d destinatario/s).",
+            tracking_code, len(recipients),
+        )
+    except Exception as exc:
+        logger.error("[PQRSF-NOTIFY] Error inesperado: %s", exc)
+
+
 def render_pqrsf_response_email(
     *,
     tracking_code: str,
@@ -228,7 +391,7 @@ def render_pqrsf_response_email(
 ) -> str:
     """Renderiza el HTML del email de respuesta a una PQRSF.
 
-    El `body` se escapacomo texto plano y se convierten saltos de línea a <br>.
+    El `body` se escapa como texto plano y se convierten saltos de línea a <br>.
     """
     # Convertir texto plano a HTML seguro (escapar + preservar saltos de línea)
     body_html = escape(body).replace("\n", "<br>\n")

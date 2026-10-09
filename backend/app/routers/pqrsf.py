@@ -35,6 +35,7 @@ from app.schemas.pqrsf import (
     PqrsfTrackResponse,
 )
 from app.services import pqrsf as pqrsf_service
+from app.services.email_sender import notify_pqrsf_submission
 from app.services.pqrsf import get_smtp_status
 from app.websockets.manager import manager
 
@@ -96,6 +97,20 @@ async def submit_pqrsf(
     except Exception:
         # Las notificaciones en tiempo real no deben romper el flujo público
         pass
+
+    # Notificar por email al equipo encargado de las solicitudes
+    # (PQRSF_NOTIFY_EMAILS, con fallback a CONTACT_NOTIFY_EMAILS).
+    # notify_pqrsf_submission es fail-safe: nunca lanza excepciones.
+    await notify_pqrsf_submission(
+        tracking_code=item.tracking_code,
+        request_type=item.request_type,
+        subject=item.subject,
+        full_name=item.full_name,
+        email=item.email,
+        phone=item.phone,
+        company=item.company,
+        message=item.message,
+    )
 
     return PqrsfSubmissionPublic.model_validate(item)
 

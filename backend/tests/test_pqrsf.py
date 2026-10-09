@@ -143,7 +143,10 @@ def test_schema_submission_public_has_tracking_code():
 @pytest.mark.asyncio
 @patch("app.services.pqrsf.create_pqrsf_submission", new_callable=AsyncMock)
 @patch("app.routers.pqrsf.manager.publish", new_callable=AsyncMock)
-async def test_create_pqrsf_public_success(mock_publish, mock_create, client, sample_payload):
+@patch("app.routers.pqrsf.notify_pqrsf_submission", new_callable=AsyncMock)
+async def test_create_pqrsf_public_success(
+    mock_notify, mock_publish, mock_create, client, sample_payload
+):
     """POST /api/pqrsf debe crear una PQRSF y retornar 201 con tracking_code."""
     submission = make_submission()
     mock_create.return_value = submission
@@ -158,11 +161,97 @@ async def test_create_pqrsf_public_success(mock_publish, mock_create, client, sa
 @pytest.mark.asyncio
 @patch("app.services.pqrsf.create_pqrsf_submission", new_callable=AsyncMock)
 @patch("app.routers.pqrsf.manager.publish", new_callable=AsyncMock)
-async def test_create_pqrsf_requires_consent(mock_publish, mock_create, client, sample_payload):
-    """POST /api/pqrsf sin consent debe retornar 400."""
+@patch("app.routers.pqrsf.notify_pqrsf_submission", new_callable=AsyncMock)
+async def test_create_pqrsf_notifies_team_by_email(
+    mock_notify, mock_publish, mock_create, client, sample_payload
+):
+    """POST /api/pqrsf exitoso debe disparar notify_pqrsf_submission con los
+    datos de la PQRSF (notificación por email al equipo de solicitudes)."""
+    submission = make_submission()
+    mock_create.return_value = submission
+
+    resp = await client.post("/api/pqrsf", json=sample_payload)
+    assert resp.status_code == 201, resp.text
+
+    mock_notify.assert_awaited_once()
+    kwargs = mock_notify.await_args.kwargs
+    assert kwargs["tracking_code"] == submission.tracking_code
+    assert kwargs["request_type"] == submission.request_type
+    assert kwargs["full_name"] == submission.full_name
+    assert kwargs["email"] == submission.email
+    assert kwargs["message"] == submission.message
+
+
+@pytest.mark.asyncio
+@patch("app.services.pqrsf.create_pqrsf_submission", new_callable=AsyncMock)
+@patch("app.routers.pqrsf.manager.publish", new_callable=AsyncMock)
+@patch("app.services.email_sender.send_email", new_callable=AsyncMock)
+async def test_create_pqrsf_notify_failure_does_not_break_endpoint(
+    mock_send, mock_publish, mock_create, client, sample_payload, monkeypatch
+):
+    """Aunque el envío SMTP falle, notify_pqrsf_submission lo captura y el
+    endpoint responde 201 (la notificación es best-effort, fail-safe)."""
+    from app.config import settings as app_settings
+
+    # Forzar un destinatario y que el SMTP "explote" para probar el fail-safe
+    monkeypatch.setattr(
+        app_settings, "PQRSF_NOTIFY_EMAILS", "equipo@ayceventos.com.co"
+    )
+    mock_send.side_effect = RuntimeError("SMTP caído")
+
+    submission = make_submission()
+    mock_create.return_value = submission
+
+    resp = await client.post("/api/pqrsf", json=sample_payload)
+    assert resp.status_code == 201, resp.text
+    mock_send.assert_awaited()
+
+
+@pytest.mark.asyncio
+@patch("app.services.pqrsf.create_pqrsf_submission", new_callable=AsyncMock)
+@patch("app.routers.pqrsf.manager.publish", new_callable=AsyncMock)
+@patch("app.routers.pqrsf.notify_pqrsf_submission", new_callable=AsyncMock)
+async def test_create_pqrsf_requires_consent(
+    mock_notify, mock_publish, mock_create, client, sample_payload
+):
+    """POST /api/pqrsf sin consent debe retornar 400 y NO notificar."""
     payload = {**sample_payload, "consent": False}
     resp = await client.post("/api/pqrsf", json=payload)
     assert resp.status_code == 400
+    mock_notify.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Tests del fallback de configuración pqrsf_notify_list
+# ---------------------------------------------------------------------------
+def test_pqrsf_notify_list_uses_own_value():
+    """PQRSF_NOTIFY_EMAILS tiene prioridad sobre el fallback."""
+    from app.config import Settings
+
+    s = Settings(
+        PQRSF_NOTIFY_EMAILS="pqrsf1@x.com, pqrsf2@x.com",
+        CONTACT_NOTIFY_EMAILS="contacto@x.com",
+    )
+    assert s.pqrsf_notify_list == ["pqrsf1@x.com", "pqrsf2@x.com"]
+
+
+def test_pqrsf_notify_list_fallback_to_contact():
+    """Si PQRSF_NOTIFY_EMAILS está vacío, usa CONTACT_NOTIFY_EMAILS."""
+    from app.config import Settings
+
+    s = Settings(
+        PQRSF_NOTIFY_EMAILS="",
+        CONTACT_NOTIFY_EMAILS="contacto@x.com",
+    )
+    assert s.pqrsf_notify_list == ["contacto@x.com"]
+
+
+def test_pqrsf_notify_list_empty_when_nothing_configured():
+    """Sin ninguna variable configurada → [] (se omite la notificación)."""
+    from app.config import Settings
+
+    s = Settings(PQRSF_NOTIFY_EMAILS="", CONTACT_NOTIFY_EMAILS="")
+    assert s.pqrsf_notify_list == []
 
 
 @pytest.mark.asyncio
