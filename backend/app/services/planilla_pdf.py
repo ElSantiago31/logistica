@@ -37,39 +37,17 @@ logger = logging.getLogger(__name__)
 # CONFIGURACIÓN DE IMPRESIÓN DEL EXCEL
 # ============================================================
 def _apply_print_setup(wb) -> None:
-    """Aplica el setup de impresión a todas las hojas del workbook.
+    """Aplica el setup de impresión (delega en planilla_excel).
 
-    Configura cada hoja para que al imprimir/exportar a PDF salga:
-    - Orientación **horizontal** (landscape).
-    - Tamaño de papel **Legal** (8.5 x 14 in) — igual a la planilla física.
-    - **Ajustar todas las columnas a 1 página de ancho** (fitToWidth=1),
-      con alto ilimitado (fitToHeight=0) para que pagine por filas.
-    - Márgenes estrechos para aprovechar el espacio.
-    - Centrado horizontal.
-    - Área de impresión limitada a las columnas B:N (las que usa la plantilla).
+    La configuración vive en una única fuente de verdad:
+    :func:`app.services.planilla_excel.apply_print_setup`, que también se
+    aplica al Excel descargable. Así el PDF y el Excel siempre salen con
+    los mismos márgenes: superior 3.5 cm (carpeta de archivo) y 1 cm en
+    los demás lados, orientación horizontal, papel Legal y fit-to-width.
     """
-    from openpyxl.worksheet.properties import PageSetupProperties
-    from openpyxl.worksheet.page import PageMargins
+    from app.services.planilla_excel import apply_print_setup
 
-    for ws in wb.worksheets:
-        # Orientación horizontal + papel Legal
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.paperSize = 5  # 5 = Legal (8.5 x 14 in)
-        # Ajustar columnas a 1 página de ancho; paginar por filas
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
-        ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
-        # Márgenes estrechos (en pulgadas)
-        ws.page_margins = PageMargins(
-            left=0.3, right=0.3, top=0.4, bottom=0.4,
-            header=0.2, footer=0.2,
-        )
-        # Centrado horizontal en la página
-        ws.print_options.horizontalCentered = True
-        # Área de impresión: columnas B:N (las que usa la plantilla),
-        # desde la fila 1 hasta el final del contenido.
-        last_row = max(ws.max_row, 28)
-        ws.print_area = f"B1:N{last_row}"
+    apply_print_setup(wb)
 
 
 # ============================================================

@@ -524,6 +524,52 @@ def _render_pages(
     return sheets_created
 
 
+def apply_print_setup(wb) -> None:
+    """Aplica el setup de impresión a todas las hojas del workbook.
+
+    Se usa tanto para el Excel descargable (que quien lo imprima no dependa
+    de la configuración de su máquina) como para el PDF (planilla_pdf.py
+    delega aquí antes de convertir con LibreOffice).
+
+    Configura cada hoja para que al imprimir/exportar a PDF salga:
+    - Orientación **horizontal** (landscape).
+    - Tamaño de papel **Legal** (8.5 x 14 in) — igual a la planilla física.
+    - **Ajustar todas las columnas a 1 página de ancho** (fitToWidth=1),
+      con alto ilimitado (fitToHeight=0) para que pagine por filas.
+    - Márgenes: **superior 3.5 cm** (≈1.38", espacio para archivar las
+      hojas en carpeta sin que el gancho tape el encabezado) y **1 cm**
+      (≈0.39") en izquierdo/derecha/inferior.
+    - Centrado horizontal.
+    - Área de impresión limitada a las columnas B:N (las que usa la plantilla).
+
+    Nota: openpyxl define los márgenes en PULGADAS (1 cm = 0.3937").
+    """
+    from openpyxl.worksheet.properties import PageSetupProperties
+    from openpyxl.worksheet.page import PageMargins
+
+    for ws in wb.worksheets:
+        # Orientación horizontal + papel Legal
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = 5  # 5 = Legal (8.5 x 14 in)
+        # Ajustar columnas a 1 página de ancho; paginar por filas
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        # Márgenes de impresión (en pulgadas):
+        #   top   = 1.38" ≈ 3.5 cm (carpeta de archivo)
+        #   resto = 0.39" ≈ 1 cm
+        ws.page_margins = PageMargins(
+            left=0.39, right=0.39, top=1.38, bottom=0.39,
+            header=0.2, footer=0.2,
+        )
+        # Centrado horizontal en la página
+        ws.print_options.horizontalCentered = True
+        # Área de impresión: columnas B:N (las que usa la plantilla),
+        # desde la fila 1 hasta el final del contenido.
+        last_row = max(ws.max_row, 28)
+        ws.print_area = f"B1:N{last_row}"
+
+
 def generate_planilla_xlsx(
     *,
     event_name: str,
@@ -594,6 +640,8 @@ def generate_planilla_xlsx(
             event_date=event_date,
             event_location=event_location,
         )
+        # Embeber setup de impresión (márgenes/orientación) también aquí
+        apply_print_setup(template_wb)
         buf = io.BytesIO()
         template_wb.save(buf)
         return buf.getvalue()
@@ -715,6 +763,9 @@ def generate_planilla_xlsx(
         del template_wb[TEMPLATE_SHEET]
         # La primera hoja queda como activa
         template_wb.active = 0
+
+    # Embeber setup de impresión (márgenes/orientación/legal/fit-width)
+    apply_print_setup(template_wb)
 
     # Serializar a bytes
     buf = io.BytesIO()
