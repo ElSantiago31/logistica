@@ -42,7 +42,7 @@ def _apply_print_setup(wb) -> None:
     La configuración vive en una única fuente de verdad:
     :func:`app.services.planilla_excel.apply_print_setup`, que también se
     aplica al Excel descargable. Así el PDF y el Excel siempre salen con
-    los mismos márgenes: superior 3.5 cm (carpeta de archivo) y 1 cm en
+    los mismos márgenes: superior 2.5 cm (carpeta de archivo) y 1 cm en
     los demás lados, orientación horizontal, papel Legal y fit-to-width.
     """
     from app.services.planilla_excel import apply_print_setup

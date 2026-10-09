@@ -536,8 +536,8 @@ def apply_print_setup(wb) -> None:
     - Tamaño de papel **Legal** (8.5 x 14 in) — igual a la planilla física.
     - **Ajustar todas las columnas a 1 página de ancho** (fitToWidth=1),
       con alto ilimitado (fitToHeight=0) para que pagine por filas.
-    - Márgenes: **superior 3.5 cm** (≈1.38", espacio para archivar las
-      hojas en carpeta sin que el gancho tape el encabezado) y **1 cm**
+    - Márgenes: **superior 2.5 cm** (≈0.98", espacio para archivar en
+      carpeta dejando campo más grande para firmar) y **1 cm**
       (≈0.39") en izquierdo/derecha/inferior.
     - Centrado horizontal.
     - Área de impresión limitada a las columnas B:N (las que usa la plantilla).
@@ -556,10 +556,11 @@ def apply_print_setup(wb) -> None:
         ws.page_setup.fitToHeight = 0
         ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
         # Márgenes de impresión (en pulgadas):
-        #   top   = 1.38" ≈ 3.5 cm (carpeta de archivo)
+        #   top   = 0.98" ≈ 2.5 cm (antes 3.5 cm; se redujo 1 cm para que
+        #           los campos de firma queden más grandes)
         #   resto = 0.39" ≈ 1 cm
         ws.page_margins = PageMargins(
-            left=0.39, right=0.39, top=1.38, bottom=0.39,
+            left=0.39, right=0.39, top=0.98, bottom=0.39,
             header=0.2, footer=0.2,
         )
         # Centrado horizontal en la página
