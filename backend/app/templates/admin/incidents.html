@@ -178,10 +178,14 @@
                     <select id="inc-event" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"></select>
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">Operador *</label>
-                    <select id="inc-operator" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
-                        <option value="">Seleccione...</option>
-                    </select>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Operador * <span class="text-xs font-normal text-gray-400">(cédula primero, luego nombre)</span></label>
+                    <input type="hidden" id="inc-operator" value="">
+                    <div id="inc-operator-picker" class="relative">
+                        <input id="inc-operator-search" type="text" autocomplete="off" placeholder="Escriba la cédula o el nombre para buscar..."
+                            oninput="filterOperators('inc')" onfocus="showOperatorDropdown('inc')"
+                            class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                        <div id="inc-operator-dropdown" class="hidden absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20"></div>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Tipo de novedad *</label>
@@ -221,10 +225,14 @@
                     ⚠️ El operador vetado <strong>no podrá iniciar sesión</strong> hasta que sea reactivado.
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">Operador *</label>
-                    <select id="ban-operator" required class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
-                        <option value="">Seleccione...</option>
-                    </select>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Operador * <span class="text-xs font-normal text-gray-400">(cédula primero, luego nombre)</span></label>
+                    <input type="hidden" id="ban-operator" value="">
+                    <div id="ban-operator-picker" class="relative">
+                        <input id="ban-operator-search" type="text" autocomplete="off" placeholder="Escriba la cédula o el nombre para buscar..."
+                            oninput="filterOperators('ban')" onfocus="showOperatorDropdown('ban')"
+                            class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
+                        <div id="ban-operator-dropdown" class="hidden absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20"></div>
+                    </div>
                 </div>
                 <div id="ban-event-wrap">
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Evento (opcional)</label>
@@ -414,29 +422,100 @@ async function loadOperators() {
             const data = await apiFetch('/api/operators?limit=500');
             allOperators = data.items || data || [];
         }
-        const opSelects = ['inc-operator', 'ban-operator'];
-        opSelects.forEach(id => {
-            const sel = document.getElementById(id);
-            if (!sel) return;
-            sel.innerHTML = '<option value="">Seleccione...</option>';
-            if (allOperators.length === 0) {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.disabled = true;
-                opt.textContent = 'Sin operadores asignados';
-                sel.appendChild(opt);
-                return;
-            }
-            allOperators.forEach(op => {
-                const opt = document.createElement('option');
-                opt.value = op.id;
-                const fullName = (op.first_name + ' ' + (op.last_name || '')).trim();
-                opt.textContent = fullName + ' — ' + (op.document_number || 's/d');
-                sel.appendChild(opt);
-            });
-        });
+        // Ordenar por cédula (numérico cuando sea posible) para que el
+        // buscador muestre las opciones en orden natural de documento.
+        allOperators.sort((a, b) =>
+            String(a.document_number || '').localeCompare(
+                String(b.document_number || ''), undefined, { numeric: true }
+            )
+        );
     } catch (e) { console.error('loadOperators', e); }
 }
+
+// ============================================================================
+// Picker de operador con búsqueda (modales novedad y veto)
+// ============================================================================
+// El <select> nativo obligaba a scrollear entre cientos de operadores.
+// Este picker filtra allOperators por cédula O nombre mientras se escribe
+// y muestra las opciones como "CC — Nombre" (CC primero, como se pidió).
+// El id del operador elegido queda en el hidden input #inc-operator /
+// #ban-operator, que es lo que leen submitIncident()/submitBan().
+const operatorPick = { inc: null, ban: null };
+
+function opFullName(op) {
+    return (op.first_name + ' ' + (op.last_name || '')).trim();
+}
+
+function opOptionLabel(op) {
+    return (op.document_number || 's/d') + ' — ' + opFullName(op);
+}
+
+function renderOperatorOptions(scope, query) {
+    const dd = document.getElementById(scope + '-operator-dropdown');
+    if (!dd) return;
+    const q = (query || '').toLowerCase().trim();
+    if (allOperators.length === 0) {
+        dd.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">Sin operadores asignados</div>';
+        return;
+    }
+    const list = allOperators.filter(op => {
+        if (!q) return true;
+        return (op.document_number || '').includes(q) ||
+               opFullName(op).toLowerCase().includes(q);
+    });
+    if (list.length === 0) {
+        dd.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">Sin resultados para "' + esc(query) + '"</div>';
+        return;
+    }
+    dd.innerHTML = list.slice(0, 100).map(op =>
+        '<button type="button" onclick="pickOperator(\'' + scope + '\', ' + op.id + ')"' +
+        ' class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 border-b border-gray-100 last:border-0">' +
+        '<span class="font-semibold text-gray-800">' + esc(op.document_number || 's/d') + '</span>' +
+        ' — ' + esc(opFullName(op)) + '</button>'
+    ).join('') + (list.length > 100
+        ? '<div class="px-3 py-2 text-xs text-gray-400">Mostrando 100 de ' + list.length + ' — siga escribiendo para afinar</div>'
+        : '');
+}
+
+function showOperatorDropdown(scope) {
+    renderOperatorOptions(scope, document.getElementById(scope + '-operator-search').value);
+    document.getElementById(scope + '-operator-dropdown').classList.remove('hidden');
+}
+
+function filterOperators(scope) {
+    // Escribir invalida la selección previa (vuelve a buscar).
+    operatorPick[scope] = null;
+    document.getElementById(scope + '-operator').value = '';
+    showOperatorDropdown(scope);
+}
+
+function pickOperator(scope, id) {
+    const op = allOperators.find(o => String(o.id) === String(id));
+    if (!op) return;
+    operatorPick[scope] = op;
+    document.getElementById(scope + '-operator').value = op.id;
+    document.getElementById(scope + '-operator-search').value = opOptionLabel(op);
+    document.getElementById(scope + '-operator-dropdown').classList.add('hidden');
+}
+
+function clearOperatorPick(scope) {
+    operatorPick[scope] = null;
+    const h = document.getElementById(scope + '-operator');
+    if (h) h.value = '';
+    const s = document.getElementById(scope + '-operator-search');
+    if (s) s.value = '';
+    const dd = document.getElementById(scope + '-operator-dropdown');
+    if (dd) dd.classList.add('hidden');
+}
+
+// Cerrar los dropdowns al hacer click fuera del picker.
+document.addEventListener('click', e => {
+    ['inc', 'ban'].forEach(scope => {
+        const wrap = document.getElementById(scope + '-operator-picker');
+        const dd = document.getElementById(scope + '-operator-dropdown');
+        if (dd && wrap && !wrap.contains(e.target)) dd.classList.add('hidden');
+    });
+});
 
 async function loadIncidents() {
     const params = new URLSearchParams();
@@ -527,8 +606,8 @@ function renderIncidents() {
             '<td class="px-4 py-3 text-sm text-gray-600">' + date + '</td>' +
             eventCell +
             '<td class="px-4 py-3 text-sm">' +
-                '<div class="font-medium text-gray-800">' + (i.operator_name || '—') + '</div>' +
-                '<div class="text-xs text-gray-400">' + (i.operator_document || '') + '</div>' +
+                '<div class="font-medium text-gray-800">' + (i.operator_document || '—') + '</div>' +
+                '<div class="text-xs text-gray-500">' + (i.operator_name || '') + '</div>' +
             '</td>' +
             '<td class="px-4 py-3 text-sm"><span class="inline-block px-2 py-1 rounded text-xs font-semibold ' + badge + '">' + vetoIcon + label + '</span></td>' +
             '<td class="px-4 py-3 text-sm text-gray-600 align-top">' +
@@ -568,8 +647,8 @@ function renderBans() {
         return '<tr class="hover:bg-gray-50">' +
             '<td class="px-4 py-3 text-sm text-gray-600">' + date + '</td>' +
             '<td class="px-4 py-3 text-sm">' +
-                '<div class="font-medium text-gray-800">' + (b.operator_name || '—') + '</div>' +
-                '<div class="text-xs text-gray-400">' + (b.operator_document || '') + '</div>' +
+                '<div class="font-medium text-gray-800">' + (b.operator_document || '—') + '</div>' +
+                '<div class="text-xs text-gray-500">' + (b.operator_name || '') + '</div>' +
             '</td>' +
             '<td class="px-4 py-3 text-sm text-gray-600">' +
                 '<div class="max-w-xs break-words wrap-anywhere">' + b.reason + '</div>' +
@@ -618,12 +697,14 @@ function switchTab(tab) {
 // ============================================================================
 function openIncidentModal() {
     document.getElementById('form-incident').reset();
+    clearOperatorPick('inc');
     document.getElementById('modal-incident').classList.remove('hidden');
     document.getElementById('modal-incident').classList.add('flex');
 }
 
 function openBanModal() {
     document.getElementById('form-ban').reset();
+    clearOperatorPick('ban');
     document.getElementById('modal-ban').classList.remove('hidden');
     document.getElementById('modal-ban').classList.add('flex');
 }
@@ -639,9 +720,14 @@ function closeModal(id) {
 // ============================================================================
 async function submitIncident(e) {
     e.preventDefault();
+    const operatorId = document.getElementById('inc-operator').value;
+    if (!operatorId) {
+        Swal.fire('Falta el operador', 'Busque por cédula o nombre y seleccione un operador de la lista', 'warning');
+        return;
+    }
     const payload = {
         event_id: EVENT_ID || document.getElementById('inc-event').value,
-        operator_id: document.getElementById('inc-operator').value,
+        operator_id: operatorId,
         incident_type: document.getElementById('inc-type').value,
         description: document.getElementById('inc-description').value,
     };
@@ -673,8 +759,13 @@ async function deleteIncident(id) {
 
 async function submitBan(e) {
     e.preventDefault();
+    const banOperatorId = document.getElementById('ban-operator').value;
+    if (!banOperatorId) {
+        Swal.fire('Falta el operador', 'Busque por cédula o nombre y seleccione un operador de la lista', 'warning');
+        return;
+    }
     const payload = {
-        operator_id: document.getElementById('ban-operator').value,
+        operator_id: banOperatorId,
         reason: document.getElementById('ban-reason').value,
         observations: document.getElementById('ban-observations').value || null,
     };
