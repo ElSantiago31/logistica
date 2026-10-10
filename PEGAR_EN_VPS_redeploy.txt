@@ -1,11 +1,20 @@
 # ==== PEGAR EN LA VPS (terminal SSH, como root) ====
-# Fix del error 500 en "Incorporacion Rapida" (quick-add) del check-in:
-# operadores importados por Excel con tipo "CEDULA"/"PP" no eran
-# encontrados al buscar por (numero AND tipo) -> intento de crear ghost
-# duplicado -> UNIQUE violation -> 500. Ahora la busqueda es SOLO por
-# numero de documento y el tipo se normaliza ("CEDULA"->CC, "PP"->PA, etc).
-# Tambien: admitted_by se trunca a 100 chars y IntegrityError -> 409.
-# Sin migraciones de BD.
+# Despliegue de los ultimos fixes en master (incluye commits hasta 35eb9c5):
+#
+# 1. Planilla de pago: margen inferior 1cm -> 0.5cm y casillas mas
+#    grandes (filas de datos 57.75pt -> 63pt) para firmar comodo.
+#    (commits 43df1dc, beadace)
+# 2. Registro de operadores: el RUT en PDF ya NO es obligatorio en el
+#    formulario del landing. Si no se sube al registrarse, el operador
+#    tiene 15 dias para subirlo desde su perfil (rut_deadline_at);
+#    vencido el plazo no puede asignarse a nuevos eventos.
+#    (commit 35eb9c5)
+# 3. Fixes anteriores ya incluidos: quick-add sin error 500 con tipos
+#    CEDULA/PP, botones de accion en monitor de gerencia, alerta roja
+#    90% en checkin, etc.
+#
+# NOTA: SI incluye la migracion add_rut_deadline (rut_deadline_at en
+# operators). El entrypoint corre `alembic upgrade head` automaticamente.
 
 cd /opt/logistica
 
@@ -15,32 +24,31 @@ git pull origin master
 # 2. Reconstruir y reiniciar (restart solo NO sirve: no reconstruye la imagen)
 docker compose -f docker-compose.prod.yml up -d --build
 
-# 3. Verificar que el codigo nuevo esta dentro del contenedor:
-docker exec logistica_backend grep -c "Admitido mediante Incorporacion Rapida" app/services/quick_add.py
+# 3. Verificar que las migraciones aplicaron (debe listar todas, incluida add_rut_deadline)
+docker exec logistica_backend alembic current
+
+# 4. Verificar que el codigo nuevo esta dentro del contenedor:
+
+# Planilla: casillas a 63pt
+docker exec logistica_backend grep -c "DATA_ROW_HEIGHT_PT = 63" app/services/planilla_excel.py
 # Debe imprimir >= 1.
 
-docker exec logistica_backend grep -c '"CEDULA": "CC"' app/services/operator_import.py
+# Planilla: margen inferior 0.2in (~0.5cm)
+docker exec logistica_backend grep -c "bottom=0.2" app/services/planilla_excel.py
 # Debe imprimir >= 1.
 
-# 4. Probar el fix en caliente (crear un operador rapido con un documento
-#    ya importado desde el panel de staff del evento). Antes: error 500
-#    "duplicate key value violates unique constraint". Ahora: 201
-#    mode="existing" (o 409 si ya estaba asignado a ese evento).
+# Registro: RUT opcional en el landing
+docker exec logistica_backend grep -c "Tu RUT (Opcional)" app/templates/landing/index.html
+# Debe imprimir >= 1.
 
-# 5. (Opcional) Corregir tipos historicos mal guardados en la BD:
-# docker exec logistica_backend python -c "
-# import asyncio
-# from app.database import get_engine
-# from sqlalchemy import text
-# async def run():
-#     e = get_engine()
-#     async with e.begin() as conn:
-#         n = await conn.execute(text(\"\"\"
-#             UPDATE users SET document_type = 'CC'
-#             WHERE document_type IN ('CEDULA','CEDULA DE CIUDADANIA','C.C.')
-#         \"\"\"))
-#         print('normalizados a CC:', n.rowcount)
-# asyncio.run(run())
-# "
-# NOTA: la app ya funciona sin este paso (la busqueda ignora el tipo),
-# solo es cosmetic/higiene para reportes.
+docker exec logistica_backend grep -c "mandatory PDF" app/templates/landing/index.html
+# Debe imprimir 0 (ya no dice "mandatory").
+
+# 5. Probar en caliente:
+#    a) Abrir /enrolamiento en el navegador -> el paso 3 debe decir
+#       "Tu RUT (Opcional)" y permitir registrarse SIN subir el PDF.
+#    b) Descargar planilla Excel/PDF de un evento con operadores y
+#       verificar casillas mas grandes (fila ~63pt) al imprimir.
+#    c) Si algun navegador muestra la version vieja del formulario,
+#       forzar Ctrl+Shift+R (el service worker usa network-first,
+#       pero puede haber cache HTTP del navegador).
