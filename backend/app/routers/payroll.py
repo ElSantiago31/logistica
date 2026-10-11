@@ -239,9 +239,10 @@ async def get_payable_operators(
 
         record = records_by_assign.get(str(assignment.id))
 
-        # [NÓMINA-V2] Determinar coordinador: quien lo programó (programmed_by)
-        # tiene prioridad. Fallback: admitted_by → mapping por área → "Sin asignar".
-        coord_name = assignment.programmed_by or assignment.admitted_by
+        # [NÓMINA-V2] Coordinador VIGENTE: admitted_by (quien lo admite en
+        # check-in; lo actualiza "Cambiar Coordinador") tiene prioridad.
+        # Fallback: programmed_by (histórico) → mapping por área → "Sin asignar".
+        coord_name = assignment.admitted_by or assignment.programmed_by
         if not coord_name:
             coord_name = general_coord[0] if general_coord else "Sin asignar"
             if role and role.area and role.area in area_to_coord:
@@ -1062,9 +1063,11 @@ async def download_planilla_coordinador(
     # Construir lista plana de operadores (con su coordinator_name)
     operators: list[dict] = []
     for assignment, operator, op_user, role in rows:
-        # Determinar coordinador: quien lo programó (programmed_by) tiene
-        # prioridad. Fallback: admitted_by → mapping por área → "Sin asignar".
-        coord_name = assignment.programmed_by or assignment.admitted_by
+        # Coordinador VIGENTE: admitted_by (actualizado por check-in y por
+        # "Cambiar Coordinador") tiene prioridad sobre el histórico
+        # programmed_by (p. ej. "Colab A&C" de la Incorporación Rápida).
+        # Fallback: mapping por área → "Sin asignar".
+        coord_name = assignment.admitted_by or assignment.programmed_by
         if not coord_name:
             coord_name = general_coord[0] if general_coord else "Sin asignar"
             if role and role.area and role.area in area_to_coord:
@@ -1303,7 +1306,7 @@ async def planilla_debug(
     try:
         operators = []
         for assignment, operator, op_user, role in rows:
-            coord_name = assignment.programmed_by or assignment.admitted_by
+            coord_name = assignment.admitted_by or assignment.programmed_by
             if not coord_name:
                 coord_name = general_coord[0] if general_coord else "Sin asignar"
                 if role and role.area and role.area in area_to_coord:

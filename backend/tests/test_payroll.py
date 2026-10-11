@@ -180,7 +180,9 @@ async def setup_payroll_event(db: AsyncSession):
         event_id=event.id,
         operator_id=op_coord_profile.id,
         role_id=role_coord.id,
-        status="checked_in"
+        status="checked_in",
+        programmed_by="Colab A&C",
+        admitted_by="Carlos Coordinador"
     )
     # Operator 1: checked_in -> should be included in payroll spreadsheet
     assign_op1 = EventAssignment(
@@ -189,7 +191,9 @@ async def setup_payroll_event(db: AsyncSession):
         role_id=role_operator.id,
         status="checked_in",
         jacket_number="J-10",
-        cap_number="C-05"
+        cap_number="C-05",
+        programmed_by="Colab A&C",
+        admitted_by="Carlos Coordinador"
     )
     # Operator 2: confirmed (not checked_in) -> should NOT be included in payroll spreadsheet
     assign_op2 = EventAssignment(
@@ -352,3 +356,28 @@ def test_planilla_rol_column_and_layout():
 
     # --- Fila 10 (Luis, rol distinto) ---
     assert ws["H10"].value == "Logistico"
+
+
+@pytest.mark.asyncio
+async def test_planilla_uses_admitted_by_over_programmed_by(
+    client: AsyncClient, admin_token: str, setup_payroll_event
+):
+    """Regresión: la planilla debe agrupar por el coordinador VIGENTE.
+
+    Escenario real del bug: operadores registrados con la Incorporación
+    Rápida traen programmed_by="Colab A&C" (histórico del registro web) y el
+    check-in / "Cambiar Coordinador" fija admitted_by="Carlos Coordinador".
+    La planilla debe usar admitted_by (vigente), no programmed_by.
+    """
+    event, _ = setup_payroll_event
+    response = await client.get(
+        f"/api/payroll/events/{event.id}/planilla-coordinador",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+    wb = openpyxl.load_workbook(BytesIO(response.content))
+
+    # La hoja debe llamarse como el coordinador VIGENTE (admitted_by),
+    # NO como el histórico programmed_by="Colab A&C".
+    assert "Carlos Coordinador" in wb.sheetnames
+    assert "Colab A&C" not in wb.sheetnames
