@@ -1097,7 +1097,12 @@ async function showOperator(assignmentId) {
 
 // Cambia el coordinador (admitted_by) de un operador después del check-in.
 // Usa el endpoint /reassign con reason="Cambio manual post-checkin".
-async function changeCoordinator(force) {
+// _coordForce=true -> reintento de sobrecupo: omite el confirm inicial y
+// solo reenvia el PATCH con force_overquota (antes el dialogo salia 2 veces).
+let _coordForce = false;
+async function changeCoordinator() {
+    const force = _coordForce;
+    _coordForce = false;
     if (!currentOperator) return;
     const sel = document.getElementById('coordinator-select');
     if (!sel) { alert('Selector de coordinador no disponible'); return; }
@@ -1112,7 +1117,7 @@ async function changeCoordinator(force) {
         alert('El coordinador seleccionado ya es el actual.');
         return;
     }
-    if (!confirm(`¿Cambiar el coordinador de "${currentOperator.full_name}"?\n\n` +
+    if (!force && !confirm(`¿Cambiar el coordinador de "${currentOperator.full_name}"?\n\n` +
         `De: ${currentCoord || '(sin asignar)'}\nA: ${newCoord}`)) return;
 
     try {
@@ -1145,7 +1150,8 @@ async function changeCoordinator(force) {
             const isQF = errData.detail && typeof errData.detail === 'object' && errData.detail.error === 'QUOTA_FULL';
             // QUOTA_FULL: ofrecer forzar el cambio aunque el destino este lleno
             if (!force && isQF && confirm(`El cupo de ${newCoord} está lleno.\n\n¿Forzar el cambio de todos modos (sobrecupo)?`)) {
-                return changeCoordinator(true);
+                _coordForce = true;   // reintenta SOLO el PATCH, sin repetir el confirm inicial
+                return changeCoordinator();
             }
             const msg = (errData.detail && errData.detail.message) || errData.detail || 'Cupo lleno';
             alert('No se pudo reasignar: ' + msg);
