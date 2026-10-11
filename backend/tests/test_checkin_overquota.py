@@ -294,3 +294,38 @@ async def test_change_role_endpoint_and_csv(client, overquota_env):
     )
     assert resp4.status_code == 200
     assert resp4.json()["status"] == "unchanged"
+
+@pytest.mark.asyncio
+async def test_reassign_force_overquota(client, overquota_env, db: AsyncSession):
+    """Regression: /reassign con force_overquota permite ceder a un coordinador lleno.
+
+    Sin force: 409 QUOTA_FULL. Con force: 200 y flag overquota en respuesta
+    (antes no habia salida cuando TODOS los coordinadores estaban llenos).
+    """
+    env = overquota_env
+    a1 = env["assignment_checked"]
+    # Mover a1 a PEDRO para que XIMENA quede llena justo (a3 = 1/1)
+    a1.admitted_by = "PEDRO"
+    await db.commit()
+    headers = {"Authorization": f"Bearer {env['token']}"}
+
+    # Sin force: rechazado con QUOTA_FULL
+    resp = await client.patch(
+        f"/api/sync/assignments/{a1.id}/reassign",
+        headers=headers,
+        json={"new_coordinator": "XIMENA"},
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"]["error"] == "QUOTA_FULL"
+
+    # Con force: permitido en sobrecupo
+    resp2 = await client.patch(
+        f"/api/sync/assignments/{a1.id}/reassign",
+        headers=headers,
+        json={"new_coordinator": "XIMENA", "force_overquota": True},
+    )
+    assert resp2.status_code == 200, resp2.text
+    data = resp2.json()
+    assert data["overquota"] is True
+    assert data["old_coordinator"] == "PEDRO"
+    assert data["new_coordinator"] == "XIMENA"

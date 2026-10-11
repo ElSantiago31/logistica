@@ -1104,10 +1104,20 @@ async def reassign_coordinator(
     # Validar permisos de staff para el evento de la asignación
     await _resolve_staff_access(db, user, assignment.event_id)
 
-    # Verificar cupo del nuevo coordinador
+    # Verificar cupo del nuevo coordinador. force_overquota permite la cesion
+    # aunque el cupo destino este lleno (misma semantica que en check-in:
+    # el cupo es informativo y nunca debe dejar al staff sin salida).
+    force = bool(payload.get("force_overquota", False))
+    overquota = False
     ok, msg, info = await _check_coordinator_quota(db, assignment.event_id, new_coordinator)
     if not ok:
-        raise HTTPException(409, detail={"error": "QUOTA_FULL", "message": msg})
+        if not force:
+            raise HTTPException(409, detail={"error": "QUOTA_FULL", "message": msg})
+        overquota = True
+        logger.info(
+            "Reasignacion en sobrecupo hacia %s en evento %s (%s)",
+            new_coordinator, assignment.event_id, msg,
+        )
 
     old = assignment.admitted_by
     assignment.admitted_by = new_coordinator
@@ -1137,6 +1147,7 @@ async def reassign_coordinator(
                 "old_coordinator": old,
                 "new_coordinator": new_coordinator,
                 "reason": reason,
+                "overquota": overquota,
             },
         )
         await db.commit()
@@ -1163,6 +1174,7 @@ async def reassign_coordinator(
         "assignment_id": str(assignment.id),
         "old_coordinator": old,
         "new_coordinator": new_coordinator,
+        "overquota": overquota,
         "message": f"{old or 'Sin coordinador'} cedió el operador a {new_coordinator}",
     }
 

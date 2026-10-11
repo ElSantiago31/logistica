@@ -1097,7 +1097,7 @@ async function showOperator(assignmentId) {
 
 // Cambia el coordinador (admitted_by) de un operador después del check-in.
 // Usa el endpoint /reassign con reason="Cambio manual post-checkin".
-async function changeCoordinator() {
+async function changeCoordinator(force) {
     if (!currentOperator) return;
     const sel = document.getElementById('coordinator-select');
     if (!sel) { alert('Selector de coordinador no disponible'); return; }
@@ -1121,7 +1121,8 @@ async function changeCoordinator() {
             headers: authHeaders(),
             body: JSON.stringify({
                 new_coordinator: newCoord,
-                reason: 'Cambio manual post-checkin'
+                reason: 'Cambio manual post-checkin',
+                force_overquota: !!force
             })
         });
         if (resp.ok) {
@@ -1141,6 +1142,11 @@ async function changeCoordinator() {
             pollQuotas();  // refrescar tarjetas de cupos
         } else if (resp.status === 409) {
             const errData = await resp.json().catch(() => ({}));
+            const isQF = errData.detail && typeof errData.detail === 'object' && errData.detail.error === 'QUOTA_FULL';
+            // QUOTA_FULL: ofrecer forzar el cambio aunque el destino este lleno
+            if (!force && isQF && confirm(`El cupo de ${newCoord} está lleno.\n\n¿Forzar el cambio de todos modos (sobrecupo)?`)) {
+                return changeCoordinator(true);
+            }
             const msg = (errData.detail && errData.detail.message) || errData.detail || 'Cupo lleno';
             alert('No se pudo reasignar: ' + msg);
         } else {
@@ -2359,8 +2365,15 @@ async function showReassignModal(assignmentId, coordinatorName, suggestions) {
     const modal = document.getElementById('reassign-modal');
     const list = document.getElementById('reassign-options');
     document.getElementById('reassign-title').textContent = `Cupo lleno: ${coordinatorName}`;
+    // Escape: dejar al operador en sobrecupo con su coordinador actual
+    // (cuando TODOS los coordinadores estan llenos no hay a quien ceder).
+    const forceBtn = `
+        <button onclick="forceOverquotaFromModal()"
+            class="w-full text-left p-3 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 transition text-sm font-medium text-amber-800 mt-2">
+            ⚠️ Dejar en sobrecupo con ${coordinatorName || 'el coordinador actual'}
+        </button>`;
     if (!suggestions || !suggestions.length) {
-        list.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">No hay coordinadores con cupo disponible.</p>';
+        list.innerHTML = forceBtn + '<p class="text-sm text-gray-500 text-center py-4">No hay coordinadores con cupo disponible.</p>';
     } else {
         list.innerHTML = suggestions.map(s => `
             <button onclick="confirmReassign('${s.coordinator}')"
@@ -2368,12 +2381,24 @@ async function showReassignModal(assignmentId, coordinatorName, suggestions) {
                 <span class="font-medium">${s.coordinator}</span>
                 <span class="text-xs text-green-600">${s.available} cupos</span>
             </button>
-        `).join('');
+        `).join('') + forceBtn;
     }
     modal.classList.remove('hidden');
 }
 
-async function confirmReassign(newCoordinator) {
+// Escape del modal de cupo lleno: reintenta el check-in con force_overquota.
+async function forceOverquotaFromModal() {
+    document.getElementById('reassign-modal').classList.add('hidden');
+    _reassignAssignmentId = null;
+    _retryingOverquota = true;
+    try {
+        await doCheckIn();
+    } finally {
+        _retryingOverquota = false;
+    }
+}
+
+async function confirmReassign(newCoordinator, force) {
     if (!_reassignAssignmentId) return;
     const modal = document.getElementById('reassign-modal');
     modal.classList.add('hidden');
@@ -2381,7 +2406,7 @@ async function confirmReassign(newCoordinator) {
         const resp = await Auth.apiFetch(`/api/sync/assignments/${_reassignAssignmentId}/reassign`, {
             method: 'PATCH',
             headers: authHeaders(),
-            body: JSON.stringify({ new_coordinator: newCoordinator })
+            body: JSON.stringify({ new_coordinator: newCoordinator, force_overquota: !!force })
         });
         if (resp.ok) {
             const result = await resp.json();
@@ -2434,6 +2459,12 @@ async function confirmReassign(newCoordinator) {
             pollQuotas();
         } else {
             const err = await resp.json().catch(() => ({}));
+            // QUOTA_FULL: ofrecer forzar la cesion aunque el destino este lleno
+            if (!force && err.detail && typeof err.detail === 'object' && err.detail.error === 'QUOTA_FULL') {
+                if (confirm(`El cupo de ${newCoordinator} está lleno.\n\n¿Forzar la cesión de todos modos (sobrecupo)?`)) {
+                    return confirmReassign(newCoordinator, true);
+                }
+            }
             const errMsg = (err.detail && err.detail.message) ? err.detail.message : (err.detail || 'desconocido');
             alert('Error al reasignar: ' + errMsg);
         }
