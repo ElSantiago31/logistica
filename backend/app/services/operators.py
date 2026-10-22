@@ -68,14 +68,22 @@ async def get_operators(
     #   inactivo → User.is_active=False o con veto (Operator.is_banned=True)
     # Los fantasmas de Incorporación Rápida (event_only, sin email) se
     # excluyen de inactivos: son registros internos del ciclo del evento.
-    banned_exists = select(Operator.id).where(
-        Operator.user_id == User.id,
-        Operator.is_banned == True,
-    ).exists()
-    ghost_exists = select(Operator.id).where(
-        Operator.user_id == User.id,
-        Operator.event_only == True,
-    ).exists()
+    # Alias obligatorio en los EXISTS: cuando un filtro (rol/educacion de
+    # los chips) fuerza JOIN operators en el query exterior, SQLAlchemy
+    # auto-correlaciona estos EXISTS contra users Y operators dejandolos
+    # sin FROM -> InvalidRequestError -> 500. Con alias + correlate(User)
+    # el FROM interno (operators AS op_xxx) siempre se conserva.
+    from sqlalchemy.orm import aliased
+    op_banned = aliased(Operator)
+    op_ghost = aliased(Operator)
+    banned_exists = select(op_banned.id).where(
+        op_banned.user_id == User.id,
+        op_banned.is_banned == True,
+    ).correlate(User).exists()
+    ghost_exists = select(op_ghost.id).where(
+        op_ghost.user_id == User.id,
+        op_ghost.event_only == True,
+    ).correlate(User).exists()
 
     if is_active:
         state_filter = and_(User.is_active == True, ~banned_exists)
@@ -107,17 +115,36 @@ async def get_operators(
     # Exclude already assigned to event
     if exclude_event_id:
         from app.models.events import EventAssignment
-        assigned_sq = select(Operator.user_id).join(
-            EventAssignment, EventAssignment.operator_id == Operator.id
-        ).where(
-            EventAssignment.event_id == exclude_event_id
-        )
-        # Solo excluye de la etapa indicada: un operador en OTRA etapa sigue
-        # apareciendo y puede reasignarse (= doble turno, permitido).
-        if exclude_stage:
-            assigned_sq = assigned_sq.where(EventAssignment.stage == exclude_stage)
-        query = query.where(User.id.notin_(assigned_sq))
-        count_query = count_query.where(User.id.notin_(assigned_sq))
+        # El frontend envía el id del evento como string: normalizarlo a UUID
+        # antes de compararlo con la columna UUID (evita AttributeError 'str'
+        # object has no attribute 'hex' -> 500).
+        try:
+            exclude_event_uuid = uuid.UUID(str(exclude_event_id))
+        except (ValueError, TypeError, AttributeError):
+            exclude_event_uuid = None
+        if exclude_event_uuid:
+            # Alias obligatorio: el query exterior puede hacer JOIN con
+            # Operator (filtros de rol/educacion de los chips). Sin alias
+            # SQLAlchemy auto-correlaciona y elimina el FROM de este
+            # subquery -> InvalidRequestError -> 500. Con alias queda
+            # autocontenido y nunca se correlaciona.
+            from sqlalchemy.orm import aliased
+            op_sq = aliased(Operator)
+            assigned_sq = select(op_sq.user_id).join(
+                EventAssignment, EventAssignment.operator_id == op_sq.id
+            ).where(
+                EventAssignment.event_id == exclude_event_uuid
+            )
+            # Solo excluye de la etapa indicada: un operador en OTRA etapa sigue
+            # apareciendo y puede reasignarse (= doble turno, permitido).
+            if exclude_stage:
+                assigned_sq = assigned_sq.where(EventAssignment.stage == exclude_stage)
+            # Correlacionar SOLO contra User. Sin esto, cuando el query
+            # exterior hace JOIN con Operator (filtros de rol/educación de
+            # los chips), SQLAlchemy auto-correlaciona y elimina el FROM del
+            # subquery -> InvalidRequestError -> 500 al filtrar por rol.
+            query = query.where(User.id.notin_(assigned_sq))
+            count_query = count_query.where(User.id.notin_(assigned_sq))
 
     # Search by name, email, or document
     if search:
