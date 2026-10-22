@@ -317,7 +317,7 @@ async function loadAssignments(){
 function _assignmentRowHtml(a){
     return `<tr>
         <td class="px-4 py-2 font-medium">${a.operator_name}${a.is_event_only?EVENT_ONLY_BADGE:''}${a.double_shift?DOUBLE_SHIFT_BADGE:''}</td>
-        <td class="px-4 py-2 text-sm">${a.operator_phone||'-'}</td>
+        <td class="px-4 py-2 text-sm">${a.operator_document_number?((a.operator_document_type||'')+' '+a.operator_document_number).trim():'-'}</td>
         <td class="px-4 py-2 text-sm">${a.role_name||'-'}</td>
         <td class="px-4 py-2">${stageBadge(a.stage)}</td>
         <td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs font-medium ${_SC[a.status]||'bg-gray-100'}">${_SL[a.status]||a.status}</span></td>
@@ -329,7 +329,7 @@ function _assignmentRowHtml(a){
 function _assignmentCardHtml(a){
     return `<div class="border rounded-lg p-3 space-y-2">
         <div class="flex justify-between items-start">
-            <div><div class="font-medium text-sm">${a.operator_name}${a.is_event_only?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold">SOLO EVENTO</span></div>':''}${a.double_shift?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">DOBLE TURNO</span></div>':''}</div><div class="text-xs text-gray-500">${a.operator_phone||'-'}</div></div>
+            <div><div class="font-medium text-sm">${a.operator_name}${a.is_event_only?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold">SOLO EVENTO</span></div>':''}${a.double_shift?'<div class="mt-0.5"><span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">DOBLE TURNO</span></div>':''}</div><div class="text-xs text-gray-500">${a.operator_document_number?((a.operator_document_type||'')+' '+a.operator_document_number).trim():'-'}</div></div>
             <div class="flex flex-col items-end gap-1">${stageBadge(a.stage)}<span class="px-2 py-1 rounded-full text-xs font-medium ${_SC[a.status]||'bg-gray-100'}">${_SL[a.status]||a.status}</span></div>
         </div>
         <div class="flex justify-between text-xs text-gray-600"><span>Rol: ${a.role_name||'-'}</span><span>${a.rate_applied?'$'+a.rate_applied.toLocaleString('es-CO'):'-'}</span></div>
@@ -377,7 +377,7 @@ function renderAssignments(){
         <table class="w-full text-sm">
             <thead class="bg-gray-50"><tr>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operador</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Documento</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Etapa</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
