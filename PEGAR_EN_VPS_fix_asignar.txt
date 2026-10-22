@@ -1,0 +1,47 @@
+# ==== PEGAR EN LA VPS (terminal SSH, como root) ====
+# Fix del error 500 al filtrar con chips del modal "+ Asignar" (commit 5d9f810):
+#
+# Sintoma: en el detalle de un evento, al abrir "+ Asignar" y tocar cualquier
+# chip (rol, educacion, ciudad) o buscar, la lista de operadores mostraba
+# "Error cargando operadores" y el log del backend registraba 500 en
+# GET /api/operators/.
+#
+# Causa (3 bugs en get_operators):
+#   1. exclude_event_id llegaba como string del frontend y se comparaba
+#      contra la columna UUID -> AttributeError.
+#   2/3. Los EXISTS de operadores vetados/fantasma y el subquery de
+#      "ya asignados" se auto-correlacionaban cuando un chip forzaba JOIN
+#      con operators -> InvalidRequestError (subquery sin FROM).
+#
+# Fix: parsear el UUID + usar aliased(Operator) en los subqueries.
+# Verificado con diagnostico local y 23 tests de regresion.
+#
+# NOTA: NO incluye migraciones nuevas (solo codigo Python). El entrypoint
+# corre `alembic upgrade head` automaticamente y es idempotente.
+
+cd /opt/logistica
+
+# 1. Bajar el codigo nuevo
+git pull origin master
+
+# 2. Reconstruir y reiniciar (restart solo NO sirve: no reconstruye la imagen)
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Verificar que el codigo nuevo esta dentro del contenedor:
+
+# UUID parse del exclude_event_id
+docker exec logistica_backend grep -c "exclude_event_uuid" app/services/operators.py
+# Debe imprimir >= 1.
+
+# Alias anti-correlacion en los EXISTS
+docker exec logistica_backend grep -c "op_banned = aliased(Operator)" app/services/operators.py
+# Debe imprimir 1.
+
+# 4. Probar en caliente:
+#    a) Abrir un evento en preparacion -> "+ Asignar" -> tocar un chip de rol:
+#       la lista debe refrescar SIN error y mostrar el contador de resultados.
+#    b) Escribir en el buscador del modal: no debe aparecer "Error cargando
+#       operadores".
+#    c) Verificar en logs que ya no hay 500:
+#       docker logs logistica_backend --since 10m 2>&1 | grep " 500 "
+#       (no debe imprimir nada nuevo al usar el modal)
