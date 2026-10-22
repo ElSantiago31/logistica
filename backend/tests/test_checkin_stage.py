@@ -290,3 +290,26 @@ async def test_change_assignment_stage_endpoint(client, stage_env, db):
     )
     assert same.status_code == 200
     assert same.json()["status"] == "unchanged"
+
+
+@pytest.mark.asyncio
+async def test_sync_attendance_applies_stage(client, stage_env, db):
+    """POST /api/sync/attendance con stage en el record offline: aplica la etapa."""
+    resp = await client.post(
+        "/api/sync/attendance",
+        headers={"Authorization": f"Bearer {stage_env['token']}"},
+        json={"records": [{
+            "event_id": stage_env["event_id"],
+            "operator_id": str(stage_env["operator"].id),
+            "assignment_id": stage_env["assignment_id"],
+            "check_in_time": datetime.now(timezone.utc).isoformat(),
+            "check_in_method": "manual",
+            "coordinator": None,
+            "role_id": None,
+            "stage": "desmontaje",  # [ETAPAS] etapa elegida offline
+        }]},
+    )
+    assert resp.status_code == 200, resp.text
+    a = await db.get(EventAssignment, uuid.UUID(stage_env["assignment_id"]))
+    assert a.stage == "desmontaje"
+    assert a.status == "checked_in"

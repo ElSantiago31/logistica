@@ -624,6 +624,10 @@ async def sync_attendance(
                         rec_role_id = _to_uuid(rec.get("role_id"))
                         if rec_role_id and str(rec_role_id) != str(assignment.role_id or ""):
                             assignment.role_id = rec_role_id
+                        # [ETAPAS] etapa del check-in offline
+                        rec_stage = str(rec.get("stage") or "").strip().lower()
+                        if rec_stage and rec_stage in EVENT_STAGES:
+                            assignment.stage = rec_stage
                         if can_set_uniform_batch:
                             shirt = rec.get("shirt_number")
                             jacket = rec.get("jacket_number")
