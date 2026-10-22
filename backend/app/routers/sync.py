@@ -1101,11 +1101,17 @@ async def export_attendance_log_csv(
 
     # Delimitador ';' para que Excel en español (es-CO/es-ES) abra cada
     # campo en su propia celda (con ',' lo deja todo en una sola columna).
+    STAGE_LABELS_CSV = {
+        "previa": "Previa",
+        "avanzada": "Avanzada",
+        "evento": "Evento",
+        "desmontaje": "Desmontaje",
+    }
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
     writer.writerow([
         "Fecha Ingreso", "Operador", "Documento", "Teléfono", "Coordinador",
-        "Sobrecupo", "Rol", "Cambio de Rol", "Cambio de Etapa", "Estado",
+        "Sobrecupo", "Rol", "Cambio de Rol", "Cambio de Etapa", "Etapa", "Estado",
         "Método", "Offline", "Registrado Por",
     ])
     for log, assignment, operator, op_user, role, verifier in result.all():
@@ -1123,6 +1129,7 @@ async def export_attendance_log_csv(
             role.name if role else "",
             _role_change_cell(log.notes),
             _stage_change_cell(log.notes),
+            STAGE_LABELS_CSV.get(getattr(assignment, "stage", None) or DEFAULT_STAGE, getattr(assignment, "stage", "") or "Evento"),
             _pretty(assignment.status, STATUS_LABELS) if assignment else "",
             _pretty(log.check_in_method, METHOD_LABELS),
             "Sí" if log.is_offline else "No",

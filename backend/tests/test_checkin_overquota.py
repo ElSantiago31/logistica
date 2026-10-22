@@ -221,8 +221,10 @@ async def test_attendance_log_csv_downloads(client, overquota_env):
     rows = list(csv.reader(StringIO(text), delimiter=";"))
     assert len(rows) == 3  # header + 2 filas (o1 08:05, o3 09:30)
     header = rows[0]
-    assert len(header) == 12, f"deben ser 12 columnas, hay {len(header)}"
+    assert len(header) == 14, f"deben ser 14 columnas, hay {len(header)}"
     assert "Cambio de Rol" in header, f"falta columna Cambio de Rol: {header}"
+    assert "Etapa" in header, f"falta columna Etapa: {header}"
+    assert "Cambio de Etapa" in header, f"falta columna Cambio de Etapa: {header}"
     idx = header.index("Sobrecupo")
     # Orden DESCENDENTE: el ingreso mas reciente primero (formato dd/mm/YYYY HH:MM)
     def _dt(cell):
@@ -230,6 +232,10 @@ async def test_attendance_log_csv_downloads(client, overquota_env):
     assert _dt(rows[1][0]) > _dt(rows[2][0]), f"CSV desordenado: {rows[1][0]} !> {rows[2][0]}"
     o1_row = next(r for r in rows[1:] if "90002" in r)
     o3_row = next(r for r in rows[1:] if "90004" in r)
+    # Etapa actual de la asignación (default 'evento' -> 'Evento')
+    assert o1_row[header.index("Etapa")] == "Evento", (
+        f"etapa default deberia ser Evento: {o1_row[header.index('Etapa')]!r}"
+    )
     # Formato legible: "No" = dentro de cupo; "SI (COORD)" = sobrecupo
     assert o1_row[idx] == "No", f"o1 deberia estar en cupo: {o1_row[idx]!r}"
     assert o3_row[idx] == "SÍ (XIMENA)", f"o3 deberia ser sobrecupo: {o3_row[idx]!r}"
