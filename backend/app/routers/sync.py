@@ -16,7 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import safe_http_error
 from app.database import get_db
 from app.dependencies.auth import get_current_user
-from app.models.events import Event, EventAssignment, EventStaffNeed, EventCoordinatorQuota
+from app.models.events import (
+    EVENT_STAGES,
+    Event,
+    EventAssignment,
+    EventStaffNeed,
+    EventCoordinatorQuota,
+)
 from app.models.operators import Operator
 from app.models.sync import SyncSession, AttendanceLog
 from app.models.users import User
@@ -76,6 +82,24 @@ async def _apply_role_change(db: AsyncSession, assignment: EventAssignment, role
     old_name = old_role.name if old_role else "Sin rol"
     assignment.role_id = new_role.id
     return f"cambio_rol:{old_name}->{new_role.name}"
+
+
+async def _apply_stage_change(
+    db: AsyncSession, assignment: EventAssignment, new_stage: Optional[str]
+) -> Optional[str]:
+    """Aplica un cambio de etapa al assignment (check-in).
+
+    La etapa se define ahora en el check-in: si el payload trae una etapa
+    distinta a la actual de la asignación, se mueve. Retorna la nota para
+    el log ('cambio_etapa:OLD->NEW') o None si no hubo cambio.
+    """
+    if not new_stage:
+        return None
+    old_stage = getattr(assignment, "stage", None) or "evento"
+    if new_stage == old_stage:
+        return None
+    assignment.stage = new_stage
+    return f"cambio_etapa:{old_stage}->{new_stage}"
 
 
 async def _resolve_staff_access(
@@ -759,6 +783,15 @@ async def check_in(
     overquota_coord = None  # coordinador cuyo cupo se extendió (para el log)
     role_id = _to_uuid(payload.get("role_id"))
     role_change_note = None  # "cambio_rol:OLD->NEW" si se cambió el rol
+    # Etapa del check-in (etapas definidas en check-in): si viene, define o
+    # mueve la etapa de la asignación. Debe ser una de EVENT_STAGES;
+    # ausente/null → no se toca la etapa (compatibilidad con clientes viejos).
+    stage = payload.get("stage")
+    if stage is not None:
+        stage = str(stage).strip().lower()
+        if stage not in EVENT_STAGES:
+            raise HTTPException(400, f"Etapa inválida: {stage}")
+    stage_change_note = None  # "cambio_etapa:OLD->NEW" si se movió de etapa
     # Optional uniform fields — solo checkin/admin/coordinator pueden setearlos
     can_set_uniform = _can_manage_uniform(user, staff_role)
     shirt_number = payload.get("shirt_number") if can_set_uniform else None
@@ -786,6 +819,14 @@ async def check_in(
             assignment = await db.get(EventAssignment, assignment_id)
             if assignment:
                 needs_commit = False
+                # Etapa del check-in: mover la asignación si el payload trae
+                # una etapa distinta (aplica también en reconcile).
+                stage_change_note = await _apply_stage_change(db, assignment, stage)
+                if stage_change_note:
+                    parts = [p for p in (existing_log.notes or "").split("|") if p]
+                    parts.append(stage_change_note)
+                    existing_log.notes = "|".join(parts)
+                    needs_commit = True
                 if assignment.status != "checked_in":
                     assignment.status = "checked_in"
                     needs_commit = True
@@ -889,6 +930,7 @@ async def check_in(
                     )
 
             role_change_note = await _apply_role_change(db, assignment, role_id)
+            stage_change_note = await _apply_stage_change(db, assignment, stage)
 
             assignment.status = "checked_in"
             if shirt_number is not None:
@@ -899,13 +941,15 @@ async def check_in(
                 assignment.cap_number = cap_number or None
 
     # El log se construyo antes de validar el cupo del coordinador, asi que
-    # los marcadores (sobrecupo / cambio de rol) se asignan aqui (antes del
-    # commit). Se unen con '|' para poder combinar ambos.
+    # los marcadores (sobrecupo / cambio de rol / cambio de etapa) se asignan
+    # aqui (antes del commit). Se unen con '|' para poder combinarlos.
     notes_parts = []
     if overquota:
         notes_parts.append(f"sobrecupo:{overquota_coord}")
     if role_change_note:
         notes_parts.append(role_change_note)
+    if stage_change_note:
+        notes_parts.append(stage_change_note)
     if notes_parts:
         log.notes = "|".join(notes_parts)
 

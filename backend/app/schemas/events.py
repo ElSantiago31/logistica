@@ -251,6 +251,11 @@ class QuickAddRequest(BaseModel):
     segundo_apellido: Optional[str] = Field(None, max_length=100)
     document_type: str = Field(min_length=1, max_length=10, description="CC | CE | TI | PA")
     document_number: str = Field(min_length=3, max_length=20)
+    stage: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Etapa destino: previa | avanzada | evento | desmontaje (default: evento)",
+    )
 
 
 class QuickAddResponse(BaseModel):

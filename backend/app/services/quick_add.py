@@ -28,7 +28,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.events import DEFAULT_STAGE, EventAssignment, EventStaffNeed
+from app.models.events import DEFAULT_STAGE, EVENT_STAGES, EventAssignment, EventStaffNeed
 from app.models.operators import Operator
 from app.models.users import User
 from app.schemas.events import QuickAddRequest, QuickAddResponse
@@ -61,6 +61,12 @@ async def quick_add_operator(
     """
     doc_type = _normalize_doc_type(payload.document_type)
     doc_number = payload.document_number.strip()
+
+    # Etapa destino: la etapa se define ahora en el check-in, así que el
+    # quick-add puede indicarla. Default: evento (comportamiento previo).
+    stage = (payload.stage or "").strip().lower() or DEFAULT_STAGE
+    if stage not in EVENT_STAGES:
+        raise HTTPException(400, f"Etapa inválida: {stage}")
 
     # --- Buscar usuario existente por documento ---
     # IMPORTANTE: buscar SOLO por número. El índice ix_users_document_number
@@ -103,12 +109,12 @@ async def quick_add_operator(
                 detail=f"El documento {doc_number} ya está asignado a este evento",
             )
 
-    # --- Rol/tarifa: primer staff_need de etapa 'evento' ---
+    # --- Rol/tarifa: primer staff_need de la etapa destino ---
     need_res = await db.execute(
         select(EventStaffNeed)
         .where(
             EventStaffNeed.event_id == event_id,
-            EventStaffNeed.stage == DEFAULT_STAGE,
+            EventStaffNeed.stage == stage,
         )
         .order_by(EventStaffNeed.created_at)
         .limit(1)
@@ -168,7 +174,7 @@ async def quick_add_operator(
             role_id=role_id,
             rate_applied=rate,
             status="confirmed",
-            stage=DEFAULT_STAGE,
+            stage=stage,
             confirmed_at=now,
             is_active=True,
             reminder_sent=False,
@@ -184,7 +190,7 @@ async def quick_add_operator(
                 select(EventAssignment.id).where(
                     EventAssignment.event_id == event_id,
                     EventAssignment.role_id == role_id,
-                    EventAssignment.stage == DEFAULT_STAGE,
+                    EventAssignment.stage == stage,
                     EventAssignment.status == "confirmed",
                     EventAssignment.is_active.is_(True),
                 )
