@@ -87,12 +87,7 @@
                 </select>
                 <div class="flex flex-col sm:flex-row gap-2">
                     <select id="assignRole" class="flex-1 border rounded-lg px-3 py-2 text-sm"></select>
-                    <select id="assignStage" class="border rounded-lg px-3 py-2 text-sm" onchange="onAssignStageChange()">
-                        <option value="previa"> ◽ Previa</option>
-                        <option value="avanzada"> ◽ Avanzada</option>
-                        <option value="evento" selected> ⭐ Evento</option>
-                        <option value="desmontaje"> ◽ Desmontaje</option>
-                    </select>
+                    <p class="text-xs text-gray-400 whitespace-nowrap self-center">ℹ️ La etapa se define en el check-in</p>
                     <label id="cityFilterWrap" class="flex items-center gap-2 border rounded-lg px-3 py-2 text-sm bg-gray-50 cursor-pointer whitespace-nowrap sm:max-w-[50%]">
                         <input type="checkbox" id="cityFilter" onchange="searchOperators(true)" class="rounded">
                         <span class="text-gray-700 truncate" id="cityFilterLabel">📍 Solo mi ciudad</span>
@@ -410,7 +405,6 @@ let _smartFilter = { role: '', edu: '' };  // Filtro inteligente (chips) en memo
 function showAssignModal(){
     selectedOps.clear();opsPage=0;opsTotal=0;
     document.getElementById('searchOps').value='';
-    document.getElementById('assignStage').value='evento';
     _smartFilter = { role: '', edu: '' };
     // Configurar el checkbox de filtro por ciudad (desactivado por defecto)
     const cityCb=document.getElementById('cityFilter');
@@ -425,7 +419,7 @@ function showAssignModal(){
             cityWrap.classList.add('hidden');  // Ocultar si el evento no tiene ciudad
         }
     }
-    // Poblar selector de coordinador: solo cupos de la etapa seleccionada
+    // Poblar selector de coordinador (todos los cupos, con etapa)
     refreshCoordinatorOptions();
 
     const chips=document.getElementById('smartChips');
@@ -435,28 +429,23 @@ function showAssignModal(){
             if(missing<=0)return'';
             const stage=n.stage||'evento';
             const label=`${n.role_name||'Rol'} (${STAGE_LABELS[stage]||stage}): faltan ${missing}${n.education_level?' (🎓 '+(EDU_LABELS[n.education_level]||n.education_level)+')':''}`;
-            return`<button type="button" onclick="applySmartFilter('${n.role_id||''}','${n.education_level||''}','${stage}')" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition">🎯 ${label}</button>`;
+            return`<button type="button" onclick="applySmartFilter('${n.role_id||''}','${n.education_level||''}')" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition">🎯 ${label}</button>`;
         }).join('');
     }else{chips.innerHTML=''}
     document.getElementById('assignModal').classList.remove('hidden');
     document.getElementById('opsResults').innerHTML='<p class="text-gray-400 text-sm text-center py-4">Cargando operadores...</p>';
     searchOperators(true);
 }
-function applySmartFilter(roleId,edu,stage){
+function applySmartFilter(roleId,edu){
     _smartFilter.role = roleId;
     _smartFilter.edu = edu;
     document.getElementById('assignRole').value = roleId;
-    if(stage&&STAGES.includes(stage)){
-        document.getElementById('assignStage').value=stage;
-        refreshCoordinatorOptions();
-    }
     searchOperators(true);
 }
-// Repoblar selector de coordinadores según la etapa seleccionada en el modal.
+// Repoblar selector de coordinadores: TODOS los cupos, con su etapa.
 function refreshCoordinatorOptions(){
-    const stage=document.getElementById('assignStage').value||'evento';
     const coordSel=document.getElementById('assignCoordinator');
-    const quotas=currentCoordinatorQuotas.filter(q=>(q.stage||'evento')===stage);
+    const quotas=currentCoordinatorQuotas;
     if(quotas.length){
         coordSel.innerHTML='<option value="">👤 Sin coordinador (sin cupo)</option>'+
             quotas.map(q=>{
@@ -465,7 +454,8 @@ function refreshCoordinatorOptions(){
                 const warn=avail<=0?' ⚠️ lleno':(avail<=2?` (${avail} disp.)`:'');
                 const opId=q.coordinator_operator_id||'';
                 const name=(q.coordinator||'').replace(/"/g,'"');
-                return `<option value="${opId}" data-name="${name}">📋 ${q.coordinator} — cupo ${q.quota} (uso ${used})${warn}</option>`;
+                const stg=STAGE_LABELS[q.stage]||'Evento';
+                return `<option value="${opId}" data-name="${name}">📋 ${q.coordinator} (${stg}) — cupo ${q.quota} (uso ${used})${warn}</option>`;
             }).join('');
         coordSel.classList.remove('hidden');
     }else{
@@ -474,7 +464,6 @@ function refreshCoordinatorOptions(){
         coordSel.value='';
     }
 }
-function onAssignStageChange(){refreshCoordinatorOptions();updateSelectionCounter();searchOperators(true)}
 function closeAssignModal(){document.getElementById('assignModal').classList.add('hidden')}
 
 function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchOperators(true),300)}
@@ -490,11 +479,10 @@ async function searchOperators(resetPage=false){
     const city=(cityCb&&cityCb.checked)?currentEventCity:'';
     const edu=_smartFilter.edu;
     const skip=opsPage*opsPageSize;
-    // Excluir solo los ya asignados a ESTA etapa: operadores en otras etapas
-    // siguen disponibles (reasignarlos = doble turno permitido).
-    const _stageSel=document.getElementById('assignStage');
-    const _curStage=_stageSel?(_stageSel.value||'evento'):'evento';
-    let url=`/api/operators/?skip=${skip}&limit=${opsPageSize}&is_approved=true&exclude_event_id=${encodeURIComponent(EVENT_ID)}&exclude_stage=${encodeURIComponent(_curStage)}`;
+    // [ETAPAS] Las nuevas asignaciones nacen en 'evento': se excluye solo a
+    // los ya asignados a esa etapa; los de otras etapas siguen disponibles
+    // (reasignarlos = doble turno permitido, avisado con badge).
+    let url=`/api/operators/?skip=${skip}&limit=${opsPageSize}&is_approved=true&exclude_event_id=${encodeURIComponent(EVENT_ID)}&exclude_stage=evento`;
     if(q.length>=2)url+=`&search=${encodeURIComponent(q)}`;
     if(roleId)url+=`&experience_role_id=${encodeURIComponent(roleId)}`;
     if(city)url+=`&city=${encodeURIComponent(city)}`;
@@ -538,11 +526,9 @@ function appendOpsResults(ops){
 function opRow(o){
     const checked=selectedOps.has(String(o.id))?'checked':'';
     const eduBadge=o.education_level?`<span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">🎓 ${EDU_LABELS[o.education_level]||o.education_level}</span>`:'';
-    // ¿Ya está en otra etapa del evento? → asignarlo a esta = DOBLE TURNO
-    const stageSel=document.getElementById('assignStage');
-    const curStage=stageSel?(stageSel.value||'evento'):'evento';
+    // ¿Ya está en otra etapa del evento? → asignarlo = DOBLE TURNO
     const stages=assignedStagesByUser.get(String(o.id));
-    const others=stages?[...stages].filter(s=>s!==curStage).map(s=>STAGE_LABELS[s]||s):[];
+    const others=stages?[...stages].filter(s=>s!=='evento').map(s=>STAGE_LABELS[s]||s):[];
     const doubleBadge=others.length?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">DOBLE TURNO (+${others.join(', ')})</span>`:'';
     return`<label class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer flex-wrap"><input type="checkbox" value="${o.id}" onchange="toggleOp(this)" class="rounded flex-shrink-0" ${checked}><span class="font-medium text-sm">${o.first_name} ${o.last_name}</span><span class="text-xs text-gray-500">${o.phone||''}</span><span class="text-xs text-gray-400">${o.city||''}</span>${eduBadge}${doubleBadge}</label>`;
 }
@@ -556,8 +542,7 @@ function loadMoreOps(){opsPage++;searchOperators(false)}
 function getRemainingForRole(){
     const roleId=document.getElementById('assignRole').value;
     if(!roleId)return null;
-    const stage=document.getElementById('assignStage')?document.getElementById('assignStage').value||'evento':'evento';
-    const need=currentStaffNeeds.find(n=>n.role_id===roleId&&(n.stage||'evento')===stage)
+    const need=currentStaffNeeds.find(n=>n.role_id===roleId&&(n.stage||'evento')==='evento')
         ||currentStaffNeeds.find(n=>n.role_id===roleId);
     if(!need)return null;
     return Math.max(0,need.quantity_needed-need.quantity_confirmed);
@@ -598,8 +583,9 @@ async function assignSelected(){
     // Nombre del coordinador seleccionado (fallback para cuotas legacy sin FK).
     const coordOpt=coordSel.options[coordSel.selectedIndex];
     const coordName=coordOpt?coordOpt.getAttribute('data-name')||null:null;
-    const stage=document.getElementById('assignStage')?document.getElementById('assignStage').value||'evento':'evento';
-    const body={operator_ids:Array.from(selectedOps),role_id:roleId,programmed_by_operator_id:coordId,programmed_by_name:coordName,stage:stage};
+    // [ETAPAS] Sin stage: el backend asigna 'evento' por defecto; la etapa
+    // final de cada operador se define en el check-in del evento.
+    const body={operator_ids:Array.from(selectedOps),role_id:roleId,programmed_by_operator_id:coordId,programmed_by_name:coordName};
     const res=await fetch(`/api/events/${EVENT_ID}/assign`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body)});
     if(res.ok){showToast('Asignados','bg-green-500');closeAssignModal();loadEvent()}
     else{const d=await res.json().catch(()=>({}));showToast(d.detail||'Error','bg-red-500')}
