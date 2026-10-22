@@ -17,6 +17,7 @@ from app.core.errors import safe_http_error
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.events import (
+    DEFAULT_STAGE,
     EVENT_STAGES,
     Event,
     EventAssignment,
@@ -53,18 +54,22 @@ def _to_uuid(val):
 def _parse_log_notes(notes):
     """Parsea las notas del AttendanceLog.
 
-    Formato: 'sobrecupo:COORD | cambio_rol:OLD->NEW' (partes unidas por '|').
-    Retorna (overquota_coord, role_change) - None en cada campo si no aplica.
+    Formato: 'sobrecupo:COORD | cambio_rol:OLD->NEW | cambio_etapa:OLD->NEW'
+    (partes unidas por '|').
+    Retorna (overquota_coord, role_change, stage_change) - None si no aplica.
     """
     overquota_coord = None
     role_change = None
+    stage_change = None
     for part in (notes or "").split("|"):
         part = part.strip()
         if part.startswith("sobrecupo:"):
             overquota_coord = part.split(":", 1)[1].strip() or None
         elif part.startswith("cambio_rol:"):
             role_change = part.split(":", 1)[1].strip() or None
-    return overquota_coord, role_change
+        elif part.startswith("cambio_etapa:"):
+            stage_change = part.split(":", 1)[1].strip() or None
+    return overquota_coord, role_change, stage_change
 
 
 async def _apply_role_change(db: AsyncSession, assignment: EventAssignment, role_id):
@@ -741,7 +746,7 @@ async def get_attendance(
 
     records = []
     for log, op, u in rows:
-        overquota_coord, role_change = _parse_log_notes(log.notes)
+        overquota_coord, role_change, _stage_change = _parse_log_notes(log.notes)
         records.append({
             "id": str(log.id),
             "operator_name": f"{u.first_name} {u.last_name}",
@@ -1082,8 +1087,13 @@ async def export_attendance_log_csv(
 
     def _role_change_cell(notes):
         """'OLD -> NEW' si hubo cambio de rol en el check-in, '' si no."""
-        _, role_change = _parse_log_notes(notes)
+        _, role_change, _ = _parse_log_notes(notes)
         return role_change.replace("->", " -> ") if role_change else ""
+
+    def _stage_change_cell(notes):
+        """'OLD -> NEW' si hubo cambio de etapa en el check-in, '' si no."""
+        _, _, stage_change = _parse_log_notes(notes)
+        return stage_change.replace("->", " -> ") if stage_change else ""
 
     # Delimitador ';' para que Excel en español (es-CO/es-ES) abra cada
     # campo en su propia celda (con ',' lo deja todo en una sola columna).
@@ -1091,7 +1101,8 @@ async def export_attendance_log_csv(
     writer = csv.writer(output, delimiter=";")
     writer.writerow([
         "Fecha Ingreso", "Operador", "Documento", "Teléfono", "Coordinador",
-        "Sobrecupo", "Rol", "Cambio de Rol", "Estado", "Método", "Offline", "Registrado Por",
+        "Sobrecupo", "Rol", "Cambio de Rol", "Cambio de Etapa", "Estado",
+        "Método", "Offline", "Registrado Por",
     ])
     for log, assignment, operator, op_user, role, verifier in result.all():
         writer.writerow([
@@ -1107,6 +1118,7 @@ async def export_attendance_log_csv(
             _sobrecupo_cell(log.notes),
             role.name if role else "",
             _role_change_cell(log.notes),
+            _stage_change_cell(log.notes),
             _pretty(assignment.status, STATUS_LABELS) if assignment else "",
             _pretty(log.check_in_method, METHOD_LABELS),
             "Sí" if log.is_offline else "No",
@@ -1336,6 +1348,113 @@ async def change_assignment_role(
     }
 
 
+@router.patch("/assignments/{assignment_id}/stage")
+async def change_assignment_stage(
+    assignment_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Cambia la etapa de un operador en el evento (antes o después del check-in).
+
+    Actualiza EventAssignment.stage y, si ya hay check-in, anota el cambio
+    en el AttendanceLog existente (notes: 'cambio_etapa:OLD->NEW') para que
+    aparezca en el log de ingresos y en el CSV.
+    """
+    new_stage = (payload.get("stage") or "").strip().lower()
+    if not new_stage:
+        raise HTTPException(400, "stage requerido")
+    if new_stage not in EVENT_STAGES:
+        raise HTTPException(400, f"Etapa inválida: {new_stage}")
+
+    assignment = await db.get(EventAssignment, assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Asignación no encontrada")
+
+    await _resolve_staff_access(db, user, assignment.event_id)
+
+    old_stage = assignment.stage or DEFAULT_STAGE
+    if old_stage == new_stage:
+        return {
+            "status": "unchanged",
+            "assignment_id": str(assignment.id),
+            "old_stage": old_stage,
+            "new_stage": new_stage,
+        }
+
+    assignment.stage = new_stage
+
+    # Anotar en el log de asistencia si ya hizo check-in
+    stage_note = f"cambio_etapa:{old_stage}->{new_stage}"
+    if assignment.status == "checked_in":
+        existing = await db.execute(
+            select(AttendanceLog).where(
+                AttendanceLog.event_id == assignment.event_id,
+                AttendanceLog.operator_id == assignment.operator_id,
+            )
+        )
+        log = existing.scalar_one_or_none()
+        if log:
+            parts = [p for p in (log.notes or "").split("|") if p]
+            parts.append(stage_note)
+            log.notes = "|".join(parts)
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        safe_http_error(
+            status_code=500,
+            client_message="Error interno del servidor",
+            log_detail="Error al cambiar etapa de asignación",
+            exc=exc,
+        )
+
+    # --- Audit log ---
+    try:
+        from app.services.events import _add_audit_log
+        await _add_audit_log(
+            db,
+            event_id=assignment.event_id,
+            user_id=user.id,
+            action="stage_change",
+            changes={
+                "assignment_id": str(assignment.id),
+                "operator_id": str(assignment.operator_id),
+                "old_stage": old_stage,
+                "new_stage": new_stage,
+                "reason": (payload.get("reason") or "").strip() or "Cambio manual en check-in",
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.warning("No se pudo registrar audit log de cambio de etapa: %s", exc)
+
+    # --- Notificar por WebSocket (cambio de etapa) ---
+    try:
+        await ws_manager.publish_broadcast(
+            str(assignment.event_id),
+            "stage_change",
+            {
+                "assignment_id": str(assignment.id),
+                "old_stage": old_stage,
+                "new_stage": new_stage,
+                "by": f"{user.first_name} {user.last_name}",
+            },
+        )
+    except Exception as exc:
+        logger.warning("[ws] no se pudo emitir stage_change: %s", exc)
+
+    return {
+        "status": "stage_changed",
+        "assignment_id": str(assignment.id),
+        "old_stage": old_stage,
+        "new_stage": new_stage,
+        "message": f"Etapa cambiada de {old_stage} a {new_stage}",
+    }
+
+
 @router.patch("/assignments/{assignment_id}/uniform")
 async def update_uniform(
     assignment_id: uuid.UUID,
@@ -1519,7 +1638,7 @@ async def get_checkin_status(
             .limit(15)
         )
         for log, op in recent_result.all():
-            overquota_coord, role_change = _parse_log_notes(log.notes)
+            overquota_coord, role_change, stage_change = _parse_log_notes(log.notes)
             recent_activity.append({
                 "operator_name": f"{op.user.first_name} {op.user.last_name}" if op.user else "—",
                 "check_in_time": log.check_in_time.isoformat() if log.check_in_time else None,
@@ -1527,6 +1646,7 @@ async def get_checkin_status(
                 "overquota": overquota_coord is not None,
                 "coordinator": overquota_coord,
                 "role_change": role_change,
+                "stage_change": stage_change,
             })
     except Exception:
         # No bloquear el polling si falla el log

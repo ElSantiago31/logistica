@@ -240,3 +240,53 @@ async def test_checkin_reconcile_moves_stage(client, stage_env, db):
         )
     )).scalar_one()
     assert "cambio_etapa:evento->desmontaje" in (log.notes or "")
+
+
+@pytest.mark.asyncio
+async def test_change_assignment_stage_endpoint(client, stage_env, db):
+    """PATCH /api/sync/assignments/{id}/stage: cambia etapa y anota en el log."""
+    hdr = {"Authorization": f"Bearer {stage_env['token']}"}
+    # Check-in primero (para que exista AttendanceLog)
+    first = await client.post(
+        f"/api/sync/events/{stage_env['event_id']}/check-in",
+        headers=hdr,
+        json={
+            "assignment_id": stage_env["assignment_id"],
+            "operator_id": str(stage_env["operator"].id),
+            "method": "manual",
+        },
+    )
+    assert first.status_code == 200, first.text
+    # Cambio manual de etapa
+    resp = await client.patch(
+        f"/api/sync/assignments/{stage_env['assignment_id']}/stage",
+        headers=hdr,
+        json={"stage": "previa"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "stage_changed"
+    assert resp.json()["old_stage"] == "evento"
+    assert resp.json()["new_stage"] == "previa"
+    a = await db.get(EventAssignment, uuid.UUID(stage_env["assignment_id"]))
+    assert a.stage == "previa"
+    # Nota en el AttendanceLog (aparece en log de ingresos / CSV)
+    log = (await db.execute(
+        select(AttendanceLog).where(
+            AttendanceLog.operator_id == stage_env["operator"].id,
+        )
+    )).scalar_one()
+    assert "cambio_etapa:evento->previa" in (log.notes or "")
+    # Etapa inválida → 400; misma etapa → unchanged
+    bad = await client.patch(
+        f"/api/sync/assignments/{stage_env['assignment_id']}/stage",
+        headers=hdr,
+        json={"stage": "montaje"},
+    )
+    assert bad.status_code == 400, bad.text
+    same = await client.patch(
+        f"/api/sync/assignments/{stage_env['assignment_id']}/stage",
+        headers=hdr,
+        json={"stage": "previa"},
+    )
+    assert same.status_code == 200
+    assert same.json()["status"] == "unchanged"
