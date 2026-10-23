@@ -234,7 +234,14 @@ async def check_availability(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Check which operators are available for an event (no double-booking)."""
+    """Check operator availability for an event.
+
+    Decisión de negocio (2026-10): el solapamiento de fechas con otro
+    evento ya NO bloquea la asignación (assign_operators lo permite).
+    Este endpoint lo reporta como AVISO informativo dentro de
+    ``available`` (``overlapping: true`` + ``conflict_event``) para que
+    el llamador pueda advertir al usuario sin impedir la asignación.
+    """
     if user.user_type not in ("superadmin", "admin"):
         raise HTTPException(403, "Sin permisos")
     event = await svc.get_event(db, event_id)
@@ -258,6 +265,17 @@ async def check_availability(
         op_user = u_r.scalar_one_or_none()
         name = f"{op_user.first_name} {op_user.last_name}" if op_user else "N/A"
 
+        # RUT vencido sí es un bloqueo real para NUEVOS eventos.
+        if operator.rut_blocked:
+            results["unavailable"].append({
+                "operator_id": str(operator.id),
+                "user_id": str(operator.user_id),
+                "name": name,
+                "reason": "RUT pendiente: el plazo para subirlo venció. El operador debe subirlo desde su perfil.",
+            })
+            continue
+
+        # Solapamiento: aviso informativo, NO bloqueo.
         overlap = await db.execute(
             sel(EventAssignment)
             .join(EventModel, EventAssignment.event_id == EventModel.id)
@@ -271,20 +289,17 @@ async def check_availability(
             )
         )
         conflict = overlap.scalars().first()
+        item = {
+            "operator_id": str(operator.id),
+            "user_id": str(operator.user_id),
+            "name": name,
+            "overlapping": conflict is not None,
+            "conflict_event": None,
+        }
         if conflict:
             conflict_event = await db.get(EventModel, conflict.event_id)
-            results["unavailable"].append({
-                "operator_id": str(operator.id),
-                "user_id": str(operator.user_id),
-                "name": name,
-                "conflict_event": conflict_event.name if conflict_event else "N/A",
-            })
-        else:
-            results["available"].append({
-                "operator_id": str(operator.id),
-                "user_id": str(operator.user_id),
-                "name": name,
-            })
+            item["conflict_event"] = conflict_event.name if conflict_event else "N/A"
+        results["available"].append(item)
     return results
 
 
