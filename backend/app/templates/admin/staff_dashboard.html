@@ -88,6 +88,11 @@ async function loadEvents() {
             if (['checkin', 'intendencia', 'superadmin'].includes(e.staff_role)) {
                 btns.push(`<a href="/admin/events/${e.id}/checkin" class="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">✅ Check-in e Indumentaria</a>`);
             }
+            // [ROL CHECKIN] Nómina: checkin/intendencia pueden listar y
+            // firmar; pagos y facturas siguen siendo de admin/superadmin.
+            if (['checkin', 'intendencia', 'superadmin'].includes(e.staff_role) || u.user_type === 'admin') {
+                btns.push(`<a href="/admin/events/${e.id}/payroll" class="inline-block bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700">📋 Nómina</a>`);
+            }
             // Incidencias y vetos: superadmin o coordinador (con cupo en el evento).
             if (u.user_type === 'superadmin' || u.user_type === 'admin') {
                 btns.push(`<a href="/admin/events/${e.id}/incidencias" class="inline-block bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">⚠️ Incidencias</a>`);

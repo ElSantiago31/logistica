@@ -700,6 +700,30 @@ function authHeaders() {
     return h;
 }
 
+// --- [ROL CHECKIN] Restricciones para el rol checkin ---
+// Puede listar, firmar, sincronizar y descargar planilla; NO ve el total
+// de la nómina ni descargas administrativas (facturas/novedades), y el
+// backend bloquea pagos/facturas en cada endpoint sensible.
+let IS_CHECKIN_ROLE = false;
+try {
+    IS_CHECKIN_ROLE = (JSON.parse(localStorage.getItem('user') || '{}').user_type || '') === 'checkin';
+} catch (_) {}
+
+function _applyCheckinRestrictions() {
+    if (!IS_CHECKIN_ROLE) return;
+    // Ocultar stat "Total Nómina" (monto agregado) y reacomodar grid
+    const statTotal = document.getElementById('stat-total');
+    if (statTotal) {
+        const card = statTotal.closest('.bg-white');
+        if (card) card.style.display = 'none';
+        const grid = statTotal.closest('.grid');
+        if (grid) grid.className = grid.className.replace('grid-cols-4', 'grid-cols-3');
+    }
+    // Ocultar botones de descargas administrativas
+    document.querySelectorAll('button[onclick="downloadInvoicesBulk()"], button[onclick="downloadNovedadesExcel()"]')
+        .forEach(b => b.style.display = 'none');
+}
+
 // --- Toast de notificaciones (fix: faltaba y toggleUniformReturn fallaba) ---
 function showToast(msg, cls) {
     const el = document.getElementById('toast');
@@ -978,11 +1002,14 @@ function renderTable(operators) {
         if (st === 'pending') {
             actions = `<button onclick="openSignatureModal('${op.assignment_id}')" class="btn btn-primary">✍️ Firmar</button>`;
         } else if (st === 'signed') {
-            actions = `<button onclick="confirmPayment('${op.payroll_record_id}')" class="btn btn-success">💰 Confirmar Pago</button>`;
+            // [ROL CHECKIN] checkin firma pero no confirma pagos
+            actions = IS_CHECKIN_ROLE
+                ? `<span class="text-xs text-gray-500 font-medium">Pago pendiente (admin)</span>`
+                : `<button onclick="confirmPayment('${op.payroll_record_id}')" class="btn btn-success">💰 Confirmar Pago</button>`;
         } else if (st === 'paid') {
             actions = `
                 <div class="text-blue-600 text-xs font-bold mb-1">${op.invoice_number || ''}</div>
-                <button onclick="generateInvoice('${op.payroll_record_id}')" class="btn btn-outline">Ver Factura</button>
+                ${IS_CHECKIN_ROLE ? '' : `<button onclick="generateInvoice('${op.payroll_record_id}')" class="btn btn-outline">Ver Factura</button>`}
             `;
         }
 
@@ -1575,6 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPayroll();
     startPolling();
     _initRealtime();
+    _applyCheckinRestrictions();
 });
 </script>
 <!-- ============================================================ -->

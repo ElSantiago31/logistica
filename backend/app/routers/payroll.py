@@ -58,6 +58,12 @@ router = APIRouter(prefix="/api/payroll", tags=["Payroll"])
 
 _PERMITTED = ("admin", "superadmin")
 
+# [ROL CHECKIN] Acceso limitado a nómina: puede listar operadores,
+# firmar, sincronizar offline (solo firma), ver status en vivo,
+# descargar planilla y registrar devolución de uniformes. NO confirma
+# pagos ni genera facturas (eso queda para admin/superadmin).
+_PERMITTED_SIGN = ("admin", "superadmin", "checkin")
+
 
 def _to_uuid(val):
     """Convert string to UUID, return None if invalid/empty."""
@@ -163,7 +169,7 @@ async def get_payable_operators(
     Estructura compatible con el buscador offline del frontend (mismo formato
     que /api/sync/events/{event_id}/offline-data).
     """
-    if user.user_type not in _PERMITTED:
+    if user.user_type not in _PERMITTED_SIGN:
         raise HTTPException(403, "Sin permisos")
 
     event = await db.get(Event, event_id)
@@ -301,7 +307,7 @@ async def sign_payroll(
     user=Depends(get_current_user),
 ):
     """Guarda la firma del operador (base64 PNG) en su PayrollRecord."""
-    if user.user_type not in _PERMITTED:
+    if user.user_type not in _PERMITTED_SIGN:
         raise HTTPException(403, "Sin permisos")
 
     signature_data = payload.get("signature_data")
@@ -407,7 +413,7 @@ async def toggle_uniform_return(
     Si uniform_returned_at es NULL → marca con fecha actual (devuelto).
     Si tiene fecha → NULL (pendiente de devolución).
     """
-    if user.user_type not in _PERMITTED:
+    if user.user_type not in _PERMITTED_SIGN:
         raise HTTPException(403, "Sin permisos")
 
     assignment = await db.get(EventAssignment, assignment_id)
@@ -612,7 +618,7 @@ async def sync_payroll_offline(
     payload: { records: [{ assignment_id, operator_id, event_id, signature_data,
                             payment_amount, role_name, status, device_id }] }
     """
-    if user.user_type not in _PERMITTED:
+    if user.user_type not in _PERMITTED_SIGN:
         raise HTTPException(403, "Sin permisos")
 
     records = payload.get("records", [])
@@ -637,6 +643,11 @@ async def sync_payroll_offline(
 
             signature_data = rec.get("signature_data")
             status = rec.get("status", "signed")
+            # [ROL CHECKIN] El rol checkin solo firma: cualquier registro
+            # offline "paid" desde un dispositivo checkin se degrada a
+            # "signed" (el pago lo confirma admin/superadmin en la nómina).
+            if user.user_type == "checkin":
+                status = "signed"
 
             if existing:
                 # Solo actualizar si está en estado anterior
@@ -808,7 +819,7 @@ async def get_payroll_status(
     Retorna solo el estado de pago por asignación (payload pequeño), más
     presencia de dispositivos y pagos recientes.
     """
-    if user.user_type not in _PERMITTED:
+    if user.user_type not in _PERMITTED_SIGN:
         raise HTTPException(403, "Sin permisos")
 
     # --- Registrar presencia ---
@@ -969,7 +980,7 @@ async def download_planilla_coordinador(
             f"{sorted(_PLANILLA_STAGES)}",
         )
 
-    if user.user_type not in _PERMITTED:
+    if user.user_type not in _PERMITTED_SIGN:
         raise HTTPException(403, "Sin permisos")
 
     # --- Consultas a BD y construcción de datos ---
