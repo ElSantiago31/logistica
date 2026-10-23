@@ -74,17 +74,20 @@
         </div>
     </div>
 
-    <!-- Filtro por etapa (etapas del evento) -->
-    <div class="flex items-center gap-2 mb-3">
-        <label for="stage-filter" class="text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Etapa</label>
-        <select id="stage-filter" onchange="updateStats(); populateRoleSelect(); pollQuotas().then(() => populateCoordinatorSelect());"
-            class="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-amber-400">
-            <option value="">Todas</option>
-            <option value="previa">Previa</option>
-            <option value="avanzada">Avanzada</option>
-            <option value="evento">Evento</option>
-            <option value="desmontaje">Desmontaje</option>
-        </select>
+    <!-- Etapa de check-in: 4 botones (NO filtran la lista de operadores;
+         definen a qué etapa se registran los ingresos hasta que se pulse
+         otro botón). El botón activo pre-selecciona la etapa del check-in,
+         los cupos y las tarjetas de rol de esa etapa. -->
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+        <span class="text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Check-in en</span>
+        <button type="button" data-stage="previa" onclick="selectStage('previa')"
+            class="stage-btn px-4 py-1.5 rounded-lg text-sm border transition bg-white text-gray-600 border-gray-300 hover:border-amber-400">Previa</button>
+        <button type="button" data-stage="avanzada" onclick="selectStage('avanzada')"
+            class="stage-btn px-4 py-1.5 rounded-lg text-sm border transition bg-white text-gray-600 border-gray-300 hover:border-amber-400">Avanzada</button>
+        <button type="button" data-stage="evento" onclick="selectStage('evento')"
+            class="stage-btn px-4 py-1.5 rounded-lg text-sm border transition bg-amber-500 text-white border-amber-500 font-bold">Evento</button>
+        <button type="button" data-stage="desmontaje" onclick="selectStage('desmontaje')"
+            class="stage-btn px-4 py-1.5 rounded-lg text-sm border transition bg-white text-gray-600 border-gray-300 hover:border-amber-400">Desmontaje</button>
         <span id="stage-count" class="text-xs text-gray-400"></span>
     </div>
 
@@ -208,7 +211,7 @@
                         <option value="evento">Evento</option>
                         <option value="desmontaje">Desmontaje</option>
                     </select>
-                    <p class="text-[11px] text-gray-400 mt-1">Define en qué etapa hace el ingreso; se puede cambiar después</p>
+                    <p class="text-[11px] text-gray-400 mt-1">Se registra el ingreso en la etapa activa de arriba; ajustable por operador</p>
                 </div>
 
                 <div id="checkin-actions" class="space-y-2">
@@ -417,8 +420,8 @@ _updateQaButtons();
 function showQuickAddModal() {
     ['qaPrimerNombre', 'qaSegundoNombre', 'qaPrimerApellido', 'qaSegundoApellido', 'qaDocNumber'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('qaDocType').value = 'CC';
-    // [ETAPAS] pre-seleccionar la etapa del filtro activo (o 'evento')
-    document.getElementById('qaStage').value = _stageFilter() || 'evento';
+    // [ETAPAS] pre-seleccionar la etapa activa (botón superior)
+    document.getElementById('qaStage').value = _stageFilter();
     document.getElementById('quickAddModal').classList.remove('hidden');
     document.getElementById('qaPrimerNombre').focus();
 }
@@ -701,17 +704,42 @@ async function loadEventData() {
 
 // --- Etapas: helpers de filtro ---
 const STAGE_LABELS = { previa: 'Previa', avanzada: 'Avanzada', evento: 'Evento', desmontaje: 'Desmontaje' };
+// Etapa activa de check-in (botones superiores). NO filtra la lista de
+// operadores: todos aparecen siempre. Define a qué etapa se registran los
+// check-in (stage-select del panel), los cupos, tarjetas de rol y la
+// alerta de 90% hasta que se seleccione otro botón.
+var _activeStage = 'evento';
 function _stageFilter() {
-    const sel = document.getElementById('stage-filter');
-    return sel ? sel.value : '';
+    return _activeStage || 'evento';
 }
-function _matchesStage(a) {
-    const f = _stageFilter();
-    if (!f) return true;
-    return (a.stage || 'evento') === f;
+// Selecciona la etapa destino de los check-in (botón pulsado) hasta que
+// se elija otra. Resalta el botón y refresca cupos/roles/estadísticas.
+function selectStage(stage) {
+    _activeStage = stage;
+    document.querySelectorAll('.stage-btn').forEach(b => {
+        const active = b.dataset.stage === stage;
+        b.classList.toggle('bg-amber-500', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('border-amber-500', active);
+        b.classList.toggle('font-bold', active);
+        b.classList.toggle('bg-white', !active);
+        b.classList.toggle('text-gray-600', !active);
+        b.classList.toggle('border-gray-300', !active);
+    });
+    // El check-in del operador abierto sigue la etapa activa
+    const stageSel = document.getElementById('stage-select');
+    if (stageSel) stageSel.value = stage;
+    updateStats();
+    populateRoleSelect();
+    pollQuotas().then(() => populateCoordinatorSelect());
 }
+// La lista de operadores NUNCA se filtra por etapa (todas visibles)
 function _visibleAssignments() {
-    return (eventAssignments || []).filter(_matchesStage);
+    return eventAssignments || [];
+}
+// ¿El check-in de esta asignación se registró en la etapa activa?
+function _inActiveStage(a) {
+    return (a.stage || 'evento') === _stageFilter();
 }
 
 // Stats recalculadas en vivo (respetan el filtro de etapa).
@@ -723,11 +751,16 @@ function updateStats() {
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-checked').textContent = checked;
     document.getElementById('stat-pending').textContent = total - checked;
-    // Contador junto al filtro de etapa
+    // Contador junto a los botones de etapa: progreso de la etapa activa
     const sc = document.getElementById('stage-count');
     if (sc) {
-        const all = (eventAssignments || []).length;
-        sc.textContent = `${list.length} de ${all} asignaciones`;
+        const f = _stageFilter();
+        const checkedSt = list.filter(a => a.status === 'checked_in' && _inActiveStage(a)).length;
+        const needsSt = (staffNeeds || []).filter(n => (n.stage || 'evento') === f)
+            .reduce((s, n) => s + (n.quantity_needed || 0), 0);
+        sc.textContent = needsSt > 0
+            ? `${checkedSt}/${needsSt} de cupo en ${STAGE_LABELS[f] || f}`
+            : `${checkedSt} check-in en ${STAGE_LABELS[f] || f}`;
     }
     // Actualiza también el progreso de check-in agrupado por rol
     try { renderRoleCards(); } catch(e) { console.error('renderRoleCards error:', e); }
@@ -736,10 +769,10 @@ function updateStats() {
 }
 
 // Cuenta solo operadores relevantes para check-in: confirmados + ya ingresados
-// (respeta el filtro de etapa activo)
+// (todas las etapas — la lista nunca se filtra)
 function countRelevantForCheckin(assignments) {
-    return (assignments || []).filter(a => _matchesStage(a) &&
-        (a.status === 'confirmed' || a.status === 'checked_in')).length;
+    return (assignments || []).filter(a =>
+        a.status === 'confirmed' || a.status === 'checked_in').length;
 }
 
 // ============================================================
@@ -764,12 +797,15 @@ function _updateProgressAlert() {
     // requiere 10 pero hay 20 programados, la alerta salta al 9.º check-in
     // (9/10 = 90%). Sin plan de personal definido → fallback a confirmed + checked_in.
     const list = _visibleAssignments();
-    const checked = list.filter(a => a.status === 'checked_in').length;
     const fNeed = _stageFilter();
-    const visibleNeeds = (staffNeeds || []).filter(n => !fNeed || (n.stage || 'evento') === fNeed);
+    // Solo cuentan los check-in registrados en la etapa activa (botón)
+    const checked = list.filter(a => a.status === 'checked_in' &&
+        (a.stage || 'evento') === fNeed).length;
+    const visibleNeeds = (staffNeeds || []).filter(n => (n.stage || 'evento') === fNeed);
     let total = visibleNeeds.reduce((s, n) => s + (n.quantity_needed || 0), 0);
     if (!(total > 0)) {
-        total = list.filter(a => a.status === 'confirmed' || a.status === 'checked_in').length;
+        total = list.filter(a => (a.stage || 'evento') === fNeed &&
+            (a.status === 'confirmed' || a.status === 'checked_in')).length;
     }
     const pct = total > 0 ? checked / total : 0;
 
@@ -865,20 +901,22 @@ function renderRoleCards() {
     if (!grid) return;
 
     // Conteo en vivo: checked_in agrupado por role_name (instantáneo al
-    // hacer check-in, sin esperar recarga del backend). Respeta etapa.
+    // hacer check-in, sin esperar recarga del backend). Solo cuenta los
+    // ingresados en la etapa activa (botón superior).
+    const fCards = _stageFilter();
     const checkedMap = {};
     for (const a of _visibleAssignments()) {
+        if ((a.stage || 'evento') !== fCards) continue;
         const role = (a.role_name || 'Operador').trim() || 'Operador';
         if (a.status === 'checked_in') {
             checkedMap[role] = (checkedMap[role] || 0) + 1;
         }
     }
 
-    // [ETAPAS] Cada cupo (EventStaffNeed) pertenece a una etapa. Filtrar
-    // por la etapa activa; sin filtro se agrupa por rol sumando los
-    // cupos de todas las etapas.
+    // [ETAPAS] Cada cupo (EventStaffNeed) pertenece a una etapa. Las cards
+    // muestran los cupos de la etapa activa (siempre hay una seleccionada).
     const f = _stageFilter();
-    const visibleNeeds = (staffNeeds || []).filter(n => !f || (n.stage || 'evento') === f);
+    const visibleNeeds = (staffNeeds || []).filter(n => (n.stage || 'evento') === f);
 
     // Base: roles requeridos del evento (quantity_needed).
     let roles = [];
@@ -974,10 +1012,9 @@ async function searchOperator(query) {
     }
 
     const q = query.toLowerCase();
-    // El filtro de etapa seleccionado restringe la búsqueda: solo aparecen
-    // los operadores asignados a esa etapa (con "Todas" se ven todos).
+    // La búsqueda muestra TODOS los operadores del evento, sin importar
+    // su etapa (la etapa activa solo define dónde se registra el check-in).
     const results = eventAssignments.filter(a =>
-        _matchesStage(a) &&
         ['confirmed', 'checked_in', 'standby', 'sin_acreditacion'].includes(a.status) &&
         ((a.full_name && a.full_name.toLowerCase().includes(q)) ||
         (a.document_number && a.document_number.includes(q)))
@@ -1047,9 +1084,10 @@ async function showOperator(assignmentId) {
             a.operator_id === operator.operator_id && (a.stage || 'evento') !== st));
     }
 
-    // [ETAPAS] pre-seleccionar etapa del check-in: filtro activo > etapa actual
+    // [ETAPAS] pre-seleccionar etapa del check-in: la del botón activo
+    // (el ingreso se registra en la etapa seleccionada arriba)
     const stageSel = document.getElementById('stage-select');
-    if (stageSel) stageSel.value = _stageFilter() || (operator.stage || 'evento');
+    if (stageSel) stageSel.value = _stageFilter();
 
     // --- Actualizar avatar con la foto del operador (o fallback 👤) ---
     const avatarEl = document.getElementById('op-avatar');
@@ -2164,13 +2202,12 @@ function populateRoleSelect() {
         roles.push({ id: curId, name: currentOperator.role_name });
     }
     sel.innerHTML = '<option value="">— Sin rol —</option>';
-    // [ETAPAS] Progreso del rol respetando la etapa activa: con etapa
-    // elegida usa el cupo de esa etapa; con "Todas" suma los cupos de
-    // todas las etapas para ese rol.
+    // [ETAPAS] Progreso del rol en la etapa activa (botón superior):
+    // usa el cupo de esa etapa y los check-in registrados en ella.
     const f = _stageFilter();
     const checkedMap = {};
     for (const a of _visibleAssignments()) {
-        if (a.status === 'checked_in' && a.role_id) {
+        if (a.status === 'checked_in' && a.role_id && (a.stage || 'evento') === f) {
             const key = String(a.role_id);
             checkedMap[key] = (checkedMap[key] || 0) + 1;
         }
@@ -2368,9 +2405,10 @@ function showCoordinatorDetail(coordinatorName) {
     titleEl.textContent = coordinatorName || 'Coordinador';
 
     // Filtrar assignments: admitted_by == coordinador Y status == checked_in
+    // en la etapa activa (los cupos de las tarjetas responden a esa etapa)
     const checkedIn = (eventAssignments || [])
-        .filter(a => _matchesStage(a) &&
-            (a.admitted_by || '').trim().toUpperCase() === coordKey && a.status === 'checked_in')
+        .filter(a => (a.admitted_by || '').trim().toUpperCase() === coordKey &&
+            a.status === 'checked_in' && _inActiveStage(a))
         .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
 
     countEl.textContent = `Check-ins: ${checkedIn.length}`;
@@ -2402,7 +2440,7 @@ async function pollQuotas() {
     try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 5000);
-        // [ETAPAS] Los cupos responden a la etapa activa del filtro superior
+        // [ETAPAS] Los cupos responden a la etapa activa (botón superior)
         const fStage = _stageFilter();
         const qs = fStage ? `?stage=${encodeURIComponent(fStage)}` : '';
         const resp = await Auth.apiFetch(`/api/sync/events/${EVENT_ID}/coordinator-quotas${qs}`, {
