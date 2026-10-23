@@ -441,15 +441,30 @@ async def update_assignment_status(
     elif new_status == "rejected":
         assignment.rejected_at = now
 
-    # Ajustar quantity_confirmed del EventStaffNeed según la transición
+    # Ajustar quantity_confirmed del EventStaffNeed según la transición.
+    # FIX 500: desde Fase 5 (etapas) un mismo rol puede tener VARIOS needs
+    # (uno por etapa). scalar_one_or_none() lanzaba MultipleResultsFound
+    # cuando el rol estaba en 2+ etapas → 500 al cambiar estado.
+    # Se usa .scalars().first() filtrando por la etapa de la asignación,
+    # con fallback a cualquier etapa (mismo patrón que delete_assignment).
     if assignment.role_id:
+        stage = getattr(assignment, "stage", None) or "evento"
         sn_result = await db.execute(
             select(EventStaffNeed).where(
                 EventStaffNeed.event_id == assignment.event_id,
                 EventStaffNeed.role_id == assignment.role_id,
+                EventStaffNeed.stage == stage,
             )
         )
-        sn = sn_result.scalar_one_or_none()
+        sn = sn_result.scalars().first()
+        if not sn:
+            sn_result = await db.execute(
+                select(EventStaffNeed).where(
+                    EventStaffNeed.event_id == assignment.event_id,
+                    EventStaffNeed.role_id == assignment.role_id,
+                )
+            )
+            sn = sn_result.scalars().first()
         if sn:
             was_confirmed = old_status == "confirmed"
             is_confirmed = new_status == "confirmed"

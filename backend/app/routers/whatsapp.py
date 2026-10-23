@@ -9,6 +9,7 @@ from app.database import get_db
 from app.config import settings
 from app.dependencies.auth import get_current_user
 from app.services import whatsapp as svc
+from app.websockets.manager import manager as ws_manager
 
 router = APIRouter(prefix="/api/whatsapp", tags=["WhatsApp"])
 
